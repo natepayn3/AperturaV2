@@ -205,8 +205,22 @@ Scope {
         onTriggered: hidePreviewAnim.restart()
     }
 
+    Timer {
+        id: previewDebounceTimer
+        interval: 50 
+        running: false
+        repeat: false
+        property int pendingWorkspace: -1
+        onTriggered: {
+            if (pendingWorkspace !== -1) {
+                globalWorkspacePreview.commitWorkspaceChange(pendingWorkspace);
+            }
+        }
+    }
+
     PanelWindow {
         id: globalWorkspacePreview
+        property bool mouseOverPreview: false
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
@@ -224,31 +238,40 @@ Scope {
         onTargetWorkspaceChanged: {
             if (targetWorkspace !== -1) {
                 if (targetWorkspace === innerPreviewCard.currentActiveWorkspace) {
+                    previewDebounceTimer.stop();
                     return; 
                 }
-                dismissTimer.stop();
-                showPreviewAnim.restart();
-                innerPreviewCard.currentActiveWorkspace = targetWorkspace;
+                previewDebounceTimer.pendingWorkspace = targetWorkspace;
+                previewDebounceTimer.restart();
+            } else {
+                previewDebounceTimer.stop();
             }
         }
 
-        function cancelDismiss() { dismissTimer.stop(); }
-        function requestDismiss() { dismissTimer.restart(); }
+        function commitWorkspaceChange(ws) {
+            dismissTimer.stop();
+            showPreviewAnim.restart();
+            innerPreviewCard.currentActiveWorkspace = ws;
+        }
+
+        function cancelDismiss() { dismissTimer.stop(); previewDebounceTimer.stop(); }
+        function requestDismiss() { 
+            if (!globalWorkspacePreview.mouseOverPreview) {
+                dismissTimer.restart(); 
+            }
+        }
 
         WorkspacePreview {
             id: innerPreviewCard
             targetWorkspace: globalWorkspacePreview.targetWorkspace
             
-            // Fixed: Accounts pixel-perfectly for the 44px bar depth and 8px frame boundary width vectors
             hoverOriginX: {
-                if (rootShell.barPosition === "left") return 44;
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
-                return 8; 
+                return rootShell.barPosition === "left" ? 44 : 8; 
             }
             hoverOriginY: {
-                if (rootShell.barPosition === "top") return 44;
                 if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
-                return 8; 
+                return rootShell.barPosition === "top" ? 44 : 8; 
             }
         }
     }
