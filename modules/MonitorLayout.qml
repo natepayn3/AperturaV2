@@ -1,0 +1,162 @@
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import Quickshell
+
+Item {
+    id: monitorLayoutModuleRoot
+
+    property var shellTarget: null
+    property var settingsWindow: null
+
+    Column {
+        anchors.fill: parent
+        spacing: 32
+
+        // Display Selection Section
+        Column {
+            width: parent.width
+            spacing: 12
+
+            Text {
+                text: "Show bar on these displays:"
+                font.family: settingsWindow ? settingsWindow.selectedFont : "Rubik"
+                font.pixelSize: 20
+                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                font.bold: true
+                // Centers the title string in the content panel
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Row {
+                spacing: 12
+                // Perfectly centers the display button rack
+                anchors.horizontalCenter: parent.horizontalCenter
+                
+                Repeater {
+                    model: Quickshell.screens
+                    delegate: Button {
+                        id: dispSelBtn
+                        flat: true
+                        width: 96
+                        height: 42
+                        property bool isSelected: settingsWindow ? settingsWindow.isLocalDisplayActive(index) : false
+                        
+                        background: Rectangle { 
+                            color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
+                            border.color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : (shellTarget ? shellTarget.colorBorder : "#313244")
+                            border.width: 2
+                            radius: 8 
+                        }
+                        
+                        contentItem: Text {
+                            text: modelData.name.toUpperCase()
+                            font.family: settingsWindow ? settingsWindow.selectedFont : "Rubik"
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorBackground : "#11111b") : (shellTarget ? shellTarget.colorText : "#cdd6f4")
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            if (shellTarget && settingsWindow) {
+                                shellTarget.toggleDisplay(index);
+                                settingsWindow.enabledDisplays = shellTarget.enabledDisplayStr;
+                                settingsWindow.pushUpdate();
+                            }
+                        }
+
+                        HoverHandler {
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bar Orientation Section
+        Column {
+            width: parent.width
+            spacing: 16
+
+            Text {
+                text: "Bar Orientation"
+                font.family: settingsWindow ? settingsWindow.selectedFont : "Rubik"
+                font.pixelSize: 20
+                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                font.bold: true
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Rectangle {
+                id: monitorFrame
+                width: 140
+                height: 86
+                color: "transparent"
+                border.color: shellTarget ? shellTarget.colorBorder : "#313244"
+                border.width: 2
+                radius: 8
+                // Completely centers the preview target frame
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                // Crosshair guides
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 20
+                    height: 2
+                    color: shellTarget ? shellTarget.colorBorder : "#313244"
+                    opacity: 0.3
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 2
+                    height: 20
+                    color: shellTarget ? shellTarget.colorBorder : "#313244"
+                    opacity: 0.3
+                }
+
+                // Mini active viewport bar indicator
+                Rectangle {
+                    id: miniActiveBar
+                    color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                    radius: 4
+
+                    x: settingsWindow && settingsWindow.currentPosition === "right" ? parent.width - width : 0
+                    y: settingsWindow && settingsWindow.currentPosition === "bottom" ? parent.height - height : 0
+                    
+                    width: (settingsWindow && (settingsWindow.currentPosition === "left" || settingsWindow.currentPosition === "right")) ? 8 : parent.width
+                    height: (settingsWindow && (settingsWindow.currentPosition === "top" || settingsWindow.currentPosition === "bottom")) ? 8 : parent.height
+
+                    Behavior on x { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on y { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on width { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on height { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -12
+                    cursorShape: Qt.PointingHandCursor
+                    
+                    onClicked: (mouse) => {
+                        if (!settingsWindow) return;
+                        let localX = mouse.x + anchors.margins;
+                        let localY = mouse.y + anchors.margins;
+                        
+                        let xPct = Math.max(0.0, Math.min(1.0, localX / monitorFrame.width));
+                        let yPct = Math.max(0.0, Math.min(1.0, localY / monitorFrame.height));
+                        
+                        let dists = [yPct, 1 - yPct, xPct, 1 - xPct];
+                        let minIdx = dists.indexOf(Math.min(...dists));
+                        let edges = ["top", "bottom", "left", "right"];
+                        
+                        settingsWindow.currentPosition = edges[minIdx];
+                        if (shellTarget) shellTarget.triggerOrientationChange(edges[minIdx]);
+                        settingsWindow.pushUpdate();
+                    }
+                }
+            }
+        }
+    }
+}
