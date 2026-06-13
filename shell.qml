@@ -36,6 +36,12 @@ Scope {
 
     property string shellFont: "Rubik"
 
+    property real previewProgress: 0.0
+
+    onBarPositionChanged: saveConfig()
+    onEnabledDisplayStrChanged: saveConfig()
+    onShellFontChanged: saveConfig()
+
     SequentialAnimation {
         id: orientationAnim
         ParallelAnimation {
@@ -73,6 +79,17 @@ Scope {
         orientationAnim.restart();
     }
 
+    ParallelAnimation {
+        id: showPreviewAnim
+        NumberAnimation { target: rootShell; property: "previewProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hidePreviewAnim
+        NumberAnimation { target: rootShell; property: "previewProgress"; to: 0.0; duration: 160; easing.type: Easing.InQuad }
+        PropertyAction { target: globalWorkspacePreview; property: "targetWorkspace"; value: -1 }
+    }
+
     function isDisplayEnabled(idx) {
         let items = enabledDisplayStr.split(",");
         return items.indexOf(String(idx)) !== -1;
@@ -89,6 +106,17 @@ Scope {
         }
         enabledDisplayStr = items.join(",");
         settingsAppInstance.updateDisplaysFromShell();
+    }
+
+    function saveConfig() {
+        if (!safeToLoad || !configFilePath) return;
+        let configObj = {
+            "position": barPosition,
+            "enabledDisplays": enabledDisplayStr,
+            "font": shellFont
+        };
+        saveConfigProc.command = ["sh", "-c", "echo '" + JSON.stringify(configObj) + "' > " + configFilePath];
+        saveConfigProc.running = true;
     }
 
     function parseConfig(rawJson) {
@@ -135,6 +163,11 @@ Scope {
         stdout: StdioCollector { onTextChanged: { parseConfig(text); rootShell.safeToLoad = true; } }
     }
 
+    Process {
+        id: saveConfigProc
+        running: false
+    }
+
     Component.onCompleted: {
         const localUri = Qt.resolvedUrl(".").toString();
         rootShell.customBasePath = localUri.replace("file://", "").trim();
@@ -169,7 +202,7 @@ Scope {
         interval: 150
         running: false
         repeat: false
-        onTriggered: globalWorkspacePreview.targetWorkspace = -1
+        onTriggered: hidePreviewAnim.restart()
     }
 
     PanelWindow {
@@ -178,29 +211,45 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
         WlrLayershell.keyboardFocus: WlrLayershell.None
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
-        // Pulling anchors back to top-left so margins can physically position the window geometry
-        anchors { left: true; top: true }
-        visible: targetWorkspace !== -1
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: targetWorkspace !== -1 || rootShell.previewProgress > 0.0
+        color: "transparent"
 
         property int targetWorkspace: -1
         property int marginLeft: 0
         property int marginTop: 0
 
-        // Maps coordinates directly to the Wayland layer surface margins
-        WlrLayershell.margins.left: marginLeft
-        WlrLayershell.margins.top: marginTop
+        onTargetWorkspaceChanged: {
+            if (targetWorkspace !== -1) {
+                if (targetWorkspace === innerPreviewCard.currentActiveWorkspace) {
+                    return; 
+                }
+                dismissTimer.stop();
+                showPreviewAnim.restart();
+                innerPreviewCard.currentActiveWorkspace = targetWorkspace;
+            }
+        }
 
         function cancelDismiss() { dismissTimer.stop(); }
         function requestDismiss() { dismissTimer.restart(); }
 
-        // Binds window size directly to the inner rectangle bounds
-        implicitWidth: innerPreviewCard.width
-        implicitHeight: innerPreviewCard.height
-        color: "transparent"
-
         WorkspacePreview {
             id: innerPreviewCard
+            targetWorkspace: globalWorkspacePreview.targetWorkspace
+            
+            // Fixed: Accounts pixel-perfectly for the 44px bar depth and 8px frame boundary width vectors
+            hoverOriginX: {
+                if (rootShell.barPosition === "left") return 44;
+                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
+                return 8; 
+            }
+            hoverOriginY: {
+                if (rootShell.barPosition === "top") return 44;
+                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
+                return 8; 
+            }
         }
     }
 
