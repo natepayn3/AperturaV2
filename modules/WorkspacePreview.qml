@@ -9,8 +9,8 @@ import Quickshell.Io
 Item {
     id: previewRoot
 
-    property int targetWorkspace: -1
-    property bool active: targetWorkspace !== -1
+    property int targetWorkspace: 1 
+    property bool active: true
     property var liveClientJson: []
 
     property int currentActiveWorkspace: -1
@@ -24,13 +24,30 @@ Item {
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 380 : 200
 
-    width: Math.round(maxCardWidth * rootShell.previewProgress)
-    height: Math.round(maxCardHeight * rootShell.previewProgress)
-    opacity: rootShell.previewProgress
+    width: Math.round(maxCardWidth)
+    height: Math.round(maxCardHeight)
+    opacity: 1.0
+    visible: true
     clip: false
 
     x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
-    y: hoverOriginY
+    y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
+
+    Item {
+        id: shortcutContext
+        anchors.fill: parent
+        z: 9999
+        
+        Shortcut {
+            sequence: "Escape"
+            context: Qt.ApplicationShortcut
+            onActivated: {
+                previewRoot.visible = false;
+                previewRoot.active = false;
+                previewRoot.targetWorkspace = -1;
+            }
+        }
+    }
 
     onTargetWorkspaceChanged: {
         if (targetWorkspace !== -1) {
@@ -74,7 +91,6 @@ Item {
         return lowerClass;
     }
 
-    // Main Card Body Background Plate
     Rectangle {
         id: cardMainBody
         anchors.fill: parent
@@ -87,43 +103,37 @@ Item {
         bottomRightRadius: (rootShell.barPosition === "top" || rootShell.barPosition === "left") ? previewRoot.radiusValue : 0
     }
 
-    // Fixed: A dedicated container layer that clips out everything outside the strict window boundary
     Item {
         id: borderClippingMask
         anchors.fill: parent
-        clip: rootShell.barPosition === "right" // Only clip when right-aligned to protect other modes
-        z: 3
+        clip: false 
+        z: 4
 
         Rectangle {
             id: borderFrame
-            // Expands the canvas width out to the right so the stroke loop draws outside the clipping viewport
-            width: rootShell.barPosition === "right" ? parent.width + 4 : parent.width
-            height: parent.height
+            anchors.fill: parent
+            
+            anchors.leftMargin: rootShell.barPosition === "left" ? -2 : 0
+            anchors.topMargin: rootShell.barPosition === "top" ? -2 : 0
+            anchors.rightMargin: rootShell.barPosition === "right" ? -2 : 0
+            anchors.bottomMargin: rootShell.barPosition === "bottom" ? -2 : 0
+
             color: "transparent"
             border.color: rootShell.colorBorder
             border.width: 2
 
-            // Retains perfect native hardware anti-aliasing curves
             topLeftRadius: cardMainBody.topLeftRadius
             topRightRadius: cardMainBody.topRightRadius
             bottomLeftRadius: cardMainBody.bottomLeftRadius
             bottomRightRadius: cardMainBody.bottomRightRadius
-
-            // Internal sub-pixel masks erase overlapping stroke lines cleanly on contacting panels
-            Rectangle { visible: rootShell.barPosition === "top"; x: 0; y: 0; width: parent.width; height: 2; color: rootShell.colorBackground }
-            Rectangle { visible: rootShell.barPosition === "top" || rootShell.barPosition === "left"; x: 0; y: 0; width: 2; height: parent.height; color: rootShell.colorBackground }
-            Rectangle { visible: rootShell.barPosition === "bottom"; x: 0; y: parent.height - 2; width: parent.width; height: 2; color: rootShell.colorBackground }
-            Rectangle { visible: rootShell.barPosition === "right"; x: parent.width - 2; y: 0; width: 2; height: parent.height; color: rootShell.colorBackground }
         }
     }
 
-    // Explicit Orientation Wing Blocks (Renders exclusively matching active panel geometry channels)
     Item {
         anchors.fill: parent
         visible: previewRoot.width > 30
-        z: 1 
+        z: 2 
 
-        // TOP ORIENTATION WINGS
         Item {
             anchors.fill: parent
             visible: rootShell.barPosition === "top"
@@ -152,7 +162,6 @@ Item {
             }
         }
 
-        // LEFT ORIENTATION WINGS
         Item {
             anchors.fill: parent
             visible: rootShell.barPosition === "left"
@@ -181,7 +190,6 @@ Item {
             }
         }
 
-        // BOTTOM ORIENTATION WINGS
         Item {
             anchors.fill: parent
             visible: rootShell.barPosition === "bottom"
@@ -198,7 +206,10 @@ Item {
                 }
             }
             Shape {
-                x: parent.width - 2; y: parent.height - previewRoot.wingSize
+                rotation: -90
+                transformOrigin: Item.TopLeft
+                x: parent.width - 2
+                y: parent.height
                 width: previewRoot.wingSize; height: previewRoot.wingSize
                 ShapePath {
                     fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
@@ -210,7 +221,6 @@ Item {
             }
         }
 
-        // RIGHT ORIENTATION WINGS
         Item {
             anchors.fill: parent
             visible: rootShell.barPosition === "right"
@@ -241,10 +251,18 @@ Item {
         }
     }
 
+    // Updated: Interaction Engine for clicking previews
     MouseArea { 
         anchors.fill: parent 
         hoverEnabled: true 
-        acceptedButtons: Qt.NoButton
+        onEntered: globalWorkspacePreview.mouseOverPreview = true
+        onExited: globalWorkspacePreview.mouseOverPreview = false
+        acceptedButtons: Qt.LeftButton 
+        onClicked: {
+            Quickshell.exec(["hyprctl", "dispatch", "workspace", previewRoot.targetWorkspace.toString()]);
+            previewRoot.visible = false;
+            previewRoot.active = false;
+        }
         z: 4
     }
 
@@ -254,8 +272,7 @@ Item {
         height: Math.round(previewRoot.maxCardHeight)
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 2)
-        opacity: rootShell.previewProgress > 0.6 ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 60 } }
+        opacity: 1.0 
         z: 5
 
         Item {
@@ -264,7 +281,7 @@ Item {
 
             Text {
                 id: titleLabel
-                text: "Workspace " + previewRoot.targetWorkspace
+                text: previewRoot.targetWorkspace !== -1 ? "Workspace " + previewRoot.targetWorkspace : ""
                 font.family: rootShell.shellFont
                 font.pixelSize: 13
                 font.bold: true
