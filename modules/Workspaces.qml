@@ -110,13 +110,34 @@ Item {
                 property bool isActive: isSpecialNode ? workspacesModuleRoot.isSpecialActive : (workspacesModuleRoot.activeWorkspace === wsId && !workspacesModuleRoot.isSpecialActive)
                 property bool isOccupied: isSpecialNode ? workspacesModuleRoot.isSpecialOccupied : workspacesModuleRoot.occupiedMap[wsId] === true
                 property bool isNewIndicatorSlot: (workspacesModuleRoot.isSpecialOccupied || workspacesModuleRoot.isSpecialActive) ? index === (workspacesModuleRoot.activeWorkspaceList.length - 2) : index === (workspacesModuleRoot.activeWorkspaceList.length - 1)
-
+                
                 property int targetWidth: isSpecialNode ? 24 : (rootShell.activeLayoutOrientation === "vertical" ? 24 : (isActive ? 48 : 24))
                 property int targetHeight: isSpecialNode ? 24 : (rootShell.activeLayoutOrientation === "vertical" ? (isActive ? 48 : 24) : 24)
+                
                 implicitWidth: targetWidth; implicitHeight: targetHeight
 
                 Behavior on targetWidth { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                 Behavior on targetHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+                Timer {
+                    id: hoverTimer
+                    interval: 150
+                    onTriggered: {
+                        if (wsButtonWrapper.isSpecialNode || !wsButtonWrapper.isOccupied || !previewWindowInstance) return;
+                        if (previewWindowInstance.targetWorkspace === wsId) return;
+
+                        let globalCoords = wsMouseArea.mapToItem(null, 0, 0);
+                        previewWindowInstance.cancelDismiss();
+                        if (rootShell.activeLayoutOrientation === "vertical") {
+                            previewWindowInstance.marginLeft = rootShell.barPosition === "left" ? 54 : (parentBarWindow ? parentBarWindow.x - 332 : 0);
+                            previewWindowInstance.marginTop = globalCoords.y - (200 / 2) + 12;
+                        } else {
+                            previewWindowInstance.marginLeft = globalCoords.x - (320 / 2) + 12;
+                            previewWindowInstance.marginTop = rootShell.barPosition === "top" ? 54 : (parentBarWindow ? parentBarWindow.y - 212 : 0);
+                        }
+                        previewWindowInstance.targetWorkspace = wsId;
+                    }
+                }
 
                 Rectangle {
                     anchors.fill: parent; radius: 6
@@ -130,28 +151,16 @@ Item {
                         anchors.centerIn: parent; visible: !wsButtonWrapper.isSpecialNode; anchors.verticalCenterOffset: wsButtonWrapper.isNewIndicatorSlot ? -1 : 0
                     }
                     Text { text: "star"; font.family: "Material Icons"; font.pixelSize: 14; color: wsButtonWrapper.isActive ? "#11111b" : rootShell.colorAccent; anchors.centerIn: parent; visible: wsButtonWrapper.isSpecialNode }
+                }
 
-                    MouseArea {
-                        id: wsMouseArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onEntered: {
-                            if (wsButtonWrapper.isSpecialNode || !wsButtonWrapper.isOccupied || !previewWindowInstance) return;
-                            let globalCoords = wsMouseArea.mapToItem(null, 0, 0);
-                            previewWindowInstance.cancelDismiss();
-                            if (rootShell.activeLayoutOrientation === "vertical") {
-                                previewWindowInstance.marginLeft = rootShell.barPosition === "left" ? 54 : (parentBarWindow ? parentBarWindow.x - 332 : 0);
-                                previewWindowInstance.marginTop = globalCoords.y - (200 / 2) + 12;
-                            } else {
-                                previewWindowInstance.marginLeft = globalCoords.x - (320 / 2) + 12;
-                                previewWindowInstance.marginTop = rootShell.barPosition === "top" ? 54 : (parentBarWindow ? parentBarWindow.y - 212 : 0);
-                            }
-                            Qt.callLater(function() { previewWindowInstance.targetWorkspace = wsButtonWrapper.wsId; });
-                        }
-                        onExited: { if (previewWindowInstance) previewWindowInstance.requestDismiss(); }
-                        onClicked: {
-                            if (wsButtonWrapper.isSpecialNode) dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.workspace.toggle_special(\"magic\")"];
-                            else dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.focus({ workspace = \"" + wsButtonWrapper.wsId + "\" })"];
-                            dispatchWorkspaceCmd.running = false; dispatchWorkspaceCmd.running = true;
-                        }
+                MouseArea {
+                    id: wsMouseArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onEntered: hoverTimer.start()
+                    onExited: { hoverTimer.stop(); if (previewWindowInstance) previewWindowInstance.requestDismiss(); }
+                    onClicked: {
+                        if (wsButtonWrapper.isSpecialNode) dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.workspace.toggle_special(\"magic\")"];
+                        else dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.focus({ workspace = \"" + wsButtonWrapper.wsId + "\" })"];
+                        dispatchWorkspaceCmd.running = false; dispatchWorkspaceCmd.running = true;
                     }
                 }
             }
