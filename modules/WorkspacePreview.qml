@@ -24,12 +24,12 @@ Item {
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 380 : 200
 
-    width: maxCardWidth * rootShell.previewProgress
-    height: maxCardHeight * rootShell.previewProgress
+    width: Math.round(maxCardWidth * rootShell.previewProgress)
+    height: Math.round(maxCardHeight * rootShell.previewProgress)
     opacity: rootShell.previewProgress
     clip: false
 
-    x: hoverOriginX
+    x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
     y: hoverOriginY
 
     onTargetWorkspaceChanged: {
@@ -83,61 +83,160 @@ Item {
         
         topLeftRadius: 0
         topRightRadius: 0
-        bottomLeftRadius: 0
-        bottomRightRadius: previewRoot.radiusValue
+        bottomLeftRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? previewRoot.radiusValue : 0
+        bottomRightRadius: (rootShell.barPosition === "top" || rootShell.barPosition === "left") ? previewRoot.radiusValue : 0
     }
 
-    // Exposed Structural Frame Outlines
-    Rectangle {
+    // Fixed: A dedicated container layer that clips out everything outside the strict window boundary
+    Item {
+        id: borderClippingMask
         anchors.fill: parent
-        color: "transparent"
-        border.color: rootShell.colorBorder
-        border.width: 2
+        clip: rootShell.barPosition === "right" // Only clip when right-aligned to protect other modes
         z: 3
 
-        topLeftRadius: 0
-        topRightRadius: 0
-        bottomLeftRadius: 0
-        bottomRightRadius: previewRoot.radiusValue
+        Rectangle {
+            id: borderFrame
+            // Expands the canvas width out to the right so the stroke loop draws outside the clipping viewport
+            width: rootShell.barPosition === "right" ? parent.width + 4 : parent.width
+            height: parent.height
+            color: "transparent"
+            border.color: rootShell.colorBorder
+            border.width: 2
 
-        // Internal sub-pixel masks erase overlapping stroke lines from bar/bezel facing walls cleanly
-        Rectangle { x: 0; y: 0; width: parent.width; height: 2; color: rootShell.colorBackground }
-        Rectangle { x: 0; y: 0; width: 2; height: parent.height; color: rootShell.colorBackground }
+            // Retains perfect native hardware anti-aliasing curves
+            topLeftRadius: cardMainBody.topLeftRadius
+            topRightRadius: cardMainBody.topRightRadius
+            bottomLeftRadius: cardMainBody.bottomLeftRadius
+            bottomRightRadius: cardMainBody.bottomRightRadius
+
+            // Internal sub-pixel masks erase overlapping stroke lines cleanly on contacting panels
+            Rectangle { visible: rootShell.barPosition === "top"; x: 0; y: 0; width: parent.width; height: 2; color: rootShell.colorBackground }
+            Rectangle { visible: rootShell.barPosition === "top" || rootShell.barPosition === "left"; x: 0; y: 0; width: 2; height: parent.height; color: rootShell.colorBackground }
+            Rectangle { visible: rootShell.barPosition === "bottom"; x: 0; y: parent.height - 2; width: parent.width; height: 2; color: rootShell.colorBackground }
+            Rectangle { visible: rootShell.barPosition === "right"; x: parent.width - 2; y: 0; width: 2; height: parent.height; color: rootShell.colorBackground }
+        }
     }
 
-    // Fixed: Organic Gusset Brackets (Wings) curve completely AWAY from the bar/bezel constraints
+    // Explicit Orientation Wing Blocks (Renders exclusively matching active panel geometry channels)
     Item {
         anchors.fill: parent
         visible: previewRoot.width > 30
         z: 1 
 
-        // Fixed: Bottom-Left Wing sits directly underneath the card and curves smoothly to the RIGHT
-        Shape {
-            x: 0; y: parent.height - 2
-            width: previewRoot.wingSize; height: previewRoot.wingSize
-            layer.enabled: true; layer.samples: 4
-            ShapePath {
-                fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
-                startX: 0; startY: 0
-                PathLine { x: previewRoot.wingSize; y: 0 }
-                // Quad curve sweeps concavely rightward to form a solid structural bracket weld
-                PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
-                PathLine { x: 0; y: 0 }
+        // TOP ORIENTATION WINGS
+        Item {
+            anchors.fill: parent
+            visible: rootShell.barPosition === "top"
+
+            Shape {
+                x: 0; y: parent.height - 2
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: 0
+                    PathLine { x: previewRoot.wingSize; y: 0 }
+                    PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
+            }
+            Shape {
+                x: parent.width - 2; y: 0
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: 0
+                    PathLine { x: 0; y: previewRoot.wingSize }
+                    PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
             }
         }
 
-        // Fixed: Top-Right Wing sits directly to the right of the card and curves smoothly DOWNWARD
-        Shape {
-            x: parent.width - 2; y: 0
-            width: previewRoot.wingSize; height: previewRoot.wingSize
-            layer.enabled: true; layer.samples: 4
-            ShapePath {
-                fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
-                startX: 0; startY: 0
-                PathLine { x: 0; y: previewRoot.wingSize }
-                // Quad curve sweeps concavely downward away from the bar edge plane
-                PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
-                PathLine { x: 0; y: 0 }
+        // LEFT ORIENTATION WINGS
+        Item {
+            anchors.fill: parent
+            visible: rootShell.barPosition === "left"
+
+            Shape {
+                x: 0; y: parent.height - 2
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: 0
+                    PathLine { x: previewRoot.wingSize; y: 0 }
+                    PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
+            }
+            Shape {
+                x: parent.width - 2; y: 0
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: 0
+                    PathLine { x: 0; y: previewRoot.wingSize }
+                    PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
+            }
+        }
+
+        // BOTTOM ORIENTATION WINGS
+        Item {
+            anchors.fill: parent
+            visible: rootShell.barPosition === "bottom"
+
+            Shape {
+                x: 0; y: -previewRoot.wingSize + 2
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: previewRoot.wingSize
+                    PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
+                    PathQuad { x: 0; y: 0; controlX: 0; controlY: previewRoot.wingSize }
+                    PathLine { x: 0; y: previewRoot.wingSize }
+                }
+            }
+            Shape {
+                x: parent.width - 2; y: parent.height - previewRoot.wingSize
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: 0; startY: 0
+                    PathLine { x: previewRoot.wingSize; y: 0 }
+                    PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
+            }
+        }
+
+        // RIGHT ORIENTATION WINGS
+        Item {
+            anchors.fill: parent
+            visible: rootShell.barPosition === "right"
+
+            Shape {
+                x: -previewRoot.wingSize + 2; y: 0
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: previewRoot.wingSize; startY: 0
+                    PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
+                    PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
+                    PathLine { x: previewRoot.wingSize; y: 0 }
+                }
+            }
+            
+            Shape {
+                x: parent.width - previewRoot.wingSize; y: parent.height - 2
+                width: previewRoot.wingSize; height: previewRoot.wingSize
+                ShapePath {
+                    fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                    startX: previewRoot.wingSize; startY: 0
+                    PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
+                    PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
+                    PathLine { x: 0; y: 0 }
+                }
             }
         }
     }
@@ -151,9 +250,10 @@ Item {
 
     Item {
         id: layoutContentWrapper
-        width: previewRoot.maxCardWidth
-        height: previewRoot.maxCardHeight
-        anchors.centerIn: parent
+        width: Math.round(previewRoot.maxCardWidth)
+        height: Math.round(previewRoot.maxCardHeight)
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         opacity: rootShell.previewProgress > 0.6 ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 60 } }
         z: 5
@@ -232,10 +332,10 @@ Item {
                     model: viewportFrame.workspaceWindows
                     delegate: Rectangle {
                         id: windowDelegate
-                        x: ((modelData.at[0] - viewportFrame.calculatedBounds.originX) * viewportFrame.scaleX)
-                        y: ((modelData.at[1] - viewportFrame.calculatedBounds.originY) * viewportFrame.scaleY)
-                        width: Math.max(4, (modelData.size[0] * viewportFrame.scaleX))
-                        height: Math.max(4, (modelData.size[1] * viewportFrame.scaleY))
+                        x: Math.round((modelData.at[0] - viewportFrame.calculatedBounds.originX) * viewportFrame.scaleX)
+                        y: Math.round((modelData.at[1] - viewportFrame.calculatedBounds.originY) * viewportFrame.scaleY)
+                        width: Math.max(4, Math.round(modelData.size[0] * viewportFrame.scaleX))
+                        height: Math.max(4, Math.round(modelData.size[1] * viewportFrame.scaleY))
                         visible: modelData.mapped
                         color: Qt.rgba(0, 0, 0, 0.6)
                         border.color: rootShell.colorBorder; border.width: 1; radius: 2; clip: true
