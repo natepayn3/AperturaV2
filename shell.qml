@@ -200,6 +200,22 @@ Scope {
         stdout: StdioCollector { onTextChanged: { readMatugenProc.output = text; parseMatugen(text); } }
     }
 
+    // --- Native Built-in Quickshell IPC Handler ---
+    IpcHandler {
+        // Registers the routing socket mapping name under 'settings'
+        target: "settings"
+
+        // Explicit signature typing is strictly required by Quickshell's registration parser
+        function toggle(): void {
+            if (settingsAppInstance) {
+                settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible;
+                if (settingsAppInstance.windowVisible) {
+                    settingsAppInstance.updateDisplaysFromShell();
+                }
+            }
+        }
+    }
+
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
     Timer { 
