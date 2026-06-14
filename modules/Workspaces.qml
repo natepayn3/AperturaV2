@@ -1,167 +1,265 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Io
 
 Item {
-    id: workspacesModuleRoot
-
-    property var shellTarget: null
-    property var parentBarWindow: null
-    property var previewWindowInstance: null
+    id: workspaceContainer
     
-    implicitWidth: rootShell.activeLayoutOrientation === "vertical" ? 32 : (workspaceFlow.width + 8)
-    implicitHeight: rootShell.activeLayoutOrientation === "vertical" ? (workspaceFlow.height + 8) : 32
+    property var previewWindowInstance: null
+    property var parentBarWindow: null
+    property var shellTarget: null
 
-    property int activeWorkspace: 1
+    property bool isVertical: shellTarget ? (shellTarget.activeLayoutOrientation === "vertical") : true
+
+    implicitWidth: isVertical ? 28 : (layoutLoader.item ? layoutLoader.item.implicitWidth : 0)
+    implicitHeight: isVertical ? (layoutLoader.item ? layoutLoader.item.implicitHeight : 0) : 28
+
+    property int activeWorkspace: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : 1
     property var activeWorkspaceList: [1, 2]
     property var occupiedMap: ({})
+
     property bool isSpecialOccupied: false
     property bool isSpecialActive: false
 
-    Process {
-        id: queryWorkspaceList; command: ["hyprctl", "workspaces", "-j"]; running: rootShell.safeToLoad
-        stdout: StdioCollector {
-            onTextChanged: {
-                try {
-                    const cleaned = text.trim(); if (!cleaned || cleaned === "[]") return;
-                    const json = JSON.parse(cleaned);
-                    if (Array.isArray(json)) {
-                        let ids = json.map(ws => ws.id).filter(id => id > 0);
-                        let occupied = {}; let specialHasWindows = false;
-                        json.forEach(ws => { 
-                            if (ws.windows > 0) {
-                                if (ws.id > 0) occupied[ws.id] = true;
-                                else if (ws.name.startsWith("special") || ws.id < 0) specialHasWindows = true;
-                            }
-                        });
-                        workspacesModuleRoot.occupiedMap = occupied; workspacesModuleRoot.isSpecialOccupied = specialHasWindows;
-                        if (!ids.includes(1)) ids.push(1); if (!ids.includes(workspacesModuleRoot.activeWorkspace)) ids.push(workspacesModuleRoot.activeWorkspace);
-                        let maxId = Math.max(...ids, 0); if (!ids.includes(maxId + 1)) ids.push(maxId + 1);
-                        for (let i = 1; i <= maxId + 1; i++) { if (!ids.includes(i)) ids.push(i); }
-                        ids.sort((a, b) => a - b);
-                        if (workspacesModuleRoot.isSpecialOccupied || workspacesModuleRoot.isSpecialActive) { if (!ids.includes(-99)) ids.push(-99); }
-                        workspacesModuleRoot.activeWorkspaceList = ids;
-                    }
-                } catch (e) {}
+    function rebuildWorkspaceData() {
+        let occupied = {};
+        let specialHasWindows = false;
+        let ids = [];
+
+        // FIX: If a workspace exists in Quickshell's values array, it is occupied. No window count check needed.
+        for (let i = 0; i < Hyprland.workspaces.values.length; i++) {
+            let ws = Hyprland.workspaces.values[i];
+            if (ws.id > 0) {
+                occupied[ws.id] = true;
+                ids.push(ws.id);
+            } else if (ws.name && (ws.name.startsWith("special") || ws.id < 0)) {
+                specialHasWindows = true;
+            }
+        }
+
+        workspaceContainer.occupiedMap = occupied;
+        workspaceContainer.isSpecialOccupied = specialHasWindows;
+
+        if (!ids.includes(1)) ids.push(1);
+        if (!ids.includes(workspaceContainer.activeWorkspace)) ids.push(workspaceContainer.activeWorkspace);
+
+        let maxId = Math.max(...ids, 0);
+        if (!ids.includes(maxId + 1)) ids.push(maxId + 1);
+
+        for (let i = 1; i <= maxId + 1; i++) {
+            if (!ids.includes(i)) ids.push(i);
+        }
+
+        ids.sort((a, b) => a - b);
+
+        if (workspaceContainer.isSpecialOccupied || workspaceContainer.isSpecialActive) {
+            if (!ids.includes(-99)) ids.push(-99);
+        }
+
+        workspaceContainer.activeWorkspaceList = ids;
+    }
+
+    Connections {
+        target: Hyprland.workspaces
+        function onValuesChanged() { rebuildWorkspaceData(); }
+    }
+
+    Connections {
+        target: Hyprland
+        function onFocusedWorkspaceChanged() { rebuildWorkspaceData(); }
+        
+        function onRawEvent(event) {
+            if (event.name === "activespecial" || event.name === "activespecialv2") {
+                const wsName = event.data.split(',')[0];
+                workspaceContainer.isSpecialActive = (wsName !== "");
+                rebuildWorkspaceData();
+            }
+            if (event.name === "destroyworkspace") {
+                rebuildWorkspaceData();
             }
         }
     }
 
-    Process {
-        id: queryActiveWorkspace; command: ["hyprctl", "activeworkspace", "-j"]; running: rootShell.safeToLoad
-        stdout: StdioCollector {
-            onTextChanged: {
-                try {
-                    const cleaned = text.trim(); if (!cleaned) return;
-                    const json = JSON.parse(cleaned);
-                    if (json && json.id !== undefined) {
-                        workspacesModuleRoot.activeWorkspace = json.id;
-                        queryWorkspaceList.running = false; queryWorkspaceList.running = true;
-                    }
-                } catch (e) {}
+    Component.onCompleted: rebuildWorkspaceData()
+
+    Flickable {
+        id: scrollContainer
+        anchors.fill: parent
+        contentWidth: isVertical ? parent.width : (layoutLoader.item ? layoutLoader.item.implicitWidth : parent.width)
+        contentHeight: isVertical ? (layoutLoader.item ? layoutLoader.item.implicitHeight : parent.height) : parent.height
+        flickableDirection: isVertical ? Flickable.VerticalFlick : Flickable.HorizontalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        Loader {
+            id: layoutLoader
+            width: isVertical ? parent.width : implicitWidth
+            height: isVertical ? implicitHeight : parent.height
+            sourceComponent: workspaceContainer.isVertical ? verticalLayoutComponent : horizontalLayoutComponent
+        }
+    }
+
+    Connections {
+        target: workspaceContainer
+        function onIsVerticalChanged() {
+            layoutLoader.sourceComponent = workspaceContainer.isVertical
+                ? verticalLayoutComponent
+                : horizontalLayoutComponent
+        }
+    }
+
+    Component {
+        id: verticalLayoutComponent
+        ColumnLayout {
+            spacing: 10
+            Repeater {
+                model: workspaceContainer.activeWorkspaceList
+                delegate: workspaceButtonDelegate
             }
         }
     }
 
-    Process {
-        id: querySpecialMonitorState; command: ["hyprctl", "monitors", "-j"]; running: rootShell.safeToLoad
-        stdout: StdioCollector {
-            onTextChanged: {
-                try {
-                    const cleaned = text.trim(); if (!cleaned) return;
-                    const json = JSON.parse(cleaned);
-                    if (Array.isArray(json)) {
-                        let foundActive = false;
-                        for (let i = 0; i < json.length; i++) {
-                            if (json[i].focused === true) { if (json[i].specialWorkspace && json[i].specialWorkspace.id !== 0) foundActive = true; break; }
-                        }
-                        workspacesModuleRoot.isSpecialActive = foundActive;
-                    }
-                } catch (e) {}
+    Component {
+        id: horizontalLayoutComponent
+        RowLayout {
+            spacing: 10
+            Repeater {
+                model: workspaceContainer.activeWorkspaceList
+                delegate: workspaceButtonDelegate
             }
         }
     }
 
-    Timer {
-        interval: 150; running: rootShell.safeToLoad; repeat: true
-        onTriggered: {
-            queryActiveWorkspace.running = false; queryActiveWorkspace.running = true;
-            querySpecialMonitorState.running = false; querySpecialMonitorState.running = true;
-        }
-    }
+    Component {
+        id: workspaceButtonDelegate
+        MouseArea {
+            id: workspaceButton
+            property int wsId: modelData
+            property bool isSpecialNode: wsId === -99
+            property bool isActive: isSpecialNode ? workspaceContainer.isSpecialActive : (workspaceContainer.activeWorkspace === wsId && !workspaceContainer.isSpecialActive)
+            property bool isOccupied: isSpecialNode ? workspaceContainer.isSpecialOccupied : workspaceContainer.occupiedMap[wsId] === true
+            property bool isNewIndicatorSlot: index === (workspaceContainer.activeWorkspaceList.length - 1)
 
-    Process { id: dispatchWorkspaceCmd; running: false }
+            property int targetWidth: isSpecialNode ? 28 : (workspaceContainer.isVertical ? 28 : (isActive ? 58 : 28))
+            property int targetHeight: isSpecialNode ? 28 : (workspaceContainer.isVertical ? (isActive ? 58 : 28) : 28)
 
-    Grid {
-        id: workspaceFlow; anchors.centerIn: parent; spacing: 6
-        columns: rootShell.activeLayoutOrientation === "vertical" ? 1 : workspacesModuleRoot.activeWorkspaceList.length
-        rows: rootShell.activeLayoutOrientation === "vertical" ? workspacesModuleRoot.activeWorkspaceList.length : 1
+            implicitWidth: targetWidth
+            implicitHeight: targetHeight
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
 
-        Repeater {
-            model: workspacesModuleRoot.activeWorkspaceList
-            delegate: Item {
-                id: wsButtonWrapper
-                property int wsId: modelData
-                property bool isSpecialNode: wsId === -99
-                property bool isActive: isSpecialNode ? workspacesModuleRoot.isSpecialActive : (workspacesModuleRoot.activeWorkspace === wsId && !workspacesModuleRoot.isSpecialActive)
-                property bool isOccupied: isSpecialNode ? workspacesModuleRoot.isSpecialOccupied : workspacesModuleRoot.occupiedMap[wsId] === true
-                property bool isNewIndicatorSlot: (workspacesModuleRoot.isSpecialOccupied || workspacesModuleRoot.isSpecialActive) ? index === (workspacesModuleRoot.activeWorkspaceList.length - 2) : index === (workspacesModuleRoot.activeWorkspaceList.length - 1)
+            Behavior on targetWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            Behavior on targetHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+            onEntered: {
+                if (isSpecialNode) return;
+                let popup = workspaceContainer.previewWindowInstance;
+                if (popup && isOccupied) {
+                    popup.cancelDismiss();
+                    Qt.callLater(function() {
+                        popup.targetWorkspace = wsId;
+                    });
+                }
+            }
+
+            onExited: {
+                let popup = workspaceContainer.previewWindowInstance;
+                if (popup) {
+                    popup.requestDismiss();
+                }
+            }
+
+            onClicked: {
+                if (isSpecialNode) {
+                    Hyprland.dispatch(`hl.dsp.workspace.toggle_special("magic")`);
+                } else {
+                    Hyprland.dispatch(`hl.dsp.focus({ workspace = "${wsId}" })`);
+                }
+            }
+
+            Rectangle {
+                id: hoverBackground
+                width: parent.width
+                height: parent.height
+                radius: 0
+                anchors.centerIn: parent
+                color: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.colorAccent : "#89b4fa"
+                opacity: workspaceButton.containsMouse ? 0.3 : 0.0
+                z: 1
+            }
+
+            Rectangle {
+                id: indicatorShape
+                anchors.centerIn: parent
+                visible: !isSpecialNode
                 
-                property int targetWidth: isSpecialNode ? 24 : (rootShell.activeLayoutOrientation === "vertical" ? 24 : (isActive ? 48 : 24))
-                property int targetHeight: isSpecialNode ? 24 : (rootShell.activeLayoutOrientation === "vertical" ? (isActive ? 48 : 24) : 24)
+                property int shapeWidth: workspaceContainer.isVertical ? (workspaceButton.isActive ? 14 : 12) : (workspaceButton.isActive ? 44 : 12)
+                property int shapeHeight: workspaceContainer.isVertical ? (workspaceButton.isActive ? 44 : 12) : (workspaceButton.isActive ? 14 : 12)
                 
-                implicitWidth: targetWidth; implicitHeight: targetHeight
+                width: shapeWidth
+                height: shapeHeight
+                radius: height / 2
+                z: 2
 
-                Behavior on targetWidth { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Behavior on targetHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                Behavior on shapeWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                Behavior on shapeHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
-                Timer {
-                    id: hoverTimer
-                    interval: 150
-                    onTriggered: {
-                        if (wsButtonWrapper.isSpecialNode || !wsButtonWrapper.isOccupied || !previewWindowInstance) return;
-                        if (previewWindowInstance.targetWorkspace === wsId) return;
-
-                        let globalCoords = wsMouseArea.mapToItem(null, 0, 0);
-                        previewWindowInstance.cancelDismiss();
-                        if (rootShell.activeLayoutOrientation === "vertical") {
-                            previewWindowInstance.marginLeft = rootShell.barPosition === "left" ? 54 : (parentBarWindow ? parentBarWindow.x - 332 : 0);
-                            previewWindowInstance.marginTop = globalCoords.y - (200 / 2) + 12;
-                        } else {
-                            previewWindowInstance.marginLeft = globalCoords.x - (320 / 2) + 12;
-                            previewWindowInstance.marginTop = rootShell.barPosition === "top" ? 54 : (parentBarWindow ? parentBarWindow.y - 212 : 0);
-                        }
-                        previewWindowInstance.targetWorkspace = wsId;
-                    }
+                color: {
+                    if (!workspaceContainer.shellTarget) return "transparent";
+                    if (workspaceButton.isActive) return workspaceContainer.shellTarget.colorAccent;
+                    if (workspaceButton.isOccupied) return workspaceContainer.shellTarget.colorText;
+                    return "transparent";
                 }
 
-                Rectangle {
-                    anchors.fill: parent; radius: 6
-                    color: wsButtonWrapper.isActive ? rootShell.colorAccent : (wsMouseArea.containsMouse ? rootShell.colorBorder : "transparent")
-                    border.color: wsButtonWrapper.isOccupied && !wsButtonWrapper.isActive ? rootShell.colorSubtext : "transparent"; border.width: 1
-
-                    Text {
-                        text: wsButtonWrapper.isNewIndicatorSlot ? "+" : wsButtonWrapper.wsId.toString()
-                        font.family: rootShell.shellFont; font.pixelSize: wsButtonWrapper.isNewIndicatorSlot ? 14 : 11; font.bold: true
-                        color: wsButtonWrapper.isActive ? "#11111b" : (wsButtonWrapper.isOccupied ? rootShell.colorText : rootShell.colorSubtext)
-                        anchors.centerIn: parent; visible: !wsButtonWrapper.isSpecialNode; anchors.verticalCenterOffset: wsButtonWrapper.isNewIndicatorSlot ? -1 : 0
-                    }
-                    Text { text: "star"; font.family: "Material Icons"; font.pixelSize: 14; color: wsButtonWrapper.isActive ? "#11111b" : rootShell.colorAccent; anchors.centerIn: parent; visible: wsButtonWrapper.isSpecialNode }
+                border.width: (!workspaceButton.isActive && !workspaceButton.isOccupied) ? 1.5 : 0
+                border.color: {
+                    if (!workspaceContainer.shellTarget) return "transparent";
+                    return (!workspaceButton.isActive && !workspaceButton.isOccupied)
+                        ? workspaceContainer.shellTarget.colorSubtext // FIX: Swapped from colorBorder to colorSubtext for visibility
+                        : "transparent";
                 }
 
-                MouseArea {
-                    id: wsMouseArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onEntered: hoverTimer.start()
-                    onExited: { hoverTimer.stop(); if (previewWindowInstance) previewWindowInstance.requestDismiss(); }
-                    onClicked: {
-                        if (wsButtonWrapper.isSpecialNode) dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.workspace.toggle_special(\"magic\")"];
-                        else dispatchWorkspaceCmd.command = ["hyprctl", "dispatch", "hl.dsp.focus({ workspace = \"" + wsButtonWrapper.wsId + "\" })"];
-                        dispatchWorkspaceCmd.running = false; dispatchWorkspaceCmd.running = true;
+                Text {
+                    text: wsId.toString()
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.shellFont : "Rubik"
+                    font.pixelSize: 11
+                    font.bold: true
+                    
+                    color: {
+                        if (!workspaceContainer.shellTarget) return "#ffffff";
+                        return workspaceButton.isActive
+                            ? workspaceContainer.shellTarget.colorBackground
+                            : workspaceContainer.shellTarget.colorText;
                     }
+                    opacity: workspaceButton.isActive ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                }
+            }
+
+            Text {
+                id: specialIconLayer
+                visible: isSpecialNode
+                anchors.centerIn: parent
+                text: "star"
+                
+                font.family: "Material Symbols Outlined"
+                font.pixelSize: 16
+                font.bold: true
+                z: 2
+                
+                font.letterSpacing: workspaceButton.isActive ? 0.01 : 0.0
+                
+                color: {
+                    if (!workspaceContainer.shellTarget) return workspaceButton.isActive ? "#f5c2e7" : "#ffffff";
+                    return workspaceButton.isActive 
+                        ? workspaceContainer.shellTarget.colorAccent 
+                        : workspaceContainer.shellTarget.colorText;
                 }
             }
         }
