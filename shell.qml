@@ -202,10 +202,8 @@ Scope {
 
     // --- Native Built-in Quickshell IPC Handler ---
     IpcHandler {
-        // Registers the routing socket mapping name under 'settings'
         target: "settings"
 
-        // Explicit signature typing is strictly required by Quickshell's registration parser
         function toggle(): void {
             if (settingsAppInstance) {
                 settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible;
@@ -268,7 +266,6 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
         
-        // FIX: Change from OnDemand to None to stop focus hijacking
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -334,7 +331,6 @@ Scope {
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
         
-        // FIX: Change from OnDemand to None to stop focus hijacking
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -380,6 +376,7 @@ Scope {
         }
     }
 
+    // --- Vertical Panels (Left / Right) ---
     component LeftPanelBar : PanelWindow {
         id: barL
         screen: targetScreen
@@ -398,37 +395,53 @@ Scope {
             Column {
                 anchors.top: parent.top
                 anchors.topMargin: 12
-                anchors.right: parent.right
-                anchors.rightMargin: 4
+                // Shifts items 4px right toward screen center (Window Center Line = 22px, Column Center = 26px)
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.horizontalCenterOffset: 1
                 spacing: 12
-                width: 32
-                Button {
-                    id: settingsLauncherBtnL; flat: true; width: 32; height: 32
-                    background: Rectangle { anchors.fill: parent; color: settingsLauncherBtnL.hovered ? rootShell.colorBorder : "transparent"; radius: 6 }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnL.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
+                width: 28
+                
+                MouseArea {
+                    id: settingsMouseL
+                    width: 28; height: 28
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseL.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
-                Item {
-                    width: parent.width; height: clockColL.implicitHeight
+                MouseArea {
+                    id: clockMouseL
+                    width: 28; height: clockColL.implicitHeight + 12 // Keeps padding safe from layout squishing
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: globalCalendarPreview.showCalendar()
+                    onExited: globalCalendarPreview.requestDismiss()
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: clockMouseL.containsMouse ? 0.3 : 0.0
+                    }
                     Column {
                         id: clockColL
-                        width: parent.width; spacing: 2
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        anchors.centerIn: parent; spacing: 2
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { 
                             text: { 
                                 let hours = clockTimer.currentTime.getHours() % 12
                                 hours = hours === 0 ? 12 : hours
                                 return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
                             } 
-                            font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                            font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
                         }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    }
-                    MouseArea {
-                        anchors.fill: parent; hoverEnabled: true
-                        onEntered: globalCalendarPreview.showCalendar()
-                        onExited: globalCalendarPreview.requestDismiss()
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 9; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     }
                 }
                 
@@ -455,36 +468,52 @@ Scope {
             Column {
                 anchors.top: parent.top
                 anchors.topMargin: 12
-                anchors.left: parent.left
-                anchors.leftMargin: 4
+                // Shifts items 4px left toward screen center
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.horizontalCenterOffset: -1
                 spacing: 12
-                width: 32
-                Button {
-                    id: settingsLauncherBtnR; flat: true; width: 32; height: 32
-                    background: Rectangle { anchors.fill: parent; color: settingsLauncherBtnR.hovered ? rootShell.colorBorder : "transparent"; radius: 6 }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnR.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
+                width: 28
+                
+                MouseArea {
+                    id: settingsMouseR
+                    width: 28; height: 28
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseR.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
-                Item {
-                    width: parent.width; height: clockColR.implicitHeight
+                MouseArea {
+                    id: clockMouseR
+                    width: 28; height: clockColR.implicitHeight + 12
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: clockMouseR.containsMouse ? 0.3 : 0.0
+                    }
                     Column {
                         id: clockColR
-                        width: parent.width; spacing: 2
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        anchors.centerIn: parent; spacing: 2
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { 
                             text: { 
                                 let hours = clockTimer.currentTime.getHours() % 12
                                 hours = hours === 0 ? 12 : hours
                                 return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
                             } 
-                            font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                            font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
                         }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    }
-                    MouseArea {
-                        anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 9; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     }
                 }
                 
@@ -493,6 +522,7 @@ Scope {
         }
     }
 
+    // --- Horizontal Panels (Top / Bottom) ---
     component TopPanelBar : PanelWindow {
         id: barT
         screen: targetScreen
@@ -511,23 +541,44 @@ Scope {
             Row {
                 anchors.left: parent.left
                 anchors.leftMargin: 12
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 4
+                // Shifts items 4px down toward screen center
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: 1
                 spacing: 12
                 height: 32
-                Button {
-                    id: settingsLauncherBtnT; flat: true; width: 32; height: 32
-                    background: Rectangle { anchors.fill: parent; color: settingsLauncherBtnT.hovered ? rootShell.colorBorder : "transparent"; radius: 6 }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnT.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
+                
+                MouseArea {
+                    id: settingsMouseT
+                    width: 32; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    anchors.verticalCenter: parent.verticalCenter
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseT.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
-                Item {
+                MouseArea {
+                    id: clockMouseT
+                    width: clockRowT.implicitWidth + 12; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     anchors.verticalCenter: parent.verticalCenter
-                    width: clockRowT.implicitWidth; height: parent.height
+                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: clockMouseT.containsMouse ? 0.3 : 0.0
+                    }
                     Row {
                         id: clockRowT
-                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4; anchors.centerIn: parent
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
                         Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                         Text { 
@@ -540,10 +591,6 @@ Scope {
                             font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
                         }
                         Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                    }
-                    MouseArea {
-                        anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
                     }
                 }
                 
@@ -570,23 +617,44 @@ Scope {
             Row {
                 anchors.left: parent.left
                 anchors.leftMargin: 12
-                anchors.top: parent.top
-                anchors.topMargin: 4
+                // Shifts items 4px up toward screen center
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: -1
                 spacing: 12
                 height: 32
-                Button {
-                    id: settingsLauncherBtnB; flat: true; width: 32; height: 32
-                    background: Rectangle { anchors.fill: parent; color: settingsLauncherBtnB.hovered ? rootShell.colorBorder : "transparent"; radius: 6 }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnB.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
+                
+                MouseArea {
+                    id: settingsMouseB
+                    width: 32; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    anchors.verticalCenter: parent.verticalCenter
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseB.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
-                Item {
+                MouseArea {
+                    id: clockMouseB
+                    width: clockRowB.implicitWidth + 12; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     anchors.verticalCenter: parent.verticalCenter
-                    width: clockRowB.implicitWidth; height: parent.height
+                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: clockMouseB.containsMouse ? 0.3 : 0.0
+                    }
                     Row {
                         id: clockRowB
-                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4; anchors.centerIn: parent
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
                         Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                         Text { 
@@ -600,10 +668,6 @@ Scope {
                         }
                         Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                     }
-                    MouseArea {
-                        anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
-                    }
                 }
                 
                 Workspaces { anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; parentBarWindow: barB; previewWindowInstance: globalWorkspacePreview }
@@ -611,6 +675,7 @@ Scope {
         }
     }
 
+    // --- Instantiators ---
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
         delegate: LeftPanelBar { 
@@ -643,6 +708,7 @@ Scope {
         } 
     }
 
+    // --- Screen Border Overlay Frame Module ---
     component ScreenEdgeFrame : PanelWindow {
         id: frameWindowItem
         screen: targetScreen
