@@ -200,7 +200,6 @@ Scope {
         stdout: StdioCollector { onTextChanged: { readMatugenProc.output = text; parseMatugen(text); } }
     }
 
-    // --- Native Built-in Quickshell IPC Handler ---
     IpcHandler {
         target: "settings"
 
@@ -258,14 +257,12 @@ Scope {
         }
     }
 
-    // --- Workspace Preview Panel ---
     PanelWindow {
         id: globalWorkspacePreview
         property bool mouseOverPreview: false
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
-        
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -323,14 +320,12 @@ Scope {
         }
     }
 
-    // --- Calendar Preview Panel ---
     PanelWindow {
         id: globalCalendarPreview
         property bool calendarActive: false
         
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
-        
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -395,15 +390,15 @@ Scope {
             Column {
                 anchors.top: parent.top
                 anchors.topMargin: 12
-                // Shifts items 4px right toward screen center (Window Center Line = 22px, Column Center = 26px)
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.horizontalCenterOffset: 1
                 spacing: 12
-                width: 28
+                width: parent.width // Match target bar window size bounding box boundaries
                 
                 MouseArea {
                     id: settingsMouseL
                     width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
@@ -418,7 +413,8 @@ Scope {
                 
                 MouseArea {
                     id: clockMouseL
-                    width: 28; height: clockColL.implicitHeight + 12 // Keeps padding safe from layout squishing
+                    width: 36; height: clockColL.implicitHeight + 8 // Expanded boundary limits safely
+                    anchors.horizontalCenter: parent.horizontalCenter
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onEntered: globalCalendarPreview.showCalendar()
@@ -432,6 +428,7 @@ Scope {
                     Column {
                         id: clockColL
                         anchors.centerIn: parent; spacing: 2
+                        width: parent.width
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { 
                             text: { 
@@ -445,7 +442,7 @@ Scope {
                     }
                 }
                 
-                Workspaces { width: parent.width; shellTarget: rootShell; parentBarWindow: barL; previewWindowInstance: globalWorkspacePreview }
+                Workspaces { width: 28; anchors.horizontalCenter: parent.horizontalCenter; shellTarget: rootShell; parentBarWindow: barL; previewWindowInstance: globalWorkspacePreview }
             }
         }
     }
@@ -468,15 +465,15 @@ Scope {
             Column {
                 anchors.top: parent.top
                 anchors.topMargin: 12
-                // Shifts items 4px left toward screen center
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.horizontalCenterOffset: -1
                 spacing: 12
-                width: 28
+                width: parent.width
                 
                 MouseArea {
                     id: settingsMouseR
                     width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
@@ -491,7 +488,8 @@ Scope {
                 
                 MouseArea {
                     id: clockMouseR
-                    width: 28; height: clockColR.implicitHeight + 12
+                    width: 36; height: clockColR.implicitHeight + 8
+                    anchors.horizontalCenter: parent.horizontalCenter
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
@@ -504,6 +502,7 @@ Scope {
                     Column {
                         id: clockColR
                         anchors.centerIn: parent; spacing: 2
+                        width: parent.width
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { 
                             text: { 
@@ -517,7 +516,7 @@ Scope {
                     }
                 }
                 
-                Workspaces { width: parent.width; shellTarget: rootShell; parentBarWindow: barR; previewWindowInstance: globalWorkspacePreview }
+                Workspaces { width: 28; anchors.horizontalCenter: parent.horizontalCenter; shellTarget: rootShell; parentBarWindow: barR; previewWindowInstance: globalWorkspacePreview }
             }
         }
     }
@@ -541,11 +540,10 @@ Scope {
             Row {
                 anchors.left: parent.left
                 anchors.leftMargin: 12
-                // Shifts items 4px down toward screen center
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.verticalCenterOffset: 1
                 spacing: 12
-                height: 32
+                height: parent.height
                 
                 MouseArea {
                     id: settingsMouseT
@@ -578,7 +576,7 @@ Scope {
                     }
                     Row {
                         id: clockRowT
-                        spacing: 4; anchors.centerIn: parent
+                        spacing: 6; anchors.centerIn: parent
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
                         Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                         Text { 
@@ -617,11 +615,10 @@ Scope {
             Row {
                 anchors.left: parent.left
                 anchors.leftMargin: 12
-                // Shifts items 4px up toward screen center
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.verticalCenterOffset: -1
                 spacing: 12
-                height: 32
+                height: parent.height
                 
                 MouseArea {
                     id: settingsMouseB
@@ -654,7 +651,7 @@ Scope {
                     }
                     Row {
                         id: clockRowB
-                        spacing: 4; anchors.centerIn: parent
+                        spacing: 6; anchors.centerIn: parent
                         Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
                         Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                         Text { 
