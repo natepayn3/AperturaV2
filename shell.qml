@@ -251,7 +251,9 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        
+        // FIX: Change from OnDemand to None to stop focus hijacking
+        WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
@@ -315,14 +317,15 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        
+        // FIX: Change from OnDemand to None to stop focus hijacking
+        WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: calendarActive || rootShell.calendarProgress > 0.0
         color: "transparent"
 
-        // FIX: Corrected from innerPreviewCard to innerCalendarCard
         mask: Region { item: innerCalendarCard }
 
         function showCalendar() {
@@ -646,7 +649,6 @@ Scope {
 
         Shape {
             anchors.fill: parent
-            // Fixed: Corrected layer property assignment syntax block
             layer.enabled: true
             layer.samples: 4
             ShapePath {
