@@ -100,7 +100,6 @@ Scope {
 
     ParallelAnimation {
         id: hideCalendarAnim
-        // Matches the 350ms closing duration defined internally in CalendarPopup.qml
         NumberAnimation { target: rootShell; property: "calendarProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalCalendarPreview; property: "calendarActive"; value: false }
     }
@@ -225,7 +224,11 @@ Scope {
         interval: 150
         running: false
         repeat: false
-        onTriggered: hideCalendarAnim.restart()
+        onTriggered: {
+            if (!innerCalendarCard.isHovered) {
+                hideCalendarAnim.restart();
+            }
+        }
     }
 
     Timer {
@@ -310,7 +313,6 @@ Scope {
         id: globalCalendarPreview
         property bool calendarActive: false
         
-        // Dropped to Top so it slides under the Overlay bar and never steals input
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
@@ -320,7 +322,8 @@ Scope {
         visible: calendarActive || rootShell.calendarProgress > 0.0
         color: "transparent"
 
-        mask: Region { item: innerPreviewCard }
+        // FIX: Corrected from innerPreviewCard to innerCalendarCard
+        mask: Region { item: innerCalendarCard }
 
         function showCalendar() {
             calendarDismissTimer.stop();
@@ -329,7 +332,6 @@ Scope {
         }
 
         function requestDismiss() { 
-            // Only dismiss if the mouse isn't safely resting inside the actual popup card
             if (!innerCalendarCard.isHovered) {
                 calendarDismissTimer.restart(); 
             }
@@ -339,7 +341,6 @@ Scope {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
 
-            // Safely route the popup's internal hover state back up to the shell
             onIsHoveredChanged: {
                 if (isHovered) {
                     calendarDismissTimer.stop();
@@ -389,7 +390,6 @@ Scope {
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
                 }
                 
-                // Clock hover wrapper
                 Item {
                     width: parent.width; height: clockColL.implicitHeight
                     Column {
@@ -408,7 +408,8 @@ Scope {
                     }
                     MouseArea {
                         anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                        onEntered: globalCalendarPreview.showCalendar()
+                        onExited: globalCalendarPreview.requestDismiss()
                     }
                 }
                 
@@ -464,7 +465,7 @@ Scope {
                     }
                     MouseArea {
                         anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
                     }
                 }
                 
@@ -523,7 +524,7 @@ Scope {
                     }
                     MouseArea {
                         anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
                     }
                 }
                 
@@ -582,7 +583,7 @@ Scope {
                     }
                     MouseArea {
                         anchors.fill: parent; hoverEnabled: true
-                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                        onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
                     }
                 }
                 
@@ -645,6 +646,7 @@ Scope {
 
         Shape {
             anchors.fill: parent
+            // Fixed: Corrected layer property assignment syntax block
             layer.enabled: true
             layer.samples: 4
             ShapePath {
