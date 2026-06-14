@@ -9,8 +9,8 @@ import Quickshell.Io
 Item {
     id: previewRoot
 
-    property int targetWorkspace: 1 
-    property bool active: true
+    property int targetWorkspace: -1 
+    property bool active: targetWorkspace !== -1
     property var liveClientJson: []
 
     property int currentActiveWorkspace: -1
@@ -23,6 +23,8 @@ Item {
 
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 380 : 200
+
+    signal closeRequested()
 
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
@@ -41,11 +43,7 @@ Item {
         Shortcut {
             sequence: "Escape"
             context: Qt.ApplicationShortcut
-            onActivated: {
-                previewRoot.visible = false;
-                previewRoot.active = false;
-                previewRoot.targetWorkspace = -1;
-            }
+            onActivated: previewRoot.closeRequested()
         }
     }
 
@@ -77,8 +75,6 @@ Item {
         }
     }
 
-    Process { id: switchWorkspace; running: false }
-
     function getCleanIconName(className) {
         if (!className) return "application-x-executable";
         let lowerClass = className.toLowerCase().trim();
@@ -98,8 +94,8 @@ Item {
         z: 2
         
         topLeftRadius: 0
-        topRightRadius: 0
-        bottomLeftRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? previewRoot.radiusValue : 0
+        topRightRadius: rootShell.barPosition === "bottom" ? previewRoot.radiusValue : 0
+        bottomLeftRadius: rootShell.barPosition === "right" ? previewRoot.radiusValue : 0
         bottomRightRadius: (rootShell.barPosition === "top" || rootShell.barPosition === "left") ? previewRoot.radiusValue : 0
     }
 
@@ -251,17 +247,13 @@ Item {
         }
     }
 
-    // Updated: Interaction Engine for clicking previews
     MouseArea { 
         anchors.fill: parent 
         hoverEnabled: true 
-        onEntered: globalWorkspacePreview.mouseOverPreview = true
-        onExited: globalWorkspacePreview.mouseOverPreview = false
         acceptedButtons: Qt.LeftButton 
         onClicked: {
-            Quickshell.exec(["hyprctl", "dispatch", "workspace", previewRoot.targetWorkspace.toString()]);
-            previewRoot.visible = false;
-            previewRoot.active = false;
+            Hyprland.dispatch(`hl.dsp.focus({ workspace = "${previewRoot.targetWorkspace}" })`);
+            previewRoot.closeRequested();
         }
         z: 4
     }
