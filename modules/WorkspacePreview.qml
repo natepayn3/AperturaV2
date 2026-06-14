@@ -24,7 +24,7 @@ Item {
     property int hoverOriginY: 0
 
     property real maxCardWidth: viewportFrame.width + 28
-    property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 380 : 200
+    property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
@@ -371,7 +371,8 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: headerDivider.bottom; anchors.topMargin: 8
                     anchors.bottom: parent.bottom; anchors.bottomMargin: 2
-                    color: Qt.rgba(0, 0, 0, 0.2); radius: 4; clip: true
+                    color: "transparent" 
+                    radius: 4; clip: true
 
                     property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.targetWorkspace)
 
@@ -435,7 +436,7 @@ Item {
                             width: Math.max(4, Math.round(modelData.size[0] * viewportFrame.scaleX))
                             height: Math.max(4, Math.round(modelData.size[1] * viewportFrame.scaleY))
                             visible: modelData.mapped
-                            color: Qt.rgba(0, 0, 0, 0.6)
+                            color: "transparent" 
                             border.color: rootShell.colorBorder; border.width: 1; radius: 2; clip: true
 
                             property var wlToplevel: {
