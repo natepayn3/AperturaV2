@@ -12,10 +12,13 @@ Item {
     signal closeRequested()
 
     property int targetWorkspace: -1 
-    property bool active: targetWorkspace !== -1
+    property bool active: false
+    
+    property int stagedWorkspace: -1
     property var liveClientJson: []
 
     property int currentActiveWorkspace: -1
+    property int workingWorkspace: -1
 
     property real radiusValue: 12
     property real wingSize: 14
@@ -38,6 +41,41 @@ Item {
     x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
     y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
 
+    onTargetWorkspaceChanged: {
+        if (targetWorkspace !== -1) {
+            if (previewRoot.active) {
+                previewRoot.stagedWorkspace = targetWorkspace;
+                previewRoot.active = false;
+                sequenceDelayTimer.restart();
+            } else {
+                previewRoot.workingWorkspace = targetWorkspace;
+                clientQueryProcess.running = true;
+                previewRoot.active = true;
+            }
+        } else {
+            previewRoot.active = false;
+            previewRoot.stagedWorkspace = -1;
+            previewRoot.workingWorkspace = -1;
+            liveClientJson = [];
+        }
+    }
+
+    Timer {
+        id: sequenceDelayTimer
+        interval: 360
+        running: false
+        repeat: false
+        onTriggered: {
+            if (previewRoot.stagedWorkspace !== -1) {
+                // Fixed: Update the operational target directly to prevent loop re-entry
+                previewRoot.workingWorkspace = previewRoot.stagedWorkspace;
+                previewRoot.stagedWorkspace = -1;
+                clientQueryProcess.running = true;
+                previewRoot.active = true;
+            }
+        }
+    }
+
     Item {
         id: shortcutContext
         anchors.fill: parent
@@ -47,15 +85,6 @@ Item {
             sequence: "Escape"
             context: Qt.ApplicationShortcut
             onActivated: previewRoot.closeRequested()
-        }
-    }
-
-    onTargetWorkspaceChanged: {
-        if (targetWorkspace !== -1) {
-            clientQueryProcess.running = true;
-        } else {
-            liveClientJson = [];
-            currentActiveWorkspace = -1;
         }
     }
 
@@ -95,10 +124,10 @@ Item {
         anchors.fill: parent
 
         transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.Left
-            if (rootShell.barPosition === "right") return Item.Right
-            if (rootShell.barPosition === "top") return Item.Top
-            if (rootShell.barPosition === "bottom") return Item.Bottom
+            if (rootShell.barPosition === "left") return Item.BottomLeft
+            if (rootShell.barPosition === "right") return Item.BottomRight
+            if (rootShell.barPosition === "top") return Item.TopRight
+            if (rootShell.barPosition === "bottom") return Item.BottomLeft
             return Item.Center
         }
 
@@ -107,7 +136,6 @@ Item {
                 name: "hidden"
                 when: !previewRoot.active
                 PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
-                // Keep the content completely transparent while the card is closed
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
                 PropertyChanges { 
                     target: animatedGroup
@@ -119,7 +147,6 @@ Item {
                 name: "shown"
                 when: previewRoot.active
                 PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
-                // Bring the content to full visibility when open
                 PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
             }
         ]
@@ -128,13 +155,10 @@ Item {
             Transition {
                 from: "hidden"; to: "shown"
                 ParallelAnimation {
-                    // The main structural spring
                     NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
                     
-                    // The content reveal
                     SequentialAnimation {
-                        // Waits exactly 200ms, then starts fading the content in while the card is still bouncing
                         PauseAnimation { duration: 200 } 
                         NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
                     }
@@ -304,7 +328,7 @@ Item {
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
+                        PathLine { x: parent.width; y: parent.height }
                     }
                 }
             }
@@ -315,7 +339,7 @@ Item {
             hoverEnabled: true 
             acceptedButtons: Qt.LeftButton 
             onClicked: {
-                Hyprland.dispatch(`hl.dsp.focus({ workspace = "${previewRoot.targetWorkspace}" })`);
+                Hyprland.dispatch(`hl.dsp.focus({ workspace = "${previewRoot.workingWorkspace}" })`);
                 previewRoot.closeRequested();
             }
             z: 4
@@ -336,7 +360,7 @@ Item {
 
                 Text {
                     id: titleLabel
-                    text: previewRoot.targetWorkspace !== -1 ? "Workspace " + previewRoot.targetWorkspace : ""
+                    text: previewRoot.workingWorkspace !== -1 ? "Workspace " + previewRoot.workingWorkspace : ""
                     font.family: rootShell.shellFont
                     font.pixelSize: 13
                     font.bold: true
@@ -374,12 +398,13 @@ Item {
                     color: "transparent" 
                     radius: 4; clip: true
 
-                    property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.targetWorkspace)
+                    // Fixed: Internal content logic safely monitors workingWorkspace
+                    property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.workingWorkspace)
 
                     property var calculatedBounds: {
-                        if (!workspaceWindows || workspaceWindows.length === 0) {
+                        if (previewRoot.workingWorkspace === -1 || !workspaceWindows || workspaceWindows.length === 0) {
                             let mX = 0, mY = 0, mWidth = 1920, mHeight = 1080;
-                            let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.targetWorkspace);
+                            let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.workingWorkspace);
                             let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
                             
                             if (targetMonitor) {
@@ -389,7 +414,6 @@ Item {
                                 mX = targetMonitor.x;
                                 mY = targetMonitor.y;
                                 
-                                // Keep your V2 gap offset for empty workspaces
                                 let barThickness = 44;
                                 if (rootShell.barPosition === "left") { mX += barThickness; mWidth -= barThickness; }
                                 else if (rootShell.barPosition === "right") { mWidth -= barThickness; }
@@ -399,7 +423,6 @@ Item {
                             return { "w": mWidth, "h": mHeight, "isVertical": mHeight > mWidth, "originX": mX, "originY": mY };
                         }
 
-                        // V1 logic: Scan windows to build accurate bounding box regardless of monitor rotation
                         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                         for (let i = 0; i < workspaceWindows.length; i++) {
                             let win = workspaceWindows[i];
