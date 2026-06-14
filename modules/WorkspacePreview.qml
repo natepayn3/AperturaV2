@@ -316,42 +316,50 @@ Item {
                 property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.targetWorkspace)
 
                 property var calculatedBounds: {
-                    let mWidth = 1920;
-                    let mHeight = 1080;
-                    let mX = 0;
-                    let mY = 0;
-                    let isVert = false;
-
-                    let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.targetWorkspace);
-                    let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
-
-                    if (targetMonitor) {
-                        let scaleFactor = targetMonitor.scale || 1.0;
-                        if (scaleFactor <= 0) scaleFactor = 1.0;
-
-                        mWidth = Math.round(targetMonitor.width / scaleFactor);
-                        mHeight = Math.round(targetMonitor.height / scaleFactor);
-                        mX = targetMonitor.x;
-                        mY = targetMonitor.y;
-
-                        // Dynamically crop out the shell's exclusive zone gap so windows sit flush
-                        let barThickness = 44;
-                        if (rootShell.barPosition === "left") {
-                            mX += barThickness;
-                            mWidth -= barThickness;
-                        } else if (rootShell.barPosition === "right") {
-                            mWidth -= barThickness;
-                        } else if (rootShell.barPosition === "top") {
-                            mY += barThickness;
-                            mHeight -= barThickness;
-                        } else if (rootShell.barPosition === "bottom") {
-                            mHeight -= barThickness;
+                    if (!workspaceWindows || workspaceWindows.length === 0) {
+                        let mX = 0, mY = 0, mWidth = 1920, mHeight = 1080;
+                        let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.targetWorkspace);
+                        let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
+                        
+                        if (targetMonitor) {
+                            let scale = targetMonitor.scale > 0 ? targetMonitor.scale : 1.0;
+                            mWidth = Math.round(targetMonitor.width / scale);
+                            mHeight = Math.round(targetMonitor.height / scale);
+                            mX = targetMonitor.x;
+                            mY = targetMonitor.y;
+                            
+                            // Keep your V2 gap offset for empty workspaces
+                            let barThickness = 44;
+                            if (rootShell.barPosition === "left") { mX += barThickness; mWidth -= barThickness; }
+                            else if (rootShell.barPosition === "right") { mWidth -= barThickness; }
+                            else if (rootShell.barPosition === "top") { mY += barThickness; mHeight -= barThickness; }
+                            else if (rootShell.barPosition === "bottom") { mHeight -= barThickness; }
                         }
-
-                        isVert = mHeight > mWidth;
+                        return { "w": mWidth, "h": mHeight, "isVertical": mHeight > mWidth, "originX": mX, "originY": mY };
                     }
 
-                    return { "w": mWidth, "h": mHeight, "isVertical": isVert, "originX": mX, "originY": mY };
+                    // V1 logic: Scan windows to build accurate bounding box regardless of monitor rotation
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    for (let i = 0; i < workspaceWindows.length; i++) {
+                        let win = workspaceWindows[i];
+                        if (!win.at || !win.size) continue;
+                        if (win.at[0] < minX) minX = win.at[0];
+                        if (win.at[1] < minY) minY = win.at[1];
+                        if ((win.at[0] + win.size[0]) > maxX) maxX = win.at[0] + win.size[0];
+                        if ((win.at[1] + win.size[1]) > maxY) maxY = win.at[1] + win.size[1];
+                    }
+
+                    let spanX = maxX - minX;
+                    let spanY = maxY - minY;
+                    let verticalDetected = spanY > spanX;
+                    
+                    let normW = verticalDetected ? 1080 : 1920;
+                    let normH = verticalDetected ? 1920 : 1080;
+                    
+                    if (spanX > 0 && Math.abs(spanX - normW) > 100) normW = spanX;
+                    if (spanY > 0 && Math.abs(spanY - normH) > 100) normH = spanY;
+                    
+                    return { "w": normW, "h": normH, "isVertical": verticalDetected, "originX": minX, "originY": minY };
                 }
 
                 width: Math.round(height * (calculatedBounds.w / calculatedBounds.h))
