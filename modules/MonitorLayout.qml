@@ -24,33 +24,39 @@ Item {
                 font.pixelSize: 20
                 color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                 font.bold: true
-                // Centers the title string in the content panel
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
             Row {
                 spacing: 12
-                // Perfectly centers the display button rack
                 anchors.horizontalCenter: parent.horizontalCenter
                 
                 Repeater {
-                    model: Quickshell.screens
+                    // FIX: Connect directly to the geometry sorting matrix array instead of raw Quickshell order
+                    model: settingsWindow ? settingsWindow.getGeometricallySortedScreens() : []
+                    
                     delegate: Button {
                         id: dispSelBtn
                         flat: true
                         width: 96
                         height: 42
-                        property bool isSelected: settingsWindow ? settingsWindow.isLocalDisplayActive(index) : false
+                        
+                        // FIX: Pull immutable hardware indexes from the custom geometric tracking payload
+                        property int realHardwareIndex: modelData.index
+                        property bool isSelected: settingsWindow ? settingsWindow.isLocalDisplayActive(realHardwareIndex) : false
                         
                         background: Rectangle { 
                             color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
-                            border.color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : (shellTarget ? shellTarget.colorBorder : "#313244")
-                            border.width: 2
+                            
+                            // FIXED: Lifted dim container outline up to follow active colorText token
+                            border.color: dispSelBtn.isSelected ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : (shellTarget ? shellTarget.colorText : "#cdd6f4")
+                            border.width: 1
                             radius: 8 
                         }
                         
                         contentItem: Text {
-                            text: modelData.name.toUpperCase()
+                            // Pull name string parameters from the target live screen C++ model object wrapper
+                            text: modelData.obj.name.toUpperCase()
                             font.family: settingsWindow ? settingsWindow.selectedFont : "Rubik"
                             font.pixelSize: 13
                             font.bold: true
@@ -61,7 +67,8 @@ Item {
                         
                         onClicked: {
                             if (shellTarget && settingsWindow) {
-                                shellTarget.toggleDisplay(index);
+                                // Enforce safe real hardware index execution routing toggles
+                                shellTarget.toggleDisplay(realHardwareIndex);
                                 settingsWindow.enabledDisplays = shellTarget.enabledDisplayStr;
                                 settingsWindow.pushUpdate();
                             }
@@ -94,10 +101,11 @@ Item {
                 width: 140
                 height: 86
                 color: "transparent"
-                border.color: shellTarget ? shellTarget.colorBorder : "#313244"
-                border.width: 2
+                
+                // FIXED: Set monitor preview card box boundary outline to colorText
+                border.color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                border.width: 1
                 radius: 8
-                // Completely centers the preview target frame
                 anchors.horizontalCenter: parent.horizontalCenter
 
                 // Crosshair guides
@@ -105,14 +113,14 @@ Item {
                     anchors.centerIn: parent
                     width: 20
                     height: 2
-                    color: shellTarget ? shellTarget.colorBorder : "#313244"
+                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                     opacity: 0.3
                 }
                 Rectangle {
                     anchors.centerIn: parent
                     width: 2
                     height: 20
-                    color: shellTarget ? shellTarget.colorBorder : "#313244"
+                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                     opacity: 0.3
                 }
 
