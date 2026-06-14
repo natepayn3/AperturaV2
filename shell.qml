@@ -224,7 +224,7 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.None
+        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
@@ -264,6 +264,11 @@ Scope {
         WorkspacePreview {
             id: innerPreviewCard
             targetWorkspace: globalWorkspacePreview.targetWorkspace
+
+            onCloseRequested: {
+                globalWorkspacePreview.targetWorkspace = -1;
+                hidePreviewAnim.restart();
+            }
             
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
