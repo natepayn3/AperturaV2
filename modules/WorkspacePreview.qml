@@ -179,7 +179,7 @@ Item {
 
                 color: "transparent"
                 border.color: rootShell.colorBorder
-                border.width: 2
+                border.width: 0
 
                 topLeftRadius: cardMainBody.topLeftRadius
                 topRightRadius: cardMainBody.topRightRadius
@@ -198,10 +198,10 @@ Item {
                 visible: rootShell.barPosition === "top"
 
                 Shape {
-                    x: 0; y: parent.height - 2
+                    x: 0; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -209,10 +209,10 @@ Item {
                     }
                 }
                 Shape {
-                    x: parent.width - 2; y: 0
+                    x: parent.width; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: 0; y: previewRoot.wingSize }
                         PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -226,10 +226,10 @@ Item {
                 visible: rootShell.barPosition === "left"
 
                 Shape {
-                    x: 0; y: parent.height - 2
+                    x: 0; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -237,10 +237,10 @@ Item {
                     }
                 }
                 Shape {
-                    x: parent.width - 2; y: 0
+                    x: parent.width; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: 0; y: previewRoot.wingSize }
                         PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -254,10 +254,10 @@ Item {
                 visible: rootShell.barPosition === "bottom"
 
                 Shape {
-                    x: 0; y: -previewRoot.wingSize + 2
+                    x: 0; y: -previewRoot.wingSize
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: previewRoot.wingSize
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: 0; controlY: previewRoot.wingSize }
@@ -267,11 +267,11 @@ Item {
                 Shape {
                     rotation: -90
                     transformOrigin: Item.TopLeft
-                    x: parent.width - 2
+                    x: parent.width
                     y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -285,10 +285,10 @@ Item {
                 visible: rootShell.barPosition === "right"
 
                 Shape {
-                    x: -previewRoot.wingSize + 2; y: 0
+                    x: -previewRoot.wingSize; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
@@ -297,10 +297,10 @@ Item {
                 }
                 
                 Shape {
-                    x: parent.width - previewRoot.wingSize; y: parent.height - 2
+                    x: parent.width - previewRoot.wingSize; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: rootShell.colorBorder; strokeWidth: 2
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
