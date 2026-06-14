@@ -67,7 +67,6 @@ Item {
         repeat: false
         onTriggered: {
             if (previewRoot.stagedWorkspace !== -1) {
-                // Fixed: Update the operational target directly to prevent loop re-entry
                 previewRoot.workingWorkspace = previewRoot.stagedWorkspace;
                 previewRoot.stagedWorkspace = -1;
                 clientQueryProcess.running = true;
@@ -155,9 +154,9 @@ Item {
             Transition {
                 from: "hidden"; to: "shown"
                 ParallelAnimation {
+                    // Restored full Spring Bounce values from WorkspacePreview
                     NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                    
                     SequentialAnimation {
                         PauseAnimation { duration: 200 } 
                         NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
@@ -398,7 +397,6 @@ Item {
                     color: "transparent" 
                     radius: 4; clip: true
 
-                    // Fixed: Internal content logic safely monitors workingWorkspace
                     property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.workingWorkspace)
 
                     property var calculatedBounds: {
