@@ -37,6 +37,7 @@ Scope {
     property string shellFont: "Rubik"
 
     property real previewProgress: 0.0
+    property real calendarProgress: 0.0
 
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
@@ -79,6 +80,7 @@ Scope {
         orientationAnim.restart();
     }
 
+    // --- Workspace Preview Animations ---
     ParallelAnimation {
         id: showPreviewAnim
         NumberAnimation { target: rootShell; property: "previewProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
@@ -88,6 +90,19 @@ Scope {
         id: hidePreviewAnim
         NumberAnimation { target: rootShell; property: "previewProgress"; to: 0.0; duration: 160; easing.type: Easing.InQuad }
         PropertyAction { target: globalWorkspacePreview; property: "targetWorkspace"; value: -1 }
+    }
+
+    // --- Calendar Animations ---
+    ParallelAnimation {
+        id: showCalendarAnim
+        NumberAnimation { target: rootShell; property: "calendarProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideCalendarAnim
+        // Matches the 350ms closing duration defined internally in CalendarPopup.qml
+        NumberAnimation { target: rootShell; property: "calendarProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalCalendarPreview; property: "calendarActive"; value: false }
     }
 
     function isDisplayEnabled(idx) {
@@ -206,6 +221,14 @@ Scope {
     }
 
     Timer {
+        id: calendarDismissTimer
+        interval: 150
+        running: false
+        repeat: false
+        onTriggered: hideCalendarAnim.restart()
+    }
+
+    Timer {
         id: previewDebounceTimer
         interval: 50 
         running: false
@@ -218,6 +241,7 @@ Scope {
         }
     }
 
+    // --- Workspace Preview Panel ---
     PanelWindow {
         id: globalWorkspacePreview
         property bool mouseOverPreview: false
@@ -231,9 +255,9 @@ Scope {
         visible: targetWorkspace !== -1 || rootShell.previewProgress > 0.0
         color: "transparent"
 
+        mask: Region { item: innerPreviewCard }
+
         property int targetWorkspace: -1
-        property int marginLeft: 0
-        property int marginTop: 0
 
         onTargetWorkspaceChanged: {
             if (targetWorkspace !== -1) {
@@ -281,6 +305,61 @@ Scope {
         }
     }
 
+    // --- Calendar Preview Panel ---
+    PanelWindow {
+        id: globalCalendarPreview
+        property bool calendarActive: false
+        
+        // Dropped to Top so it slides under the Overlay bar and never steals input
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-calendar-preview"
+        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: calendarActive || rootShell.calendarProgress > 0.0
+        color: "transparent"
+
+        mask: Region { item: innerPreviewCard }
+
+        function showCalendar() {
+            calendarDismissTimer.stop();
+            calendarActive = true;
+            showCalendarAnim.restart();
+        }
+
+        function requestDismiss() { 
+            // Only dismiss if the mouse isn't safely resting inside the actual popup card
+            if (!innerCalendarCard.isHovered) {
+                calendarDismissTimer.restart(); 
+            }
+        }
+
+        CalendarPopup {
+            id: innerCalendarCard
+            active: globalCalendarPreview.calendarActive
+
+            // Safely route the popup's internal hover state back up to the shell
+            onIsHoveredChanged: {
+                if (isHovered) {
+                    calendarDismissTimer.stop();
+                    globalCalendarPreview.showCalendar();
+                } else {
+                    globalCalendarPreview.requestDismiss();
+                }
+            }
+            
+            hoverOriginX: {
+                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
+                return rootShell.barPosition === "left" ? 44 : 8; 
+            }
+            hoverOriginY: {
+                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
+                return rootShell.barPosition === "top" ? 44 : 8; 
+            }
+        }
+    }
+
     component LeftPanelBar : PanelWindow {
         id: barL
         screen: targetScreen
@@ -309,19 +388,30 @@ Scope {
                     Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnL.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
                 }
-                Column {
-                    width: parent.width; spacing: 2
-                    Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    Text { 
-                        text: { 
-                            let hours = clockTimer.currentTime.getHours() % 12
-                            hours = hours === 0 ? 12 : hours
-                            return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
-                        } 
-                        font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                
+                // Clock hover wrapper
+                Item {
+                    width: parent.width; height: clockColL.implicitHeight
+                    Column {
+                        id: clockColL
+                        width: parent.width; spacing: 2
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { 
+                            text: { 
+                                let hours = clockTimer.currentTime.getHours() % 12
+                                hours = hours === 0 ? 12 : hours
+                                return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
+                            } 
+                            font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                        }
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     }
-                    Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true
+                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                    }
                 }
+                
                 Workspaces { width: parent.width; shellTarget: rootShell; parentBarWindow: barL; previewWindowInstance: globalWorkspacePreview }
             }
         }
@@ -355,19 +445,29 @@ Scope {
                     Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnR.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
                 }
-                Column {
-                    width: parent.width; spacing: 2
-                    Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    Text { 
-                        text: { 
-                            let hours = clockTimer.currentTime.getHours() % 12
-                            hours = hours === 0 ? 12 : hours
-                            return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
-                        } 
-                        font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                
+                Item {
+                    width: parent.width; height: clockColR.implicitHeight
+                    Column {
+                        id: clockColR
+                        width: parent.width; spacing: 2
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { 
+                            text: { 
+                                let hours = clockTimer.currentTime.getHours() % 12
+                                hours = hours === 0 ? 12 : hours
+                                return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
+                            } 
+                            font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                        }
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     }
-                    Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true
+                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                    }
                 }
+                
                 Workspaces { width: parent.width; shellTarget: rootShell; parentBarWindow: barR; previewWindowInstance: globalWorkspacePreview }
             }
         }
@@ -401,21 +501,32 @@ Scope {
                     Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnT.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
                 }
-                Row {
-                    spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                    Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
-                    Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                    Text { 
-                        text: { 
-                            let date = clockTimer.currentTime
-                            let hours = date.getHours() % 12
-                            hours = hours === 0 ? 12 : hours
-                            return hours + ":" + date.getMinutes().toString().padStart(2, '0')
-                        } 
-                        font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
+                
+                Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: clockRowT.implicitWidth; height: parent.height
+                    Row {
+                        id: clockRowT
+                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
+                        Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
+                        Text { 
+                            text: { 
+                                let date = clockTimer.currentTime
+                                let hours = date.getHours() % 12
+                                hours = hours === 0 ? 12 : hours
+                                return hours + ":" + date.getMinutes().toString().padStart(2, '0')
+                            } 
+                            font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
+                        }
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                     }
-                    Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true
+                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                    }
                 }
+                
                 Workspaces { anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; parentBarWindow: barT; previewWindowInstance: globalWorkspacePreview }
             }
         }
@@ -449,21 +560,32 @@ Scope {
                     Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : (settingsLauncherBtnB.hovered ? rootShell.colorText : rootShell.colorSubtext); anchors.centerIn: parent }
                     onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
                 }
-                Row {
-                    spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                    Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
-                    Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                    Text { 
-                        text: { 
-                            let date = clockTimer.currentTime
-                            let hours = date.getHours() % 12
-                            hours = hours === 0 ? 12 : hours
-                            return hours + ":" + date.getMinutes().toString().padStart(2, '0')
-                        } 
-                        font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
+                
+                Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: clockRowB.implicitWidth; height: parent.height
+                    Row {
+                        id: clockRowB
+                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
+                        Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
+                        Text { 
+                            text: { 
+                                let date = clockTimer.currentTime
+                                let hours = date.getHours() % 12
+                                hours = hours === 0 ? 12 : hours
+                                return hours + ":" + date.getMinutes().toString().padStart(2, '0')
+                            } 
+                            font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
+                        }
+                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
                     }
-                    Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true
+                        onContainsMouseChanged: containsMouse ? globalCalendarPreview.showCalendar() : globalCalendarPreview.requestDismiss()
+                    }
                 }
+                
                 Workspaces { anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; parentBarWindow: barB; previewWindowInstance: globalWorkspacePreview }
             }
         }
