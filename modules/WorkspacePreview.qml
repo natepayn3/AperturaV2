@@ -9,6 +9,8 @@ import Quickshell.Io
 Item {
     id: previewRoot
 
+    signal closeRequested()
+
     property int targetWorkspace: -1 
     property bool active: targetWorkspace !== -1
     property var liveClientJson: []
@@ -24,7 +26,8 @@ Item {
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 380 : 200
 
-    signal closeRequested()
+    implicitWidth: Math.round(maxCardWidth)
+    implicitHeight: Math.round(maxCardHeight)
 
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
@@ -305,32 +308,50 @@ Item {
 
             Rectangle {
                 id: viewportFrame
-                x: 0; anchors.top: headerDivider.bottom; anchors.topMargin: 8
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: headerDivider.bottom; anchors.topMargin: 8
                 anchors.bottom: parent.bottom; anchors.bottomMargin: 2
                 color: Qt.rgba(0, 0, 0, 0.2); radius: 4; clip: true
 
                 property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.targetWorkspace)
 
                 property var calculatedBounds: {
-                    if (!workspaceWindows || workspaceWindows.length === 0) {
-                        return { "w": 1920, "h": 1080, "isVertical": false, "originX": 0, "originY": 0 };
+                    let mWidth = 1920;
+                    let mHeight = 1080;
+                    let mX = 0;
+                    let mY = 0;
+                    let isVert = false;
+
+                    let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.targetWorkspace);
+                    let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
+
+                    if (targetMonitor) {
+                        let scaleFactor = targetMonitor.scale || 1.0;
+                        if (scaleFactor <= 0) scaleFactor = 1.0;
+
+                        mWidth = Math.round(targetMonitor.width / scaleFactor);
+                        mHeight = Math.round(targetMonitor.height / scaleFactor);
+                        mX = targetMonitor.x;
+                        mY = targetMonitor.y;
+
+                        // Dynamically crop out the shell's exclusive zone gap so windows sit flush
+                        let barThickness = 44;
+                        if (rootShell.barPosition === "left") {
+                            mX += barThickness;
+                            mWidth -= barThickness;
+                        } else if (rootShell.barPosition === "right") {
+                            mWidth -= barThickness;
+                        } else if (rootShell.barPosition === "top") {
+                            mY += barThickness;
+                            mHeight -= barThickness;
+                        } else if (rootShell.barPosition === "bottom") {
+                            mHeight -= barThickness;
+                        }
+
+                        isVert = mHeight > mWidth;
                     }
-                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                    for (let i = 0; i < workspaceWindows.length; i++) {
-                        let win = workspaceWindows[i];
-                        if (!win.at || !win.size) continue;
-                        if (win.at[0] < minX) minX = win.at[0];
-                        if (win.at[1] < minY) minY = win.at[1];
-                        if ((win.at[0] + win.size[0]) > maxX) maxX = win.at[0] + win.size[0];
-                        if ((win.at[1] + win.size[1]) > maxY) maxY = win.at[1] + win.size[1];
-                    }
-                    let spanX = maxX - minX, spanY = maxY - minY;
-                    let verticalDetected = spanY > spanX;
-                    let normW = verticalDetected ? 1080 : 1920;
-                    let normH = verticalDetected ? 1920 : 1080;
-                    if (spanX > 0 && Math.abs(spanX - normW) > 100) normW = spanX;
-                    if (spanY > 0 && Math.abs(spanY - normH) > 100) normH = spanY;
-                    return { "w": normW, "h": normH, "isVertical": verticalDetected, "originX": minX, "originY": minY };
+
+                    return { "w": mWidth, "h": mHeight, "isVertical": isVert, "originX": mX, "originY": mY };
                 }
 
                 width: Math.round(height * (calculatedBounds.w / calculatedBounds.h))
