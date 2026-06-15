@@ -11,7 +11,14 @@ Scope {
     property var shellTarget: null
     
     property alias settingsWindowObject: settingsWindow
-    property alias windowVisible: settingsWindow.visible
+    
+    // Decouple the visibility flag so it triggers exit states rather than killing the window instantly
+    property bool windowVisible: false
+    onWindowVisibleChanged: {
+        if (windowVisible) {
+            settingsWindow.visible = true;
+        }
+    }
 
     function updateDisplaysFromShell() {
         if (shellTarget) {
@@ -21,6 +28,7 @@ Scope {
 
     PanelWindow {
         id: settingsWindow
+        // Controlled dynamically by the end of the transition curve
         visible: false
         
         WlrLayershell.layer: WlrLayer.Overlay
@@ -28,7 +36,6 @@ Scope {
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
-        // Make the window cover the whole screen to catch outside clicks and key events
         anchors {
             left: true; right: true; top: true; bottom: true
         }
@@ -131,19 +138,57 @@ Scope {
         MouseArea {
             id: settingsBackdropCatcher
             anchors.fill: parent
-            
-            // Clicking away from the center window structure dismisses it cleanly
-            onClicked: settingsWindow.visible = false
+            onClicked: settingsModuleRoot.windowVisible = false
 
-            // Centralized container mapping your explicit settings layout bounds
+            // Centralized container tracking settings layout bounds
             Item {
+                id: settingsCardFrame
                 implicitWidth: 800
                 implicitHeight: 580
                 width: 800
                 height: 580
                 anchors.centerIn: parent
+                transformOrigin: Item.Center
 
-                // Inner Input Blocker: Prevents interior configuration clicks from triggering window close
+                // --- Animation States ---
+                states: [
+                    State {
+                        name: "hidden"
+                        when: !settingsModuleRoot.windowVisible
+                        PropertyChanges { target: settingsCardFrame; opacity: 0.0; scale: 0.0 }
+                    },
+                    State {
+                        name: "shown"
+                        when: settingsModuleRoot.windowVisible
+                        PropertyChanges { target: settingsCardFrame; opacity: 1.0; scale: 1.0 }
+                    }
+                ]
+
+                // --- Animation Transitions ---
+                transitions: [
+                    Transition {
+                        from: "hidden"; to: "shown"
+                        ParallelAnimation {
+                            NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                            NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
+                        }
+                    },
+                    Transition {
+                        from: "shown"; to: "hidden"
+                        SequentialAnimation {
+                            ParallelAnimation {
+                                NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                                NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
+                            }
+                            // Safe Exit: Unmaps the window only after the exit bounce finishes
+                            ScriptAction {
+                                script: settingsWindow.visible = false
+                            }
+                        }
+                    }
+                ]
+
+                // Floor input blocker sits behind interactive content elements
                 MouseArea {
                     anchors.fill: parent
                     onClicked: (mouse) => { mouse.accepted = true; }
@@ -152,13 +197,11 @@ Scope {
                 // Focus Scope grabs active window interactions cleanly to evaluate hotkeys
                 FocusScope {
                     anchors.fill: parent
-                    
-                    // Force input redirection to land inside this container when shown
                     Component.onCompleted: forceActiveFocus()
                     
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Escape) {
-                            settingsWindow.visible = false;
+                            settingsModuleRoot.windowVisible = false;
                             event.accepted = true;
                         }
                     }
@@ -270,7 +313,7 @@ Scope {
                                             anchors.centerIn: parent
                                         }
                                         
-                                        onClicked: settingsWindow.visible = false
+                                        onClicked: settingsModuleRoot.windowVisible = false
                                         HoverHandler { cursorShape: Qt.PointingHandCursor }
                                     }
                                 }
