@@ -35,8 +35,19 @@ Item {
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
-    width: implicitWidth
-    height: implicitHeight
+    // Smooth frame interpolators for fluidly reshaping between vertical/horizontal aspect ratios
+    width: active ? implicitWidth : 0
+    height: active ? implicitHeight : 0
+    
+    Behavior on width { 
+        id: widthMorphBehavior
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic } 
+    }
+    Behavior on height { 
+        id: heightMorphBehavior
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic } 
+    }
+
     opacity: 1.0
     
     // FIXED: Match CalendarPopup — keep the root visible so it relies entirely on the parent PanelWindow mapping
@@ -48,32 +59,21 @@ Item {
 
     onTargetWorkspaceChanged: {
         if (targetWorkspace !== -1) {
-            if (previewRoot.active) {
-                previewRoot.stagedWorkspace = targetWorkspace;
-                previewRoot.active = false;
-                sequenceDelayTimer.restart();
-            } else {
-                previewRoot.workingWorkspace = targetWorkspace;
-                clientQueryProcess.running = true;
-                previewRoot.active = true;
-            }
+            debounceTimer.restart();
         } else {
-            // FIXED: Match CalendarPopup — drop the active flag to trigger the state machine, 
-            // but leave the cached metadata alone so it doesn't flash empty during the exit slide
+            debounceTimer.stop();
             previewRoot.active = false;
-            previewRoot.stagedWorkspace = -1;
         }
     }
 
     Timer {
-        id: sequenceDelayTimer
-        interval: 360
+        id: debounceTimer
+        interval: 50
         running: false
         repeat: false
         onTriggered: {
-            if (previewRoot.stagedWorkspace !== -1) {
-                previewRoot.workingWorkspace = previewRoot.stagedWorkspace;
-                previewRoot.stagedWorkspace = -1;
+            if (previewRoot.targetWorkspace !== -1) {
+                previewRoot.workingWorkspace = previewRoot.targetWorkspace;
                 clientQueryProcess.running = true;
                 previewRoot.active = true;
             }
