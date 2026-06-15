@@ -25,12 +25,11 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-settings"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         implicitWidth: 800
         implicitHeight: 580
-        
-        // This must stay transparent so the window system handles alpha clipping
         color: "transparent"
 
         anchors {
@@ -45,6 +44,38 @@ Scope {
 
         readonly property string configDir: Quickshell.env("HOME") + "/.config/quickshell/Test"
         readonly property string configFilePath: configDir + "/shell_settings.json"
+
+        function getGeometricallySortedScreens() {
+            let screensList = [];
+            if (!Quickshell.screens) return screensList;
+
+            for (let i = 0; i < Quickshell.screens.length; i++) {
+                let scr = Quickshell.screens[i];
+                if (scr) {
+                    screensList.push({ "obj": scr, "index": i });
+                }
+            }
+
+            let maxDeltaX = 0;
+            let maxDeltaY = 0;
+            if (screensList.length > 1) {
+                let minX = Math.min(...screensList.map(s => s.obj.x));
+                let maxX = Math.max(...screensList.map(s => s.obj.x));
+                let minY = Math.min(...screensList.map(s => s.obj.y));
+                let maxY = Math.max(...screensList.map(s => s.obj.y));
+                maxDeltaX = maxX - minX;
+                maxDeltaY = maxY - minY;
+            }
+
+            screensList.sort((a, b) => {
+                if (maxDeltaY > maxDeltaX) {
+                    return a.obj.y - b.obj.y;
+                } else {
+                    return a.obj.x - b.obj.x;
+                }
+            });
+            return screensList;
+        }
 
         Component.onCompleted: {
             if (shellTarget) {
@@ -98,7 +129,6 @@ Scope {
             running: false
         }
 
-        // Structural canvas buffer wrapper to force clean subpixel vector scaling
         Item {
             anchors.fill: parent
             
@@ -106,10 +136,8 @@ Scope {
                 anchors.fill: parent
                 color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
                 radius: 20
-                border.color: shellTarget ? shellTarget.colorBorder : "#313244" 
+                border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
                 border.width: 3
-
-                // Standard, collision-free edge smoothing
                 antialiasing: true
 
                 Row {
@@ -120,10 +148,11 @@ Scope {
                         height: parent.height
                         color: "transparent"
 
+                        // FIXED: Brightened the internal vertical layout panel divider line to match
                         Rectangle {
                             anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
                             width: 2
-                            color: shellTarget ? shellTarget.colorBorder : "#313244"
+                            color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                         }
 
                         Column {
@@ -158,7 +187,7 @@ Scope {
                                     font.bold: settingsWindow.activeCategory === categoryName
                                     anchors.left: parent.left; anchors.leftMargin: 20
                                     verticalAlignment: Text.AlignVCenter 
-                            }
+                                }
                                 onClicked: settingsWindow.activeCategory = categoryName
                                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                             }
