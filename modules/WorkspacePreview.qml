@@ -32,15 +32,15 @@ Item {
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
-    // Fixed: Keep the container size stable so layout engines don't recalculate on 0x0 boundaries
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
     width: implicitWidth
     height: implicitHeight
     opacity: 1.0
-    // Fixed: Protect window allocation visibility via active state instead of collapsing dimensions
-    visible: active
+    
+    // FIXED: Match CalendarPopup — keep the root visible so it relies entirely on the parent PanelWindow mapping
+    visible: true
     clip: false
 
     x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
@@ -58,10 +58,10 @@ Item {
                 previewRoot.active = true;
             }
         } else {
+            // FIXED: Match CalendarPopup — drop the active flag to trigger the state machine, 
+            // but leave the cached metadata alone so it doesn't flash empty during the exit slide
             previewRoot.active = false;
             previewRoot.stagedWorkspace = -1;
-            previewRoot.workingWorkspace = -1;
-            liveClientJson = [];
         }
     }
 
@@ -186,6 +186,7 @@ Item {
             Transition {
                 from: "shown"; to: "hidden"
                 ParallelAnimation {
+                    // This will now execute perfectly because content data stays pinned to memory while running
                     NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
                     NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
