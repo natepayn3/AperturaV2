@@ -292,17 +292,6 @@ Scope {
         }
     }
 
-    function handleIndicatorHover(workspaceId) {
-        dismissTimer.stop();
-        hoveredIndicatorWorkspace = workspaceId;
-        previewDebounceTimer.restart();
-    }
-
-    function handleIndicatorLeave() {
-        previewDebounceTimer.stop();
-        dismissTimer.restart();
-    }
-
     // --- Global Popup Instances ---
     PanelWindow {
         id: globalWorkspacePreview
