@@ -123,9 +123,9 @@ Item {
         anchors.fill: parent
 
         transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.BottomLeft
-            if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopRight
+            if (rootShell.barPosition === "left") return Item.TopLeft
+            if (rootShell.barPosition === "right") return Item.TopRight
+            if (rootShell.barPosition === "top") return Item.TopLeft
             if (rootShell.barPosition === "bottom") return Item.BottomLeft
             return Item.Center
         }
@@ -138,8 +138,26 @@ Item {
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
                 PropertyChanges { 
                     target: animatedGroup
-                    x: rootShell.barPosition === "right" ? 60 : -60
-                    y: rootShell.barPosition === "bottom" ? 60 : -60
+                    // Horizontal directional shift into the target corner
+                    x: {
+                        switch (rootShell.barPosition) {
+                            case "left":   return -40; // Slide left to top-left
+                            case "bottom": return -40; // Slide left to bottom-left
+                            case "right":  return 40;  // Slide right to top-right
+                            case "top":    return -40; // Slide left to top-left
+                            default:       return 0;
+                        }
+                    }
+                    // Vertical directional shift into the target corner
+                    y: {
+                        switch (rootShell.barPosition) {
+                            case "left":   return -40; // Slide up to top-left
+                            case "bottom": return 40;  // Slide down to bottom-left
+                            case "right":  return -40; // Slide up to top-right
+                            case "top":    return -40; // Slide up to top-left
+                            default:       return 0;
+                        }
+                    }
                 }
             },
             State {
