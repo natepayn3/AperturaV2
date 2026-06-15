@@ -335,8 +335,6 @@ Item {
                 }
             }
 
-            // 🛠️ FIX: Wrapped the list inside an Item wrapper. This lets us use absolute canvas
-            // anchoring for the error text layer without breaking the ColumnLayout flow.
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -354,18 +352,16 @@ Item {
                     move: Transition {
                         NumberAnimation {
                             properties: "x,y"
-                            duration: 280
-                            easing.type: Easing.OutBack
-                            easing.overshoot: 1.15
+                            duration: 220
+                            easing.type: Easing.Linear
                         }
                     }
 
                     moveDisplaced: Transition {
                         NumberAnimation {
                             properties: "x,y"
-                            duration: 280
-                            easing.type: Easing.OutBack
-                            easing.overshoot: 1.15
+                            duration: 220
+                            easing.type: Easing.Linear
                         }
                     }
 
@@ -466,8 +462,6 @@ Item {
                     ScrollBar.vertical: ScrollBar {}
                 }
 
-                // 🛠️ FIX: Error text is now layered over the ListView area. Anchoring to the top and 
-                // horizontally centering it allows it to float cleanly without shifting any cards below it.
                 Text {
                     id: floatingErrorText
                     text: "Error: check your config"
@@ -476,9 +470,8 @@ Item {
                     font.bold: true
                     color: "#f38ba8"
                     
-                    // Absolute positioning targets the clear top padding area of the list canvas
                     anchors.top: parent.top
-                    anchors.topMargin: -2 // Positions it right over the top padding gutter line cleanly
+                    anchors.topMargin: -2 
                     anchors.horizontalCenter: parent.horizontalCenter
                     
                     visible: opacity > 0.0
@@ -544,68 +537,145 @@ Item {
                 border.width: 1
                 clip: true
 
-                ListView {
-                    id: fileListView
+                Item {
+                    id: browserViewContainer
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 4
-                    model: FolderListModel {
-                        id: folderModel
-                        folder: vpnLayoutRoot.currentBrowserPath
-                        showDirsFirst: true
-                        showDotAndDotDot: true
-                        nameFilters: ["*.conf"] 
-                    }
+                    
+                    property string pendingPath: ""
+                    property string lastPath: ""
 
-                    delegate: ItemDelegate {
-                        width: fileListView.width
-                        height: 38
+                    ListView {
+                        id: fileListView
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 4
+                        clip: true
                         
-                        background: Rectangle {
-                            color: hovered ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
-                            radius: 6
+                        Behavior on contentY {
+                            NumberAnimation { duration: 180; easing.type: Easing.Linear }
                         }
 
-                        contentItem: RowLayout {
-                            spacing: 10
-                            anchors.fill: parent
-                            anchors.leftMargin: 8
-
-                            Text {
-                                text: fileIsDir ? "folder" : "description"
-                                font.family: "Material Symbols Outlined"
-                                font.pixelSize: 18
-                                color: fileIsDir ? "#f9e2af" : (shellTarget ? shellTarget.colorAccent : "#89b4fa")
-                            }
-
-                            Text {
-                                text: fileName
-                                font.family: settingsWindow.selectedFont
-                                font.pixelSize: 13
-                                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
-                                Layout.fillWidth: true
-                            }
+                        model: FolderListModel {
+                            id: folderModel
+                            folder: vpnLayoutRoot.currentBrowserPath
+                            showDirsFirst: true
+                            showDotAndDotDot: true
+                            nameFilters: ["*.conf"] 
                         }
 
-                        onClicked: {
-                            if (fileIsDir) {
-                                vpnLayoutRoot.currentBrowserPath = fileUrl;
-                            } else {
-                                let urlString = fileUrl.toString();
-                                let parsedPath = urlString.startsWith("file:///") 
-                                    ? urlString.substring(7) 
-                                    : urlString.replace("file://", "");
+                        populate: null
 
-                                vpnImporter.command = [
-                                    "bash", "-c",
-                                    "nmcli connection import type wireguard file '" + parsedPath + "' || echo 'QS_IMPORT_FAILED' >&2"
-                                ];
-                                vpnImporter.running = true;
-                                vpnLayoutRoot.showFileBrowser = false;
+                        delegate: ItemDelegate {
+                            width: fileListView.width
+                            height: 38
+                            
+                            background: Rectangle {
+                                color: hovered ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
+                                radius: 6
+                            }
+
+                            contentItem: RowLayout {
+                                spacing: 10
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+
+                                Text {
+                                    text: fileIsDir ? "folder" : "description"
+                                    font.family: "Material Symbols Outlined"
+                                    font.pixelSize: 18
+                                    color: fileIsDir ? "#f9e2af" : (shellTarget ? shellTarget.colorAccent : "#89b4fa")
+                                }
+
+                                Text {
+                                    text: fileName
+                                    font.family: settingsWindow.selectedFont
+                                    font.pixelSize: 13
+                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            onClicked: {
+                                if (fileIsDir) {
+                                    // 🛠️ FIX: Store the click metadata safely without altering the model target path yet
+                                    browserViewContainer.lastPath = vpnLayoutRoot.currentBrowserPath;
+                                    browserViewContainer.pendingPath = fileUrl.toString();
+                                    
+                                    // Fire sequential outward animation block first
+                                    pathFadeAnimation.start();
+                                } else {
+                                    let urlString = fileUrl.toString();
+                                    let parsedPath = urlString.startsWith("file:///") 
+                                        ? urlString.substring(7) 
+                                        : urlString.replace("file://", "");
+
+                                    vpnImporter.command = [
+                                        "bash", "-c",
+                                        "nmcli connection import type wireguard file '" + parsedPath + "' || echo 'QS_IMPORT_FAILED' >&2"
+                                    ];
+                                    vpnImporter.running = true;
+                                    vpnLayoutRoot.showFileBrowser = false;
+                                }
+                            }
+                        }
+                        ScrollBar.vertical: ScrollBar {}
+                    }
+
+                    // 🛠️ FIX: Staged timeline prevents model text blinking.
+                    // The old directory view slides completely away to blank space *before* updating the path strings.
+                    SequentialAnimation {
+                        id: pathFadeAnimation
+                        
+                        // Phase 1: Slide and fade out the existing frozen directory view data
+                        ParallelAnimation {
+                            PropertyAnimation {
+                                target: browserViewContainer
+                                property: "opacity"
+                                from: 1.0; to: 0.0
+                                duration: 110
+                                easing.type: Easing.Linear
+                            }
+                            PropertyAnimation {
+                                target: browserViewContainer
+                                property: "x"
+                                to: (browserViewContainer.pendingPath.length > browserViewContainer.lastPath.length) ? -30 : 30
+                                duration: 110
+                                easing.type: Easing.Linear
+                            }
+                        }
+                        
+                        // Phase 2: Complete the path transition safely while hidden
+                        ScriptAction {
+                            script: {
+                                vpnLayoutRoot.currentBrowserPath = browserViewContainer.pendingPath;
+                            }
+                        }
+                        
+                        // Phase 3: Teleport the canvas boundary wrapper to its incoming opposite offset vector
+                        PropertyAction {
+                            target: browserViewContainer
+                            property: "x"
+                            value: (browserViewContainer.pendingPath.length > browserViewContainer.lastPath.length) ? 30 : -30
+                        }
+                        
+                        // Phase 4: Slide cleanly back up from blank space to center position with the fresh data layout loaded
+                        ParallelAnimation {
+                            PropertyAnimation {
+                                target: browserViewContainer
+                                property: "opacity"
+                                from: 0.0; to: 1.0
+                                duration: 130
+                                easing.type: Easing.Linear
+                            }
+                            PropertyAnimation {
+                                target: browserViewContainer
+                                property: "x"
+                                to: 0
+                                duration: 130
+                                easing.type: Easing.Linear
                             }
                         }
                     }
-                    ScrollBar.vertical: ScrollBar {}
                 }
             }
         }
