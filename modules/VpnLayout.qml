@@ -13,10 +13,14 @@ Item {
     // --- State Machine Synchronizers ---
     property bool hasVpnProfile: false
     property string detectedConnection: ""
-    property string fallbackConnection: "" // <-- Stores the target profile name when disconnected
+    property string fallbackConnection: "" 
+    property string publicIpAddress: "" 
     property bool isVpnActive: false
+    
+    // Visual lock prevents half-baked route data or strings from flashing on screen
+    property bool textVisible: true
 
-    // Passive polling pipeline handles synchronization
+    // Passive polling pipeline for profile states only
     Timer {
         id: syncVpnTimer
         interval: 3000
@@ -31,10 +35,22 @@ Item {
         }
     }
 
+    // --- De-Flicker Propagation Engine ---
+    Timer {
+        id: delayFetchTimer
+        interval: 600 // Settle time matching nmcli execution parameters
+        repeat: false
+        running: false
+        onTriggered: {
+            // 1. Fire off the network tracking request now that interface is ready
+            publicIpFetcher.running = false;
+            publicIpFetcher.running = true;
+        }
+    }
+
     // Identifies if any valid wireguard, vpn, or tun endpoints exist
     Process {
         id: vpnProfileCheck
-        // FIX: Request both connection types AND names from nmcli
         command: ["nmcli", "-g", "TYPE,NAME", "connection", "show"]
         running: false
         stdout: StdioCollector {
@@ -58,7 +74,6 @@ Item {
                         
                         if (type === "vpn" || type === "wireguard" || type === "tun") {
                             foundProfile = true;
-                            // Cache the first valid connection profile name we find as a baseline fallback
                             if (staticFallback === "") {
                                 staticFallback = name;
                             }
@@ -134,6 +149,23 @@ Item {
         }
     }
 
+    // Native Public IP Scraper
+    Process {
+        id: publicIpFetcher
+        command: ["curl", "-s", "-4", "icanhazip.com"]
+        running: false
+        stdout: StdioCollector {
+            onTextChanged: {
+                let cleanIp = text.trim();
+                if (cleanIp) {
+                    vpnLayoutRoot.publicIpAddress = cleanIp;
+                    // 2. Safe Reveal: Bring text visibility back to 1.0 ONLY when the endpoint string returns
+                    vpnLayoutRoot.textVisible = true;
+                }
+            }
+        }
+    }
+
     Process {
         id: notifyProc
         running: false
@@ -141,13 +173,15 @@ Item {
 
     function executeVpnToggle() {
         if (vpnLayoutRoot.isVpnActive) {
-            // Active: Drop down the running connection via its active ID
             vpnToggler.command = ["nmcli", "connection", "down", "id", vpnLayoutRoot.detectedConnection];
         } else {
-            // Disconnected: Bring up the profiled fallback connection name natively
             vpnToggler.command = ["nmcli", "connection", "up", "id", vpnLayoutRoot.fallbackConnection];
         }
         vpnToggler.running = true;
+    }
+
+    Component.onCompleted: {
+        publicIpFetcher.running = true;
     }
 
     // --- Module User Interface View ---
@@ -156,7 +190,7 @@ Item {
         spacing: 20
 
         Text {
-            text: "Available VPN profiles:"
+            text: "Network Security & Encryption"
             font.family: settingsWindow.selectedFont
             font.pixelSize: 16
             font.bold: true
@@ -207,23 +241,36 @@ Item {
                     }
 
                     Text {
+                        // Clean ternary switch evaluation removes explicit string assignments during loading states
                         text: !vpnLayoutRoot.hasVpnProfile 
                             ? "Create a tunnel endpoint via NetworkManager connection settings." 
-                            : (vpnLayoutRoot.isVpnActive ? "Connected" : "Disconnected")
+                            : (vpnLayoutRoot.isVpnActive 
+                                ? (vpnLayoutRoot.publicIpAddress !== "" ? "Connected: " + vpnLayoutRoot.publicIpAddress : "Connected")
+                                : (vpnLayoutRoot.publicIpAddress !== "" ? "Disconnected: " + vpnLayoutRoot.publicIpAddress : "Disconnected"))
                         font.family: settingsWindow.selectedFont
                         font.pixelSize: 14
                         color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
                         elide: Text.ElideRight
                         Layout.fillWidth: true
+
+                        // Controlled execution binding maps visibility state smoothly
+                        opacity: vpnLayoutRoot.textVisible ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 100 } }
                     }
                 }
 
                 Switch {
                     id: toggleSwitch
                     checked: vpnLayoutRoot.isVpnActive
-                    // FIX: Ensure it validates against fallback availability so it can toggle back on
                     enabled: vpnLayoutRoot.hasVpnProfile && (vpnLayoutRoot.detectedConnection !== "" || vpnLayoutRoot.fallbackConnection !== "")
-                    onClicked: vpnLayoutRoot.executeVpnToggle()
+                    
+                    onClicked: {
+                        // Instant Visual Fade: Lock sub-text visibility down on interaction click
+                        vpnLayoutRoot.textVisible = false;
+
+                        vpnLayoutRoot.executeVpnToggle();
+                        delayFetchTimer.restart();
+                    }
 
                     background: Rectangle {
                         implicitWidth: 48
