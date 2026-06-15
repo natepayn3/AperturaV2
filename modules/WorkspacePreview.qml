@@ -327,7 +327,7 @@ Item {
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
-                        PathLine { x: parent.width; y: parent.height }
+                        PathLine { x: 0; y: 0 }
                     }
                 }
             }
