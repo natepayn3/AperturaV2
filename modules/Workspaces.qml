@@ -156,11 +156,19 @@ Item {
                 if (isSpecialNode) return;
                 let popup = workspaceContainer.previewWindowInstance;
                 if (popup) {
+                    // 1. Instantly kill the delayed dismiss timer from the previous onExited event
+                    if (typeof popup.cancelDismiss === "function") {
+                        popup.cancelDismiss();
+                    }
+
                     if (isOccupied) {
+                        // 2. Smash the QML state cache by forcing an empty value
+                        popup.targetWorkspace = -1;
+                        
+                        // 3. Fire your custom commit method (QML now sees this as a guaranteed fresh assignment)
                         popup.commitWorkspaceChange(wsId, workspaceContainer.parentBarWindow ? workspaceContainer.parentBarWindow.screen : null);
                     } else {
-                        // FIXED: Drop target tracking states immediately on empty placeholder slots
-                        // This prevents the data register from getting jammed with old indices
+                        // Drop target tracking states immediately on empty placeholder slots
                         if (workspaceContainer.shellTarget) {
                             workspaceContainer.shellTarget.hoveredIndicatorWorkspace = -1;
                         }
