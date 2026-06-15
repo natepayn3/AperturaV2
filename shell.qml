@@ -6,9 +6,17 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import "modules"
+import "modules/bars"
 
 Scope {
     id: rootShell
+
+    // --- Global References for External Modules ---
+    readonly property var clockRef: clockTimer
+    readonly property var settingsAppRef: settingsAppInstance
+    readonly property var calendarRef: globalCalendarPreview
+    readonly property var launcherRef: globalAppLauncherPreview
+    readonly property var workspaceRef: globalWorkspacePreview
 
     property string barPosition: "left"
     property string enabledDisplayStr: "0"
@@ -38,6 +46,7 @@ Scope {
 
     property real previewProgress: 0.0
     property real calendarProgress: 0.0
+    property real launcherProgress: 0.0
 
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
@@ -80,7 +89,6 @@ Scope {
         orientationAnim.restart();
     }
 
-    // --- Workspace Preview Animations ---
     ParallelAnimation {
         id: showPreviewAnim
         NumberAnimation { target: rootShell; property: "previewProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
@@ -92,7 +100,6 @@ Scope {
         PropertyAction { target: globalWorkspacePreview; property: "targetWorkspace"; value: -1 }
     }
 
-    // --- Calendar Animations ---
     ParallelAnimation {
         id: showCalendarAnim
         NumberAnimation { target: rootShell; property: "calendarProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
@@ -103,9 +110,6 @@ Scope {
         NumberAnimation { target: rootShell; property: "calendarProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalCalendarPreview; property: "calendarActive"; value: false }
     }
-
-    // --- App Launcher Animations ---
-    property real launcherProgress: 0.0
 
     ParallelAnimation {
         id: showLauncherAnim
@@ -216,7 +220,6 @@ Scope {
 
     IpcHandler {
         target: "settings"
-
         function toggle(): void {
             if (settingsAppInstance) {
                 settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible;
@@ -226,10 +229,9 @@ Scope {
             }
         }
     }
-
+    
     IpcHandler {
         target: "launcher"
-
         function toggle(): void {
             if (globalAppLauncherPreview) {
                 if (globalAppLauncherPreview.launcherActive) {
@@ -264,7 +266,6 @@ Scope {
         }
     }
 
-    // Main state tracking property used by your bar indicators
     property int hoveredIndicatorWorkspace: -1
 
     Timer {
@@ -275,7 +276,6 @@ Scope {
         property int pendingWorkspace: -1
         onTriggered: {
             if (pendingWorkspace !== -1) {
-                // Route directly to the inner card to initiate the opening sequence
                 innerPreviewCard.targetWorkspace = pendingWorkspace;
             }
         }
@@ -303,7 +303,7 @@ Scope {
         dismissTimer.restart();
     }
 
-    // --- Workspace Preview Panel ---
+    // --- Global Popup Instances ---
     PanelWindow {
         id: globalWorkspacePreview
 
@@ -312,7 +312,6 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
-        
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -320,10 +319,7 @@ Scope {
         visible: innerPreviewCard.state !== "hidden" || globalWorkspacePreview.targetWorkspace !== -1
         color: "transparent"
 
-        mask: Region { 
-            item: (globalWorkspacePreview.targetWorkspace !== -1) ? innerPreviewCard : null 
-        }
-
+        mask: Region { item: (globalWorkspacePreview.targetWorkspace !== -1) ? innerPreviewCard : null }
         property int targetWorkspace: -1
 
         onTargetWorkspaceChanged: {
@@ -342,22 +338,14 @@ Scope {
 
         function commitWorkspaceChange(ws, monitorScreen) {
             dismissTimer.stop();
-            if (monitorScreen) {
-                globalWorkspacePreview.targetScreen = monitorScreen;
-            }
+            if (monitorScreen) globalWorkspacePreview.targetScreen = monitorScreen;
             hoveredIndicatorWorkspace = ws;
             globalWorkspacePreview.targetWorkspace = ws;
             showPreviewAnim.restart();
         }
 
-        function cancelDismiss() { 
-            dismissTimer.stop(); 
-            previewDebounceTimer.stop(); 
-        }
-        
-        function requestDismiss() { 
-            dismissTimer.restart(); 
-        }
+        function cancelDismiss() { dismissTimer.stop(); previewDebounceTimer.stop(); }
+        function requestDismiss() { dismissTimer.restart(); }
 
         WorkspacePreview {
             id: innerPreviewCard
@@ -385,39 +373,22 @@ Scope {
         
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-launcher-preview"
-        
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand 
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: launcherActive || rootShell.launcherProgress > 0.0
         color: "transparent"
-
         mask: Region { item: innerLauncherCard }
 
-        function showLauncher() {
-            launcherActive = true;
-            showLauncherAnim.restart();
-        }
-
-        function forceDismiss() {
-            hideLauncherAnim.restart();
-        }
+        function showLauncher() { launcherActive = true; showLauncherAnim.restart(); }
+        function forceDismiss() { hideLauncherAnim.restart(); }
 
         AppLauncher {
             id: innerLauncherCard
             active: globalAppLauncherPreview.launcherActive
-
-            onCloseRequested: {
-                globalAppLauncherPreview.forceDismiss();
-            }
-
-            onActiveChanged: {
-                if (!active && globalAppLauncherPreview.launcherActive) {
-                    globalAppLauncherPreview.forceDismiss();
-                }
-            }
-            
+            onCloseRequested: globalAppLauncherPreview.forceDismiss()
+            onActiveChanged: { if (!active && globalAppLauncherPreview.launcherActive) globalAppLauncherPreview.forceDismiss(); }
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
                 return rootShell.barPosition === "left" ? 44 : 8; 
@@ -441,34 +412,18 @@ Scope {
         anchors { left: true; right: true; top: true; bottom: true }
         visible: calendarActive || rootShell.calendarProgress > 0.0
         color: "transparent"
-
         mask: Region { item: innerCalendarCard }
 
-        function showCalendar() {
-            calendarDismissTimer.stop();
-            calendarActive = true;
-            showCalendarAnim.restart();
-        }
-
-        function requestDismiss() { 
-            if (!innerCalendarCard.isHovered) {
-                calendarDismissTimer.restart(); 
-            }
-        }
+        function showCalendar() { calendarDismissTimer.stop(); calendarActive = true; showCalendarAnim.restart(); }
+        function requestDismiss() { if (!innerCalendarCard.isHovered) calendarDismissTimer.restart(); }
 
         CalendarPopup {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
-
             onIsHoveredChanged: {
-                if (isHovered) {
-                    calendarDismissTimer.stop();
-                    globalCalendarPreview.showCalendar();
-                } else {
-                    globalCalendarPreview.requestDismiss();
-                }
+                if (isHovered) { calendarDismissTimer.stop(); globalCalendarPreview.showCalendar(); }
+                else globalCalendarPreview.requestDismiss();
             }
-            
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
                 return rootShell.barPosition === "left" ? 44 : 8; 
@@ -480,513 +435,50 @@ Scope {
         }
     }
 
-    // --- Vertical Panels (Left / Right) ---
-    component LeftPanelBar : PanelWindow {
-        id: barL
-        screen: targetScreen
-        WlrLayershell.namespace: "quickshell-bar"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusionMode: WlrLayershell.Exclusive
-        exclusiveZone: 36 * rootShell.verticalBarProgress
-        color: "transparent"
-        anchors { left: true; right: false; top: true; bottom: true; }
-        implicitWidth: 44.0 * rootShell.verticalBarProgress
-        implicitHeight: screen ? screen.height : 0
-        property var targetScreen: null
-
-        Rectangle { color: rootShell.colorBackground; anchors.fill: parent }
-        Item { anchors.fill: parent
-            Column {
-                anchors.top: parent.top
-                anchors.topMargin: 12
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.horizontalCenterOffset: 1
-                spacing: 12
-                width: parent.width
-
-                MouseArea {
-                    id: settingsMouseL
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseL.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
-                }
-                
-                MouseArea {
-                    id: launcherMouseL
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    
-                    onClicked: {
-                        if (globalAppLauncherPreview.launcherActive) {
-                            globalAppLauncherPreview.forceDismiss();
-                        } else {
-                            globalAppLauncherPreview.showLauncher();
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: launcherMouseL.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
-                    }
-                    
-                    Text { 
-                        text: "apps"
-                        font.family: "Material Symbols Outlined" 
-                        font.pixelSize: 18
-                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
-                        anchors.centerIn: parent 
-                    }
-                }
-                
-                MouseArea {
-                    id: clockMouseL
-                    width: 36; height: clockColL.implicitHeight + 8
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered: globalCalendarPreview.showCalendar()
-                    onExited: globalCalendarPreview.requestDismiss()
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: clockMouseL.containsMouse ? 0.3 : 0.0
-                    }
-                    Column {
-                        id: clockColL
-                        anchors.centerIn: parent; spacing: 2
-                        width: parent.width
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { 
-                            text: { 
-                                let hours = clockTimer.currentTime.getHours() % 12
-                                hours = hours === 0 ? 12 : hours
-                                return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
-                            } 
-                            font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
-                        }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 9; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    }
-                }
-                
-                Workspaces { width: 28; anchors.horizontalCenter: parent.horizontalCenter; shellTarget: rootShell; parentBarWindow: barL; previewWindowInstance: globalWorkspacePreview }
-            }
-        }
+    // --- Dynamic Instantiators using Unified Modules ---
+    
+    // Alias the root scope so the delegates don't confuse it with their internal properties
+    Item {
+        id: globalCtx
+        property var ref: rootShell
     }
 
-    component RightPanelBar : PanelWindow {
-        id: barR
-        screen: targetScreen
-        WlrLayershell.namespace: "quickshell-bar"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusionMode: WlrLayershell.Exclusive
-        exclusiveZone: 36 * rootShell.verticalBarProgress
-        color: "transparent"
-        anchors { left: false; right: true; top: true; bottom: true; }
-        implicitWidth: 44.0 * rootShell.verticalBarProgress
-        implicitHeight: screen ? screen.height : 0
-        property var targetScreen: null
-
-        Rectangle { color: rootShell.colorBackground; anchors.fill: parent }
-        Item { anchors.fill: parent
-            Column {
-                anchors.top: parent.top
-                anchors.topMargin: 12
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.horizontalCenterOffset: -1
-                spacing: 12
-                width: parent.width
-
-                MouseArea {
-                    id: settingsMouseR
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseR.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
-                }
-                
-                MouseArea {
-                    id: launcherMouseR
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    
-                    onClicked: {
-                        if (globalAppLauncherPreview.launcherActive) {
-                            globalAppLauncherPreview.forceDismiss();
-                        } else {
-                            globalAppLauncherPreview.showLauncher();
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: launcherMouseR.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
-                    }
-                    
-                    Text { 
-                        text: "apps"
-                        font.family: "Material Symbols Outlined" 
-                        font.pixelSize: 18
-                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
-                        anchors.centerIn: parent 
-                    }
-                }
-                
-                MouseArea {
-                    id: clockMouseR
-                    width: 36; height: clockColR.implicitHeight + 8
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: clockMouseR.containsMouse ? 0.3 : 0.0
-                    }
-                    Column {
-                        id: clockColR
-                        anchors.centerIn: parent; spacing: 2
-                        width: parent.width
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { 
-                            text: { 
-                                let hours = clockTimer.currentTime.getHours() % 12
-                                hours = hours === 0 ? 12 : hours
-                                return hours + ":" + clockTimer.currentTime.getMinutes().toString().padStart(2, '0')
-                            } 
-                            font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
-                        }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 9; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    }
-                }
-                
-                Workspaces { width: 28; anchors.horizontalCenter: parent.horizontalCenter; shellTarget: rootShell; parentBarWindow: barR; previewWindowInstance: globalWorkspacePreview }
-            }
-        }
-    }
-
-    // --- Horizontal Panels (Top / Bottom) ---
-    component TopPanelBar : PanelWindow {
-        id: barT
-        screen: targetScreen
-        WlrLayershell.namespace: "quickshell-bar"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusionMode: WlrLayershell.Exclusive
-        exclusiveZone: 36 * rootShell.horizontalBarProgress
-        color: "transparent"
-        anchors { left: true; right: true; top: true; bottom: false; }
-        implicitWidth: screen ? screen.width : 0
-        implicitHeight: 44.0 * rootShell.horizontalBarProgress
-        property var targetScreen: null
-
-        Rectangle { color: rootShell.colorBackground; anchors.fill: parent }
-        Item { anchors.fill: parent
-            Row {
-                anchors.left: parent.left
-                anchors.leftMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.verticalCenterOffset: 1
-                spacing: 12
-                height: parent.height
-
-                MouseArea {
-                    id: settingsMouseT
-                    width: 32; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseT.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
-                }
-                
-                MouseArea {
-                    id: launcherMouseT
-                    width: 32; height: 32
-                    anchors.verticalCenter: parent.verticalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    
-                    onClicked: {
-                        if (globalAppLauncherPreview.launcherActive) {
-                            globalAppLauncherPreview.forceDismiss();
-                        } else {
-                            globalAppLauncherPreview.showLauncher();
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: launcherMouseT.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
-                    }
-                    
-                    Text { 
-                        text: "apps"
-                        font.family: "Material Symbols Outlined" 
-                        font.pixelSize: 22
-                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
-                        anchors.centerIn: parent 
-                    }
-                }
-                
-                MouseArea {
-                    id: clockMouseT
-                    width: clockRowT.implicitWidth + 12; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: clockMouseT.containsMouse ? 0.3 : 0.0
-                    }
-                    Row {
-                        id: clockRowT
-                        spacing: 6; anchors.centerIn: parent
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
-                        Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                        Text { 
-                            text: { 
-                                let date = clockTimer.currentTime
-                                let hours = date.getHours() % 12
-                                hours = hours === 0 ? 12 : hours
-                                return hours + ":" + date.getMinutes().toString().padStart(2, '0')
-                            } 
-                            font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
-                        }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                    }
-                }
-                
-                Workspaces { anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; parentBarWindow: barT; previewWindowInstance: globalWorkspacePreview }
-            }
-        }
-    }
-
-    component BottomPanelBar : PanelWindow {
-        id: barB
-        screen: targetScreen
-        WlrLayershell.namespace: "quickshell-bar"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusionMode: WlrLayershell.Exclusive
-        exclusiveZone: 36 * rootShell.horizontalBarProgress
-        color: "transparent"
-        anchors { left: true; right: true; top: false; bottom: true; }
-        implicitWidth: screen ? screen.width : 0
-        implicitHeight: 44.0 * rootShell.horizontalBarProgress
-        property var targetScreen: null
-
-        Rectangle { color: rootShell.colorBackground; anchors.fill: parent }
-        Item { anchors.fill: parent
-            Row {
-                anchors.left: parent.left
-                anchors.leftMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.verticalCenterOffset: -1
-                spacing: 12
-                height: parent.height
-
-                MouseArea {
-                    id: settingsMouseB
-                    width: 32; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseB.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
-                }
-                
-                MouseArea {
-                    id: launcherMouseB
-                    width: 32; height: 32
-                    anchors.verticalCenter: parent.verticalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    
-                    onClicked: {
-                        if (globalAppLauncherPreview.launcherActive) {
-                            globalAppLauncherPreview.forceDismiss();
-                        } else {
-                            globalAppLauncherPreview.showLauncher();
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: launcherMouseB.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
-                    }
-                    
-                    Text { 
-                        text: "apps"
-                        font.family: "Material Symbols Outlined" 
-                        font.pixelSize: 22
-                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
-                        anchors.centerIn: parent 
-                    }
-                }
-                
-                MouseArea {
-                    id: clockMouseB
-                    width: clockRowB.implicitWidth + 12; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onContainsMouseChanged: if (containsMouse) globalCalendarPreview.showCalendar(); else globalCalendarPreview.requestDismiss();
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: clockMouseB.containsMouse ? 0.3 : 0.0
-                    }
-                    Row {
-                        id: clockRowB
-                        spacing: 6; anchors.centerIn: parent
-                        Text { text: Qt.formatDateTime(clockTimer.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; verticalAlignment: Text.AlignVCenter }
-                        Text { text: "•"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                        Text { 
-                            text: { 
-                                let date = clockTimer.currentTime
-                                let hours = date.getHours() % 12
-                                hours = hours === 0 ? 12 : hours
-                                return hours + ":" + date.getMinutes().toString().padStart(2, '0')
-                            } 
-                            font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; verticalAlignment: Text.AlignVCenter 
-                        }
-                        Text { text: clockTimer.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorSubtext; verticalAlignment: Text.AlignVCenter }
-                    }
-                }
-                
-                Workspaces { anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; parentBarWindow: barB; previewWindowInstance: globalWorkspacePreview }
-            }
-        }
-    }
-
-    // --- Instantiators ---
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: LeftPanelBar { 
-            targetScreen: modelData
-            visible: rootShell.isDisplayEnabled(index) && rootShell.barPosition === "left" && rootShell.verticalBarProgress > 0.0 
+        delegate: VerticalBar { 
+            targetScreen: modelData; edge: "left"; rootShell: globalCtx.ref
+            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "left" && globalCtx.ref.verticalBarProgress > 0.0 
         } 
     }
     
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: RightPanelBar { 
-            targetScreen: modelData
-            visible: rootShell.isDisplayEnabled(index) && rootShell.barPosition === "right" && rootShell.verticalBarProgress > 0.0 
+        delegate: VerticalBar { 
+            targetScreen: modelData; edge: "right"; rootShell: globalCtx.ref
+            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "right" && globalCtx.ref.verticalBarProgress > 0.0 
         } 
     }
     
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: TopPanelBar { 
-            targetScreen: modelData
-            visible: rootShell.isDisplayEnabled(index) && rootShell.barPosition === "top" && rootShell.horizontalBarProgress > 0.0 
+        delegate: HorizontalBar { 
+            targetScreen: modelData; edge: "top"; rootShell: globalCtx.ref
+            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "top" && globalCtx.ref.horizontalBarProgress > 0.0 
         } 
     }
     
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: BottomPanelBar { 
-            targetScreen: modelData
-            visible: rootShell.isDisplayEnabled(index) && rootShell.barPosition === "bottom" && rootShell.horizontalBarProgress > 0.0 
+        delegate: HorizontalBar { 
+            targetScreen: modelData; edge: "bottom"; rootShell: globalCtx.ref
+            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "bottom" && globalCtx.ref.horizontalBarProgress > 0.0 
         } 
-    }
-
-    // --- Screen Border Overlay Frame Module ---
-    component ScreenEdgeFrame : PanelWindow {
-        id: frameWindowItem
-        screen: targetScreen
-        WlrLayershell.namespace: "quickshell-frame"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-        color: Qt.rgba(0, 0, 0, 0)
-        mask: Region {}
-        anchors { 
-            left: barPosition !== "left" || !rootShell.isDisplayEnabled(parentIndex)
-            right: barPosition !== "right" || !rootShell.isDisplayEnabled(parentIndex)
-            top: barPosition !== "top" || !rootShell.isDisplayEnabled(parentIndex)
-            bottom: barPosition !== "bottom" || !rootShell.isDisplayEnabled(parentIndex) 
-        }
-        property var targetScreen: null
-        property int parentIndex: 0
-        property real currentMargin: rootShell.activeLayoutOrientation === "vertical" ? (36.0 * rootShell.verticalFrameProgress) : (36.0 * rootShell.horizontalFrameProgress)
-        implicitWidth: barPosition === "left" || barPosition === "right" ? (rootShell.isDisplayEnabled(parentIndex) ? (screen ? screen.width - currentMargin : 0) : (screen ? screen.width : 0)) : (screen ? screen.width : 0)
-        implicitHeight: barPosition === "top" || barPosition === "bottom" ? (rootShell.isDisplayEnabled(parentIndex) ? (screen ? screen.height - currentMargin : 0) : (screen ? screen.height : 0)) : (screen ? screen.height : 0)
-
-        Shape {
-            anchors.fill: parent
-            layer.enabled: true
-            layer.samples: 4
-            ShapePath {
-                fillColor: rootShell.colorBackground
-                strokeColor: "transparent"
-                fillRule: ShapePath.OddEvenFill
-                PathMove { x: 0; y: 0 }
-                PathLine { x: frameWindowItem.width; y: 0 }
-                PathLine { x: frameWindowItem.width; y: frameWindowItem.height }
-                PathLine { x: 0; y: frameWindowItem.height }
-                PathLine { x: 0; y: 0 }
-                PathMove { x: 8 + borderFrameLine.radius; y: 8 }
-                PathLine { x: frameWindowItem.width - 8 - borderFrameLine.radius; y: 8 }
-                PathArc { x: frameWindowItem.width - 8; y: 8 + borderFrameLine.radius; radiusX: borderFrameLine.radius; radiusY: borderFrameLine.radius }
-                PathLine { x: frameWindowItem.width - 8; y: frameWindowItem.height - 8 - borderFrameLine.radius }
-                PathArc { x: frameWindowItem.width - 8 - borderFrameLine.radius; y: frameWindowItem.height - 8; radiusX: borderFrameLine.radius; radiusY: borderFrameLine.radius }
-                PathLine { x: 8 + borderFrameLine.radius; y: frameWindowItem.height - 8 }
-                PathArc { x: 8; y: frameWindowItem.height - 8 - borderFrameLine.radius; radiusX: borderFrameLine.radius; radiusY: borderFrameLine.radius }
-                PathLine { x: 8; y: 8 + borderFrameLine.radius }
-                PathArc { x: 8 + borderFrameLine.radius; y: 8; radiusX: borderFrameLine.radius; radiusY: borderFrameLine.radius }
-            }
-        }
-        Rectangle { id: borderFrameLine; x: 8; y: 8; width: parent.width - 16; height: parent.height - 16; color: "transparent"; border.color: rootShell.colorBackground; border.width: 2; radius: 16 }
     }
 
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
         delegate: ScreenEdgeFrame { 
-            targetScreen: modelData
-            parentIndex: index 
+            targetScreen: modelData; parentIndex: index; rootShell: globalCtx.ref 
         } 
     }
 }
