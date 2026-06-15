@@ -241,11 +241,15 @@ Scope {
 
     Timer {
         id: previewDebounceTimer
-        interval: 50 // Crisp 50ms entry response
+        interval: 50
         running: false
         repeat: false
+        property int pendingWorkspace: -1
         onTriggered: {
-            innerPreviewCard.targetWorkspace = hoveredIndicatorWorkspace;
+            if (pendingWorkspace !== -1) {
+                // Route directly to the inner card to initiate the opening sequence
+                innerPreviewCard.targetWorkspace = pendingWorkspace;
+            }
         }
     }
 
@@ -275,6 +279,9 @@ Scope {
     // --- Workspace Preview Panel ---
     PanelWindow {
         id: globalWorkspacePreview
+
+        screen: targetScreen
+        property var targetScreen: null
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
@@ -283,18 +290,17 @@ Scope {
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
-        visible: targetWorkspace !== -1 || innerPreviewCard.active
+        visible: innerPreviewCard.state !== "hidden" || globalWorkspacePreview.targetWorkspace !== -1
         color: "transparent"
 
         mask: Region { 
-            item: innerPreviewCard.active ? innerPreviewCard : null 
+            item: (globalWorkspacePreview.targetWorkspace !== -1) ? innerPreviewCard : null 
         }
 
         property int targetWorkspace: -1
 
         onTargetWorkspaceChanged: {
             if (targetWorkspace !== -1) {
-                // Fixed: Check against targetWorkspace directly instead of deleted currentActiveWorkspace
                 if (targetWorkspace === innerPreviewCard.targetWorkspace) {
                     previewDebounceTimer.stop();
                     return; 
@@ -303,16 +309,21 @@ Scope {
                 previewDebounceTimer.restart();
             } else {
                 previewDebounceTimer.stop();
+                // FIXED: Pass the dismissal down to the inner card so it drops its active state
+                innerPreviewCard.targetWorkspace = -1;
             }
         }
 
-        function commitWorkspaceChange(ws) {
+        function commitWorkspaceChange(ws, monitorScreen) {
             dismissTimer.stop();
+            
+            // Instantly snap the layout window context to the correct hardware screen output index
+            if (monitorScreen) {
+                globalWorkspacePreview.targetScreen = monitorScreen;
+            }
+            
             hoveredIndicatorWorkspace = ws;
-            
-            // FIXED: Only write to the valid, existing targetWorkspace property
-            innerPreviewCard.targetWorkspace = ws;
-            
+            globalWorkspacePreview.targetWorkspace = ws;
             showPreviewAnim.restart();
         }
 
