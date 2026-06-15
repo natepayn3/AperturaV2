@@ -29,7 +29,6 @@ Item {
         let specialHasWindows = false;
         let ids = [];
 
-        // FIX: If a workspace exists in Quickshell's values array, it is occupied. No window count check needed.
         for (let i = 0; i < Hyprland.workspaces.values.length; i++) {
             let ws = Hyprland.workspaces.values[i];
             if (ws.id > 0) {
@@ -55,9 +54,8 @@ Item {
 
         ids.sort((a, b) => a - b);
 
-        if (workspaceContainer.isSpecialOccupied || workspaceContainer.isSpecialActive) {
-            if (!ids.includes(-99)) ids.push(-99);
-        }
+        // FIX: Stripped conditional checks so the special node index is unconditionally appended
+        if (!ids.includes(-99)) ids.push(-99);
 
         workspaceContainer.activeWorkspaceList = ids;
     }
@@ -157,15 +155,23 @@ Item {
             onEntered: {
                 if (isSpecialNode) return;
                 let popup = workspaceContainer.previewWindowInstance;
-                if (popup && isOccupied) {
-                    popup.cancelDismiss();
-                    Qt.callLater(function() {
-                        popup.targetWorkspace = wsId;
-                    });
+                if (popup) {
+                    if (isOccupied) {
+                        popup.commitWorkspaceChange(wsId, workspaceContainer.parentBarWindow ? workspaceContainer.parentBarWindow.screen : null);
+                    } else {
+                        // FIXED: Drop target tracking states immediately on empty placeholder slots
+                        // This prevents the data register from getting jammed with old indices
+                        if (workspaceContainer.shellTarget) {
+                            workspaceContainer.shellTarget.hoveredIndicatorWorkspace = -1;
+                        }
+                        popup.targetWorkspace = -1;
+                        popup.requestDismiss();
+                    }
                 }
             }
 
             onExited: {
+                if (isSpecialNode) return;
                 let popup = workspaceContainer.previewWindowInstance;
                 if (popup) {
                     popup.requestDismiss();
@@ -184,7 +190,7 @@ Item {
                 id: hoverBackground
                 width: parent.width
                 height: parent.height
-                radius: 0
+                radius: 6
                 anchors.centerIn: parent
                 color: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.colorAccent : "#89b4fa"
                 opacity: workspaceButton.containsMouse ? 0.3 : 0.0
@@ -218,7 +224,7 @@ Item {
                 border.color: {
                     if (!workspaceContainer.shellTarget) return "transparent";
                     return (!workspaceButton.isActive && !workspaceButton.isOccupied)
-                        ? workspaceContainer.shellTarget.colorSubtext // FIX: Swapped from colorBorder to colorSubtext for visibility
+                        ? workspaceContainer.shellTarget.colorSubtext
                         : "transparent";
                 }
 
