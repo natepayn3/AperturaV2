@@ -503,6 +503,22 @@ Scope {
                 anchors.horizontalCenterOffset: 1
                 spacing: 12
                 width: parent.width
+
+                MouseArea {
+                    id: settingsMouseL
+                    width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseL.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
+                }
                 
                 MouseArea {
                     id: launcherMouseL
@@ -532,22 +548,6 @@ Scope {
                         color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
                         anchors.centerIn: parent 
                     }
-                }
-
-                MouseArea {
-                    id: settingsMouseL
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseL.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
                 MouseArea {
@@ -608,6 +608,22 @@ Scope {
                 anchors.horizontalCenterOffset: -1
                 spacing: 12
                 width: parent.width
+
+                MouseArea {
+                    id: settingsMouseR
+                    width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseR.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
+                }
                 
                 MouseArea {
                     id: launcherMouseR
@@ -637,22 +653,6 @@ Scope {
                         color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
                         anchors.centerIn: parent 
                     }
-                }
-
-                MouseArea {
-                    id: settingsMouseR
-                    width: 28; height: 28
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseR.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
                 MouseArea {
@@ -713,6 +713,22 @@ Scope {
                 anchors.verticalCenterOffset: 1
                 spacing: 12
                 height: parent.height
+
+                MouseArea {
+                    id: settingsMouseT
+                    width: 32; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseT.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
+                }
                 
                 MouseArea {
                     id: launcherMouseT
@@ -742,22 +758,6 @@ Scope {
                         color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
                         anchors.centerIn: parent 
                     }
-                }
-
-                MouseArea {
-                    id: settingsMouseT
-                    width: 32; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseT.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
                 MouseArea {
@@ -818,6 +818,22 @@ Scope {
                 anchors.verticalCenterOffset: -1
                 spacing: 12
                 height: parent.height
+
+                MouseArea {
+                    id: settingsMouseB
+                    width: 32; height: 32
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: settingsMouseB.containsMouse ? 0.3 : 0.0
+                    }
+                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
+                }
                 
                 MouseArea {
                     id: launcherMouseB
@@ -847,22 +863,6 @@ Scope {
                         color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
                         anchors.centerIn: parent 
                     }
-                }
-
-                MouseArea {
-                    id: settingsMouseB
-                    width: 32; height: 32
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible
-
-                    Rectangle {
-                        anchors.fill: parent; radius: 6
-                        color: rootShell.colorAccent
-                        opacity: settingsMouseB.containsMouse ? 0.3 : 0.0
-                    }
-                    Text { text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; color: settingsAppInstance.windowVisible ? rootShell.colorAccent : rootShell.colorText; anchors.centerIn: parent }
                 }
                 
                 MouseArea {
