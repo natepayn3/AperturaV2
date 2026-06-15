@@ -11,13 +11,22 @@ Scope {
     id: launcherModuleRoot
 
     property alias launcherWindowObject: launcherWindow
-    property alias active: launcherWindow.visible
+    
+    // Decouple the public active flag so it kicks off the exit states 
+    // instead of destroying the layout instance instantly
+    property bool active: false
+    onActiveChanged: {
+        if (active) {
+            launcherWindow.visible = true;
+        }
+    }
 
     signal closeRequested()
-    onCloseRequested: launcherWindow.visible = false
+    onCloseRequested: launcherModuleRoot.active = false
 
     PanelWindow {
         id: launcherWindow
+        // Controlled dynamically by the end of the transition curve
         visible: false
         
         WlrLayershell.layer: WlrLayer.Overlay
@@ -25,7 +34,6 @@ Scope {
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
-        // Make the window fullscreen so it intercepts click-away requests across the display
         anchors { left: true; right: true; top: true; bottom: true }
         color: "transparent"
 
@@ -109,6 +117,7 @@ Scope {
             launcherModuleRoot.closeRequested();
         }
 
+        // Changed target from visibility changes to the public activation state token
         onVisibleChanged: {
             if (visible) {
                 if (allApps.length === 0) appFetcher.running = true;
@@ -119,16 +128,56 @@ Scope {
             }
         }
 
-        // --- Layout Shell Backdrop Catcher ---
         MouseArea {
             anchors.fill: parent
-            // Clicking outside the centered box calls closeRequested()
             onClicked: launcherModuleRoot.closeRequested()
 
             Item {
+                id: launcherCardFrame
                 width: 400
                 height: 400
                 anchors.centerIn: parent
+                transformOrigin: Item.Center
+
+                // --- Animation States ---
+                states: [
+                    State {
+                        name: "hidden"
+                        // Tie tracking flags straight to the public module property state
+                        when: !launcherModuleRoot.active
+                        PropertyChanges { target: launcherCardFrame; opacity: 0.0; scale: 0.0 }
+                    },
+                    State {
+                        name: "shown"
+                        when: launcherModuleRoot.active
+                        PropertyChanges { target: launcherCardFrame; opacity: 1.0; scale: 1.0 }
+                    }
+                ]
+
+                // --- Animation Transitions ---
+                transitions: [
+                    Transition {
+                        from: "hidden"; to: "shown"
+                        ParallelAnimation {
+                            NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                            NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
+                        }
+                    },
+                    Transition {
+                        from: "shown"; to: "hidden"
+                        // SequentialAnimation ensures the window visibility toggle waits for the scale/opacity to finish
+                        SequentialAnimation {
+                            ParallelAnimation {
+                                NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                                NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
+                            }
+                            // Safe Exit: Turning off window visibility ONLY after the transition finishes animating
+                            ScriptAction {
+                                script: launcherWindow.visible = false
+                            }
+                        }
+                    }
+                ]
 
                 Rectangle {
                     id: cardMainBody
@@ -170,8 +219,6 @@ Scope {
 
                             onTextChanged: launcherWindow.updateModel()
 
-                            // Key event mappings preserved perfectly
-                            // Escape still triggers standard safe close paths
                             Keys.onPressed: (event) => {
                                 if (event.key === Qt.Key_Down) {
                                     appListView.incrementCurrentIndex();
@@ -281,7 +328,6 @@ Scope {
                     }
                 }
 
-                // Inner click blocker prevents UI interaction events from bubbles
                 MouseArea {
                     anchors.fill: parent
                     onClicked: (mouse) => { mouse.accepted = true; }
