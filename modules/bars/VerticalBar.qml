@@ -85,10 +85,16 @@ PanelWindow {
                     opacity: launcherMouse.containsMouse || rootShell.launcherRef.launcherActive ? 0.3 : 0.0
                 }
                 
-                Text { 
-                    text: "apps"; font.family: "Material Symbols Outlined"; font.pixelSize: 18
-                    color: rootShell.launcherRef.launcherActive ? rootShell.colorAccent : rootShell.colorText
+                Text {
+                    text: "apps" // Or your designated icon string
+                    font.family: "Material Symbols Outlined"
+                    font.pixelSize: 22
                     anchors.centerIn: parent 
+                    
+                    // Dynamic color matching the Settings active state logic
+                    color: (rootShell.launcherRef && rootShell.launcherRef.active)
+                        ? rootShell.colorAccent 
+                        : rootShell.colorText
                 }
             }
             
