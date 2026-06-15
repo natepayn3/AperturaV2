@@ -39,11 +39,9 @@ Item {
                 fontListView.currentIndex = 0;
             }
 
-            // Keyboard navigation synchronization engine
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_Down) {
                     fontListView.incrementCurrentIndex();
-                    // Forces instantaneous selection update upon highlighting
                     if (fontListView.currentItem) fontListView.currentItem.triggerSelection();
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Up) {
@@ -59,18 +57,26 @@ Item {
             }
         }
 
+        // --- Font Example Preview Area ---
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            color: Qt.rgba(1, 1, 1, 0.02)
+            // FIX: Shrunk preferredHeight from 80 to 66 to instantly strip the dead space
+            Layout.preferredHeight: 66
+            
+            color: Qt.rgba(0, 0, 0, 0.15)
             border.color: shellTarget ? shellTarget.colorBorder : "#313244"
             border.width: 1
-            radius: 8
+            radius: 12
 
-            Column {
+            // FIX: Changed from plain Column to ColumnLayout for layout constraint alignment
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 4
+                // Padded side margins out to 14 while tightening top/bottom layout boundaries to 10
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                anchors.topMargin: 10
+                anchors.bottomMargin: 10
+                spacing: 2 // Tightened label spacing slightly to sit perfectly centered
 
                 Text {
                     text: "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz"
@@ -78,7 +84,7 @@ Item {
                     font.pixelSize: 14
                     color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                     elide: Text.ElideRight
-                    width: parent.width
+                    Layout.fillWidth: true // Leverages layout stretching constraints natively
                 }
 
                 Text {
@@ -87,7 +93,7 @@ Item {
                     font.pixelSize: 13
                     color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
                     elide: Text.ElideRight
-                    width: parent.width
+                    Layout.fillWidth: true
                 }
             }
         }
