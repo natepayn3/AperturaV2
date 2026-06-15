@@ -73,6 +73,10 @@ Item {
         repeat: false
         onTriggered: {
             if (previewRoot.targetWorkspace !== -1) {
+                // Force Quickshell to fetch new Wayland surface proxies from the compositor
+                Hyprland.refreshToplevels();
+                Hyprland.refreshWorkspaces();
+                
                 previewRoot.workingWorkspace = previewRoot.targetWorkspace;
                 clientQueryProcess.running = true;
                 previewRoot.active = true;
@@ -92,10 +96,20 @@ Item {
         }
     }
 
+    Timer {
+        id: jsonRefreshTimer
+        interval: 100
+        running: false
+        onTriggered: clientQueryProcess.running = true
+    }
+
     Connections {
         target: Hyprland
         ignoreUnknownSignals: true
-        function onRawEvent(event) { if (previewRoot.active) clientQueryProcess.running = true; }
+        function onRawEvent(event) { 
+            // Restarting the timer absorbs the spam of rapid raw events
+            if (previewRoot.active) jsonRefreshTimer.restart(); 
+        }
     }
 
     Process {
@@ -491,17 +505,45 @@ Item {
 
                             property var wlToplevel: {
                                 if (!modelData || !modelData.address) return null;
+                                
+                                // QML Hack: Forces re-evaluation whenever a new hyprctl query runs
+                                let tracker = clientQueryProcess.running;
+                                
                                 let targetAddr = modelData.address.trim().toLowerCase();
-                                let match = Hyprland.toplevels.values.find(t => t.lastIpcObject && t.lastIpcObject.address && t.lastIpcObject.address.trim().toLowerCase() === targetAddr);
-                                return match ? match.wayland : null;
+
+                                // Primary search through global toplevels
+                                let match = Hyprland.toplevels.values.find(t => {
+                                    if (!t.lastIpcObject || !t.lastIpcObject.address) return false;
+                                    return t.lastIpcObject.address.trim().toLowerCase() === targetAddr;
+                                });
+                                if (match && match.wayland) return match.wayland;
+                                
+                                // Fallback search through active workspace toplevels (from your working file)
+                                if (Hyprland.activeWorkspace) {
+                                    let localMatch = Hyprland.activeWorkspace.toplevels.values.find(t => {
+                                        if (!t.lastIpcObject || !t.lastIpcObject.address) return false;
+                                        return t.lastIpcObject.address.trim().toLowerCase() === targetAddr;
+                                    });
+                                    if (localMatch && localMatch.wayland) return localMatch.wayland;
+                                }
+                                return null;
                             }
 
                             Loader {
                                 anchors.fill: parent
                                 active: windowDelegate.wlToplevel !== null && !viewportFrame.isTargetActiveWorkspace
-                                sourceComponent: ScreencopyView {
-                                    captureSource: windowDelegate.wlToplevel
-                                    live: true; paintCursor: false
+                                asynchronous: true // Essential for Wayland buffer handoff
+                                
+                                // Fade-in matches your working shell
+                                opacity: status === Loader.Ready ? 1.0 : 0.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                sourceComponent: Component {
+                                    ScreencopyView {
+                                        captureSource: windowDelegate.wlToplevel
+                                        live: true
+                                        paintCursor: false
+                                    }
                                 }
                             }
 
