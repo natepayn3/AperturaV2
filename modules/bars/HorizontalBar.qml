@@ -74,10 +74,8 @@ PanelWindow {
                 cursorShape: Qt.PointingHandCursor
                 
                 onClicked: {
-                    if (rootShell.launcherRef.launcherActive) {
-                        rootShell.launcherRef.forceDismiss();
-                    } else {
-                        rootShell.launcherRef.showLauncher();
+                    if (rootShell.launcherRef) {
+                        rootShell.launcherRef.active = !rootShell.launcherRef.active;
                     }
                 }
 
