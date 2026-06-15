@@ -27,6 +27,7 @@ hl.monitor({ output = "DP-2", mode = "2560x1440@164.84", position = "1440x722", 
 local terminal    = "kitty"
 local fileManager = "nautilus"
 local menu = "qs -c AperturaV2 ipc call launcher toggle"
+local settings = "qs -c AperturaV2 ipc call settings toggle"
 
 
 -------------------
@@ -267,6 +268,7 @@ hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + ALT + S", hl.dsp.exec_cmd(settings))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("google-chrome-stable"))
