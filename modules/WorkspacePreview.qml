@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
+import QtQuick.Controls
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -12,13 +13,9 @@ Item {
     signal closeRequested()
 
     property int targetWorkspace: -1 
-    property bool active: false
-    
-    property int stagedWorkspace: -1
+    // Pure declarative activation gate - instantly fires teardown routines
+    property bool active: targetWorkspace !== undefined && targetWorkspace !== -1
     property var liveClientJson: []
-
-    property int currentActiveWorkspace: -1
-    property int workingWorkspace: -1
 
     property real radiusValue: 12
     property real wingSize: 14
@@ -26,14 +23,17 @@ Item {
     property int hoverOriginX: 0
     property int hoverOriginY: 0
 
+    property bool isHovered: globalTrackingArea.containsMouse || contentHoverHandler.hovered
+
     property real maxCardWidth: viewportFrame.width + 28
     property real maxCardHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
-    implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.round(maxCardHeight)
+    // Adopt the direct reactive dimension mapping from the working file
+    implicitWidth: active ? Math.round(maxCardWidth) : 0
+    implicitHeight: active ? (viewportFrame.calculatedBounds.isVertical ? 500 : 270) : 0
 
-    width: Math.round(maxCardWidth)
-    height: Math.round(maxCardHeight)
+    width: implicitWidth
+    height: implicitHeight
     opacity: 1.0
     visible: true
     clip: false
@@ -43,35 +43,9 @@ Item {
 
     onTargetWorkspaceChanged: {
         if (targetWorkspace !== -1) {
-            if (previewRoot.active) {
-                previewRoot.stagedWorkspace = targetWorkspace;
-                previewRoot.active = false;
-                sequenceDelayTimer.restart();
-            } else {
-                previewRoot.workingWorkspace = targetWorkspace;
-                clientQueryProcess.running = true;
-                previewRoot.active = true;
-            }
+            clientQueryProcess.running = true;
         } else {
-            previewRoot.active = false;
-            previewRoot.stagedWorkspace = -1;
-            previewRoot.workingWorkspace = -1;
             liveClientJson = [];
-        }
-    }
-
-    Timer {
-        id: sequenceDelayTimer
-        interval: 360
-        running: false
-        repeat: false
-        onTriggered: {
-            if (previewRoot.stagedWorkspace !== -1) {
-                previewRoot.workingWorkspace = previewRoot.stagedWorkspace;
-                previewRoot.stagedWorkspace = -1;
-                clientQueryProcess.running = true;
-                previewRoot.active = true;
-            }
         }
     }
 
@@ -138,23 +112,21 @@ Item {
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
                 PropertyChanges { 
                     target: animatedGroup
-                    // Horizontal directional shift into the target corner
                     x: {
                         switch (rootShell.barPosition) {
-                            case "left":   return -40; // Slide left to top-left
-                            case "bottom": return -40; // Slide left to bottom-left
-                            case "right":  return 40;  // Slide right to top-right
-                            case "top":    return -40; // Slide left to top-left
+                            case "left":   return -40;
+                            case "bottom": return -40;
+                            case "right":  return 40;
+                            case "top":    return -40;
                             default:       return 0;
                         }
                     }
-                    // Vertical directional shift into the target corner
                     y: {
                         switch (rootShell.barPosition) {
-                            case "left":   return -40; // Slide up to top-left
-                            case "bottom": return 40;  // Slide down to bottom-left
-                            case "right":  return -40; // Slide up to top-right
-                            case "top":    return -40; // Slide up to top-left
+                            case "left":   return -40;
+                            case "bottom": return 40;
+                            case "right":  return -40;
+                            case "top":    return -40;
                             default:       return 0;
                         }
                     }
@@ -172,7 +144,6 @@ Item {
             Transition {
                 from: "hidden"; to: "shown"
                 ParallelAnimation {
-                    // Restored full Spring Bounce values from WorkspacePreview
                     NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
                     SequentialAnimation {
@@ -229,6 +200,7 @@ Item {
             }
         }
 
+        // --- Custom Wings Component ---
         Item {
             anchors.fill: parent
             visible: previewRoot.width > 30
@@ -352,11 +324,12 @@ Item {
         }
 
         MouseArea { 
+            id: globalTrackingArea
             anchors.fill: parent 
             hoverEnabled: true 
             acceptedButtons: Qt.LeftButton 
             onClicked: {
-                Hyprland.dispatch(`hl.dsp.focus({ workspace = "${previewRoot.workingWorkspace}" })`);
+                Hyprland.dispatch(`hl.dsp.focus({ workspace = "${previewRoot.targetWorkspace}" })`);
                 previewRoot.closeRequested();
             }
             z: 4
@@ -371,13 +344,17 @@ Item {
             opacity: 1.0 
             z: 5
 
+            HoverHandler {
+                id: contentHoverHandler
+            }
+
             Item {
                 anchors.fill: parent
                 anchors.margins: 14
 
                 Text {
                     id: titleLabel
-                    text: previewRoot.workingWorkspace !== -1 ? "Workspace " + previewRoot.workingWorkspace : ""
+                    text: previewRoot.targetWorkspace !== -1 ? "Workspace " + previewRoot.targetWorkspace : ""
                     font.family: rootShell.shellFont
                     font.pixelSize: 13
                     font.bold: true
@@ -415,12 +392,13 @@ Item {
                     color: "transparent" 
                     radius: 4; clip: true
 
-                    property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.workingWorkspace)
+                    property var workspaceWindows: previewRoot.liveClientJson.filter(w => w.workspace.id === previewRoot.targetWorkspace)
+                    property bool isTargetActiveWorkspace: !!(Hyprland.activeWorkspace && (previewRoot.targetWorkspace === Hyprland.activeWorkspace.id))
 
                     property var calculatedBounds: {
-                        if (previewRoot.workingWorkspace === -1 || !workspaceWindows || workspaceWindows.length === 0) {
+                        if (previewRoot.targetWorkspace === -1 || !workspaceWindows || workspaceWindows.length === 0) {
                             let mX = 0, mY = 0, mWidth = 1920, mHeight = 1080;
-                            let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.workingWorkspace);
+                            let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.targetWorkspace);
                             let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
                             
                             if (targetMonitor) {
@@ -470,13 +448,16 @@ Item {
                         model: viewportFrame.workspaceWindows
                         delegate: Rectangle {
                             id: windowDelegate
-                            x: Math.round((modelData.at[0] - viewportFrame.calculatedBounds.originX) * viewportFrame.scaleX)
-                            y: Math.round((modelData.at[1] - viewportFrame.calculatedBounds.originY) * viewportFrame.scaleY)
-                            width: Math.max(4, Math.round(modelData.size[0] * viewportFrame.scaleX))
-                            height: Math.max(4, Math.round(modelData.size[1] * viewportFrame.scaleY))
+                            x: (modelData.at[0] - viewportFrame.calculatedBounds.originX) * viewportFrame.scaleX
+                            y: (modelData.at[1] - viewportFrame.calculatedBounds.originY) * viewportFrame.scaleY
+                            width: Math.max(4, modelData.size[0] * viewportFrame.scaleX)
+                            height: Math.max(4, modelData.size[1] * viewportFrame.scaleY)
                             visible: modelData.mapped
-                            color: "transparent" 
-                            border.color: rootShell.colorBorder; border.width: 1; radius: 2; clip: true
+                            
+                            // Rely strictly on the working file's higher-opacity fallback rendering approach
+                            color: viewportFrame.isTargetActiveWorkspace ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) : Qt.rgba(0, 0, 0, 0.6)
+                            border.color: viewportFrame.isTargetActiveWorkspace ? rootShell.colorAccent : rootShell.colorBorder
+                            border.width: 1; radius: 2; clip: true
 
                             property var wlToplevel: {
                                 if (!modelData || !modelData.address) return null;
@@ -487,7 +468,7 @@ Item {
 
                             Loader {
                                 anchors.fill: parent
-                                active: windowDelegate.wlToplevel !== null
+                                active: windowDelegate.wlToplevel !== null && !viewportFrame.isTargetActiveWorkspace
                                 sourceComponent: ScreencopyView {
                                     captureSource: windowDelegate.wlToplevel
                                     live: true; paintCursor: false
@@ -497,12 +478,13 @@ Item {
                             Rectangle {
                                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
                                 height: Math.min(14, parent.height * 0.25)
-                                color: "#cc11111b"
+                                color: viewportFrame.isTargetActiveWorkspace ? rootShell.colorAccent : "#cc11111b"
                                 visible: parent.height > 20 && parent.width > 35; z: 10
 
                                 Text {
                                     text: (modelData.title && modelData.title.trim() !== "" && modelData.title !== "~") ? modelData.title : (modelData.class || "")
-                                    font.family: rootShell.shellFont; font.pixelSize: 8; font.bold: true; color: "#ffffff"
+                                    font.family: rootShell.shellFont; font.pixelSize: 8; font.bold: true; 
+                                    color: viewportFrame.isTargetActiveWorkspace ? rootShell.colorBackground : "#ffffff"
                                     anchors.centerIn: parent; width: parent.width - 4; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
                                 }
                             }
