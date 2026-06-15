@@ -104,6 +104,20 @@ Scope {
         PropertyAction { target: globalCalendarPreview; property: "calendarActive"; value: false }
     }
 
+    // --- App Launcher Animations ---
+    property real launcherProgress: 0.0
+
+    ParallelAnimation {
+        id: showLauncherAnim
+        NumberAnimation { target: rootShell; property: "launcherProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideLauncherAnim
+        NumberAnimation { target: rootShell; property: "launcherProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalAppLauncherPreview; property: "launcherActive"; value: false }
+    }
+
     function isDisplayEnabled(idx) {
         let items = enabledDisplayStr.split(",");
         return items.indexOf(String(idx)) !== -1;
@@ -213,6 +227,20 @@ Scope {
         }
     }
 
+    IpcHandler {
+        target: "launcher"
+
+        function toggle(): void {
+            if (globalAppLauncherPreview) {
+                if (globalAppLauncherPreview.launcherActive) {
+                    globalAppLauncherPreview.forceDismiss();
+                } else {
+                    globalAppLauncherPreview.showLauncher();
+                }
+            }
+        }
+    }
+
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
     Timer { 
@@ -264,7 +292,6 @@ Scope {
         }
     }
 
-    // Fixed: Stripped out the dead pendingWorkspace reference lines completely
     function handleIndicatorHover(workspaceId) {
         dismissTimer.stop();
         hoveredIndicatorWorkspace = workspaceId;
@@ -309,19 +336,15 @@ Scope {
                 previewDebounceTimer.restart();
             } else {
                 previewDebounceTimer.stop();
-                // FIXED: Pass the dismissal down to the inner card so it drops its active state
                 innerPreviewCard.targetWorkspace = -1;
             }
         }
 
         function commitWorkspaceChange(ws, monitorScreen) {
             dismissTimer.stop();
-            
-            // Instantly snap the layout window context to the correct hardware screen output index
             if (monitorScreen) {
                 globalWorkspacePreview.targetScreen = monitorScreen;
             }
-            
             hoveredIndicatorWorkspace = ws;
             globalWorkspacePreview.targetWorkspace = ws;
             showPreviewAnim.restart();
@@ -343,6 +366,56 @@ Scope {
             onCloseRequested: {
                 globalWorkspacePreview.targetWorkspace = -1;
                 hidePreviewAnim.restart();
+            }
+            
+            hoverOriginX: {
+                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
+                return rootShell.barPosition === "left" ? 44 : 8; 
+            }
+            hoverOriginY: {
+                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
+                return rootShell.barPosition === "top" ? 44 : 8; 
+            }
+        }
+    }
+
+    PanelWindow {
+        id: globalAppLauncherPreview
+        property bool launcherActive: false
+        
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-launcher-preview"
+        
+        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand 
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: launcherActive || rootShell.launcherProgress > 0.0
+        color: "transparent"
+
+        mask: Region { item: innerLauncherCard }
+
+        function showLauncher() {
+            launcherActive = true;
+            showLauncherAnim.restart();
+        }
+
+        function forceDismiss() {
+            hideLauncherAnim.restart();
+        }
+
+        AppLauncher {
+            id: innerLauncherCard
+            active: globalAppLauncherPreview.launcherActive
+
+            onCloseRequested: {
+                globalAppLauncherPreview.forceDismiss();
+            }
+
+            onActiveChanged: {
+                if (!active && globalAppLauncherPreview.launcherActive) {
+                    globalAppLauncherPreview.forceDismiss();
+                }
             }
             
             hoverOriginX: {
@@ -429,8 +502,38 @@ Scope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.horizontalCenterOffset: 1
                 spacing: 12
-                width: parent.width // Match target bar window size bounding box boundaries
+                width: parent.width
                 
+                MouseArea {
+                    id: launcherMouseL
+                    width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    
+                    onClicked: {
+                        if (globalAppLauncherPreview.launcherActive) {
+                            globalAppLauncherPreview.forceDismiss();
+                        } else {
+                            globalAppLauncherPreview.showLauncher();
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: launcherMouseL.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
+                    }
+                    
+                    Text { 
+                        text: "apps"
+                        font.family: "Material Symbols Outlined" 
+                        font.pixelSize: 18
+                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
+                        anchors.centerIn: parent 
+                    }
+                }
+
                 MouseArea {
                     id: settingsMouseL
                     width: 28; height: 28
@@ -449,7 +552,7 @@ Scope {
                 
                 MouseArea {
                     id: clockMouseL
-                    width: 36; height: clockColL.implicitHeight + 8 // Expanded boundary limits safely
+                    width: 36; height: clockColL.implicitHeight + 8
                     anchors.horizontalCenter: parent.horizontalCenter
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
@@ -506,6 +609,36 @@ Scope {
                 spacing: 12
                 width: parent.width
                 
+                MouseArea {
+                    id: launcherMouseR
+                    width: 28; height: 28
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    
+                    onClicked: {
+                        if (globalAppLauncherPreview.launcherActive) {
+                            globalAppLauncherPreview.forceDismiss();
+                        } else {
+                            globalAppLauncherPreview.showLauncher();
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: launcherMouseR.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
+                    }
+                    
+                    Text { 
+                        text: "apps"
+                        font.family: "Material Symbols Outlined" 
+                        font.pixelSize: 18
+                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
+                        anchors.centerIn: parent 
+                    }
+                }
+
                 MouseArea {
                     id: settingsMouseR
                     width: 28; height: 28
@@ -582,6 +715,36 @@ Scope {
                 height: parent.height
                 
                 MouseArea {
+                    id: launcherMouseT
+                    width: 32; height: 32
+                    anchors.verticalCenter: parent.verticalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    
+                    onClicked: {
+                        if (globalAppLauncherPreview.launcherActive) {
+                            globalAppLauncherPreview.forceDismiss();
+                        } else {
+                            globalAppLauncherPreview.showLauncher();
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: launcherMouseT.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
+                    }
+                    
+                    Text { 
+                        text: "apps"
+                        font.family: "Material Symbols Outlined" 
+                        font.pixelSize: 22
+                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
+                        anchors.centerIn: parent 
+                    }
+                }
+
+                MouseArea {
                     id: settingsMouseT
                     width: 32; height: 32
                     hoverEnabled: true
@@ -656,6 +819,36 @@ Scope {
                 spacing: 12
                 height: parent.height
                 
+                MouseArea {
+                    id: launcherMouseB
+                    width: 32; height: 32
+                    anchors.verticalCenter: parent.verticalCenter
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    
+                    onClicked: {
+                        if (globalAppLauncherPreview.launcherActive) {
+                            globalAppLauncherPreview.forceDismiss();
+                        } else {
+                            globalAppLauncherPreview.showLauncher();
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: rootShell.colorAccent
+                        opacity: launcherMouseB.containsMouse || globalAppLauncherPreview.launcherActive ? 0.3 : 0.0
+                    }
+                    
+                    Text { 
+                        text: "apps"
+                        font.family: "Material Symbols Outlined" 
+                        font.pixelSize: 22
+                        color: globalAppLauncherPreview.launcherActive ? rootShell.colorAccent : rootShell.colorText
+                        anchors.centerIn: parent 
+                    }
+                }
+
                 MouseArea {
                     id: settingsMouseB
                     width: 32; height: 32
