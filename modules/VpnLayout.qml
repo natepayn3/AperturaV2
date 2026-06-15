@@ -190,7 +190,7 @@ Item {
         spacing: 20
 
         Text {
-            text: "Network Security & Encryption"
+            text: "Available profiles:"
             font.family: settingsWindow.selectedFont
             font.pixelSize: 16
             font.bold: true
