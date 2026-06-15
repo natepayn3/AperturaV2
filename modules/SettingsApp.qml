@@ -268,6 +268,7 @@ Scope {
                                     CategoryButton { categoryName: "Font" }
                                     CategoryButton { categoryName: "Modules" }
                                     CategoryButton { categoryName: "Behavior" }
+                                    CategoryButton { categoryName: "VPN" }
                                 }
                             }
 
@@ -335,10 +336,18 @@ Scope {
                                         shellTarget: settingsModuleRoot.shellTarget
                                         settingsWindow: settingsWindow
                                     }
+
+                                    VpnLayout {
+                                        anchors.fill: parent
+                                        visible: settingsWindow.activeCategory === "VPN"
+                                        shellTarget: settingsModuleRoot.shellTarget
+                                        settingsWindow: settingsWindow
+                                    }
                                     
                                     Loader {
                                         anchors.fill: parent
-                                        active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font"
+                                        // FIX: Add '&& settingsWindow.activeCategory !== "VPN"' to the condition statement
+                                        active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "VPN"
                                         sourceComponent: Component {
                                             Text { 
                                                 text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
