@@ -10,14 +10,14 @@ Item {
     property var shellTarget: null
     property var settingsWindow: null
 
+    property alias isPickerOpen: filePickerLauncher.running
+
     // --- State Machine Synchronizers ---
     property bool hasVpnProfile: false
     property string detectedConnection: ""
     property string fallbackConnection: "" 
     property string publicIpAddress: "" 
     property bool isVpnActive: false
-    
-    // Visual lock prevents half-baked route data or strings from flashing on screen
     property bool textVisible: true
 
     // Passive polling pipeline for profile states only
@@ -35,17 +35,20 @@ Item {
         }
     }
 
-    // --- De-Flicker Propagation Engine ---
     Timer {
         id: delayFetchTimer
-        interval: 600 // Settle time matching nmcli execution parameters
+        interval: 600 
         repeat: false
         running: false
         onTriggered: {
-            // 1. Fire off the network tracking request now that interface is ready
             publicIpFetcher.running = false;
             publicIpFetcher.running = true;
         }
+    }
+
+    onIsVpnActiveChanged: {
+        vpnLayoutRoot.textVisible = false;
+        delayFetchTimer.restart();
     }
 
     // Identifies if any valid wireguard, vpn, or tun endpoints exist
@@ -159,10 +162,37 @@ Item {
                 let cleanIp = text.trim();
                 if (cleanIp) {
                     vpnLayoutRoot.publicIpAddress = cleanIp;
-                    // 2. Safe Reveal: Bring text visibility back to 1.0 ONLY when the endpoint string returns
                     vpnLayoutRoot.textVisible = true;
                 }
             }
+        }
+    }
+
+    // --- Native Import Pipeline Machinery ---
+    Process {
+        id: filePickerLauncher
+        command: ["zenity", "--file-selection", "--title=Select WireGuard Configuration", "--file-filter=WireGuard Profiles (*.conf) | *.conf"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let targetPath = text.trim();
+                if (targetPath && targetPath !== "") {
+                    vpnImporter.command = ["nmcli", "connection", "import", "type", "wireguard", "file", targetPath];
+                    vpnImporter.running = true;
+                }
+            }
+        }
+    }
+
+    Process {
+        id: vpnImporter
+        running: false
+        onExited: {
+            notifyProc.command = ["notify-send", "-a", "VPN Manager", "-i", "network-vpn", "Profile Imported", "WireGuard configuration added successfully."];
+            notifyProc.running = true;
+
+            vpnProfileCheck.running = false;
+            vpnProfileCheck.running = true;
         }
     }
 
@@ -187,14 +217,63 @@ Item {
     // --- Module User Interface View ---
     ColumnLayout {
         anchors.fill: parent
-        spacing: 20
+        spacing: 16
 
-        Text {
-            text: "Available profiles:"
-            font.family: settingsWindow.selectedFont
-            font.pixelSize: 16
-            font.bold: true
-            color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+        RowLayout {
+            Layout.fillWidth: true
+
+            Text {
+                text: "Available profiles:"
+                font.family: settingsWindow.selectedFont
+                font.pixelSize: 16
+                font.bold: true
+                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                Layout.fillWidth: true
+            }
+
+            // --- Native WireGuard Import Button ---
+            Button {
+                id: importBtn
+                flat: true
+                implicitWidth: 150
+                implicitHeight: 34
+
+                background: Rectangle {
+                    color: importBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
+                    border.color: shellTarget ? shellTarget.colorBorder : "#313244"
+                    border.width: 1
+                    radius: 8
+                }
+
+                // FIX: Center content items inside parent container dimensions perfectly
+                contentItem: Item {
+                    anchors.fill: parent
+
+                    RowLayout {
+                        spacing: 6
+                        anchors.centerIn: parent // Centers the complete collection footprint
+                        
+                        Text {
+                            text: "upload_file"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Text {
+                            text: "Import Profile"
+                            font.family: settingsWindow.selectedFont
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                }
+
+                onClicked: filePickerLauncher.running = true
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+            }
         }
 
         Rectangle {
@@ -241,7 +320,6 @@ Item {
                     }
 
                     Text {
-                        // Clean ternary switch evaluation removes explicit string assignments during loading states
                         text: !vpnLayoutRoot.hasVpnProfile 
                             ? "Create a tunnel endpoint via NetworkManager connection settings." 
                             : (vpnLayoutRoot.isVpnActive 
@@ -253,7 +331,6 @@ Item {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
 
-                        // Controlled execution binding maps visibility state smoothly
                         opacity: vpnLayoutRoot.textVisible ? 1.0 : 0.0
                         Behavior on opacity { NumberAnimation { duration: 100 } }
                     }
@@ -265,9 +342,7 @@ Item {
                     enabled: vpnLayoutRoot.hasVpnProfile && (vpnLayoutRoot.detectedConnection !== "" || vpnLayoutRoot.fallbackConnection !== "")
                     
                     onClicked: {
-                        // Instant Visual Fade: Lock sub-text visibility down on interaction click
                         vpnLayoutRoot.textVisible = false;
-
                         vpnLayoutRoot.executeVpnToggle();
                         delayFetchTimer.restart();
                     }
