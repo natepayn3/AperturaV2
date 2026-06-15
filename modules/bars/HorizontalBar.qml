@@ -47,6 +47,11 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onEntered: {
+                    if (rootShell.launcherRef.launcherActive) {
+                        rootShell.launcherRef.forceDismiss();
+                    }
+                }
                 onClicked: rootShell.settingsAppRef.windowVisible = !rootShell.settingsAppRef.windowVisible
 
                 Rectangle {
@@ -95,7 +100,16 @@ PanelWindow {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 anchors.verticalCenter: parent.verticalCenter
-                onContainsMouseChanged: if (containsMouse) rootShell.calendarRef.showCalendar(); else rootShell.calendarRef.requestDismiss();
+                onContainsMouseChanged: {
+                    if (containsMouse) {
+                        if (rootShell.launcherRef.launcherActive) {
+                            rootShell.launcherRef.forceDismiss();
+                        }
+                        rootShell.calendarRef.showCalendar();
+                    } else {
+                        rootShell.calendarRef.requestDismiss();
+                    }
+                }
 
                 Rectangle {
                     anchors.fill: parent; radius: 6
