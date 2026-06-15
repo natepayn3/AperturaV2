@@ -125,8 +125,14 @@ Item {
         launcherRoot.closeRequested();
     }
 
+    function ensureCacheExists() {
+        // Execute a bash one-liner to touch the file and init it with an empty pins list if missing
+        Quickshell.execDetached(["bash", "-c", "if [ ! -f ~/.cache/quickshell_launcher_pins.json ]; then mkdir -p ~/.cache && echo '{\"pins\": []}' > ~/.cache/quickshell_launcher_pins.json; fi"]);
+    }
+
     onActiveChanged: {
         if (active) {
+            ensureCacheExists();
             if (allApps.length === 0) appFetcher.running = true;
             searchInput.text = "";
             searchInput.forceActiveFocus();
