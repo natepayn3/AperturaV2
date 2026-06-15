@@ -154,21 +154,25 @@ Item {
 
             onEntered: {
                 if (isSpecialNode) return;
+
+                // 1. Force close the app launcher across the module boundary
+                if (workspaceContainer.shellTarget && workspaceContainer.shellTarget.launcherRef) {
+                    if (workspaceContainer.shellTarget.launcherRef.launcherActive) {
+                        workspaceContainer.shellTarget.launcherRef.forceDismiss();
+                    }
+                }
+
                 let popup = workspaceContainer.previewWindowInstance;
                 if (popup) {
-                    // 1. Instantly kill the delayed dismiss timer from the previous onExited event
+                    // Instantly kill the delayed dismiss timer from the previous onExited event
                     if (typeof popup.cancelDismiss === "function") {
                         popup.cancelDismiss();
                     }
 
                     if (isOccupied) {
-                        // 2. Smash the QML state cache by forcing an empty value
                         popup.targetWorkspace = -1;
-                        
-                        // 3. Fire your custom commit method (QML now sees this as a guaranteed fresh assignment)
                         popup.commitWorkspaceChange(wsId, workspaceContainer.parentBarWindow ? workspaceContainer.parentBarWindow.screen : null);
                     } else {
-                        // Drop target tracking states immediately on empty placeholder slots
                         if (workspaceContainer.shellTarget) {
                             workspaceContainer.shellTarget.hoveredIndicatorWorkspace = -1;
                         }
