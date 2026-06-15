@@ -84,18 +84,6 @@ Item {
         }
     }
 
-    Item {
-        id: shortcutContext
-        anchors.fill: parent
-        z: 9999
-        
-        Shortcut {
-            sequence: "Escape"
-            context: Qt.ApplicationShortcut
-            onActivated: previewRoot.closeRequested()
-        }
-    }
-
     Timer {
         id: jsonRefreshTimer
         interval: 100
