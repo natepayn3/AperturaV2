@@ -225,14 +225,6 @@ Scope {
     }
 
     Timer {
-        id: dismissTimer
-        interval: 150
-        running: false
-        repeat: false
-        onTriggered: hidePreviewAnim.restart()
-    }
-
-    Timer {
         id: calendarDismissTimer
         interval: 150
         running: false
@@ -244,25 +236,49 @@ Scope {
         }
     }
 
+    // Main state tracking property used by your bar indicators
+    property int hoveredIndicatorWorkspace: -1
+
     Timer {
         id: previewDebounceTimer
-        interval: 50 
+        interval: 50 // Crisp 50ms entry response
         running: false
         repeat: false
-        property int pendingWorkspace: -1
         onTriggered: {
-            if (pendingWorkspace !== -1) {
-                globalWorkspacePreview.commitWorkspaceChange(pendingWorkspace);
-            }
+            innerPreviewCard.targetWorkspace = hoveredIndicatorWorkspace;
         }
     }
 
+    Timer {
+        id: dismissTimer
+        interval: 100
+        running: false
+        repeat: false
+        onTriggered: {
+            hoveredIndicatorWorkspace = -1;
+            innerPreviewCard.targetWorkspace = -1;
+        }
+    }
+
+    // Fixed: Stripped out the dead pendingWorkspace reference lines completely
+    function handleIndicatorHover(workspaceId) {
+        dismissTimer.stop();
+        hoveredIndicatorWorkspace = workspaceId;
+        previewDebounceTimer.restart();
+    }
+
+    function handleIndicatorLeave() {
+        previewDebounceTimer.stop();
+        dismissTimer.restart();
+    }
+
+    // --- Workspace Preview Panel ---
     PanelWindow {
         id: globalWorkspacePreview
-        property bool mouseOverPreview: false
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-workspace-preview"
+        
         WlrLayershell.keyboardFocus: WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -276,7 +292,8 @@ Scope {
 
         onTargetWorkspaceChanged: {
             if (targetWorkspace !== -1) {
-                if (targetWorkspace === innerPreviewCard.currentActiveWorkspace) {
+                // Fixed: Check against targetWorkspace directly instead of deleted currentActiveWorkspace
+                if (targetWorkspace === innerPreviewCard.targetWorkspace) {
                     previewDebounceTimer.stop();
                     return; 
                 }
@@ -289,15 +306,21 @@ Scope {
 
         function commitWorkspaceChange(ws) {
             dismissTimer.stop();
+            hoveredIndicatorWorkspace = ws;
+            
+            // FIXED: Only write to the valid, existing targetWorkspace property
+            innerPreviewCard.targetWorkspace = ws;
+            
             showPreviewAnim.restart();
-            innerPreviewCard.currentActiveWorkspace = ws;
         }
 
-        function cancelDismiss() { dismissTimer.stop(); previewDebounceTimer.stop(); }
+        function cancelDismiss() { 
+            dismissTimer.stop(); 
+            previewDebounceTimer.stop(); 
+        }
+        
         function requestDismiss() { 
-            if (!globalWorkspacePreview.mouseOverPreview) {
-                dismissTimer.restart(); 
-            }
+            dismissTimer.restart(); 
         }
 
         WorkspacePreview {
