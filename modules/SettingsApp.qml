@@ -12,7 +12,6 @@ Scope {
     
     property alias settingsWindowObject: settingsWindow
     
-    // Decouple the visibility flag so it triggers exit states rather than killing the window instantly
     property bool windowVisible: false
     onWindowVisibleChanged: {
         if (windowVisible) {
@@ -28,13 +27,16 @@ Scope {
 
     PanelWindow {
         id: settingsWindow
-        // Controlled dynamically by the end of the transition curve
         visible: false
         
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-settings"
-        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
+        
+        // Dynamically drops keyboard exclusivity when Zenity opens to allow input processing
+        WlrLayershell.keyboardFocus: (vpnLayoutSection && vpnLayoutSection.isPickerOpen) 
+            ? WlrLayershell.None 
+            : WlrLayershell.OnDemand
 
         anchors {
             left: true; right: true; top: true; bottom: true
@@ -138,13 +140,17 @@ Scope {
         MouseArea {
             id: settingsBackdropCatcher
             anchors.fill: parent
-            onClicked: settingsModuleRoot.windowVisible = false
+            
+            onClicked: {
+                if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.isPickerOpen) {
+                    return;
+                }
+                settingsModuleRoot.windowVisible = false;
+            }
 
             // Centralized container tracking settings layout bounds
             Item {
                 id: settingsCardFrame
-                implicitWidth: 800
-                implicitHeight: 580
                 width: 800
                 height: 580
                 anchors.centerIn: parent
@@ -178,9 +184,9 @@ Scope {
                         SequentialAnimation {
                             ParallelAnimation {
                                 NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                                // FIX: Restored Easing enum identifier lookup mapping safely here
                                 NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
                             }
-                            // Safe Exit: Unmaps the window only after the exit bounce finishes
                             ScriptAction {
                                 script: settingsWindow.visible = false
                             }
@@ -201,6 +207,10 @@ Scope {
                     
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Escape) {
+                            if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.isPickerOpen) {
+                                event.accepted = true;
+                                return;
+                            }
                             settingsModuleRoot.windowVisible = false;
                             event.accepted = true;
                         }
@@ -266,9 +276,9 @@ Scope {
                                     }
                                     CategoryButton { categoryName: "Layout" }
                                     CategoryButton { categoryName: "Font" }
+                                    CategoryButton { categoryName: "VPN" }
                                     CategoryButton { categoryName: "Modules" }
                                     CategoryButton { categoryName: "Behavior" }
-                                    CategoryButton { categoryName: "VPN" }
                                 }
                             }
 
@@ -338,6 +348,7 @@ Scope {
                                     }
 
                                     VpnLayout {
+                                        id: vpnLayoutSection
                                         anchors.fill: parent
                                         visible: settingsWindow.activeCategory === "VPN"
                                         shellTarget: settingsModuleRoot.shellTarget
@@ -346,7 +357,6 @@ Scope {
                                     
                                     Loader {
                                         anchors.fill: parent
-                                        // FIX: Add '&& settingsWindow.activeCategory !== "VPN"' to the condition statement
                                         active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "VPN"
                                         sourceComponent: Component {
                                             Text { 
