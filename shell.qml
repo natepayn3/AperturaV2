@@ -234,11 +234,8 @@ Scope {
         target: "launcher"
         function toggle(): void {
             if (globalAppLauncherPreview) {
-                if (globalAppLauncherPreview.launcherActive) {
-                    globalAppLauncherPreview.forceDismiss();
-                } else {
-                    globalAppLauncherPreview.showLauncher();
-                }
+                // Instantly flips window visibility state on or off
+                globalAppLauncherPreview.active = !globalAppLauncherPreview.active;
             }
         }
     }
@@ -356,38 +353,7 @@ Scope {
         }
     }
 
-    PanelWindow {
-        id: globalAppLauncherPreview
-        property bool launcherActive: false
-        
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-launcher-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand 
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: launcherActive || rootShell.launcherProgress > 0.0
-        color: "transparent"
-        mask: Region { item: innerLauncherCard }
-
-        function showLauncher() { launcherActive = true; showLauncherAnim.restart(); }
-        function forceDismiss() { hideLauncherAnim.restart(); }
-
-        AppLauncher {
-            id: innerLauncherCard
-            active: globalAppLauncherPreview.launcherActive
-            onCloseRequested: globalAppLauncherPreview.forceDismiss()
-            onActiveChanged: { if (!active && globalAppLauncherPreview.launcherActive) globalAppLauncherPreview.forceDismiss(); }
-            hoverOriginX: {
-                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
-                return rootShell.barPosition === "left" ? 44 : 8; 
-            }
-            hoverOriginY: {
-                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
-                return rootShell.barPosition === "top" ? 44 : 8; 
-            }
-        }
-    }
+    AppLauncher { id: globalAppLauncherPreview }
 
     PanelWindow {
         id: globalCalendarPreview
