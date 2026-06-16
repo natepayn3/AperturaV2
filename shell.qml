@@ -449,17 +449,22 @@ Scope {
             hideBluetoothAnim.restart();
         }
 
-        Keys.onPressed: (event) => {
-            if (event.key === Qt.Key_Escape && bluetoothActive) {
-                forceDismiss();
-                event.accepted = true;
-            }
-        }
-
         MouseArea {
             anchors.fill: parent
             z: 1
+            
+            // 🎯 FIX: Force active focus on this Item layer to intercept inputs cleanly
+            focus: globalBluetoothPreview.bluetoothActive
+            
             onClicked: globalBluetoothPreview.forceDismiss()
+
+            // 🎯 FIX: Relocated here where Keys are natively supported by the engine
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Escape && globalBluetoothPreview.bluetoothActive) {
+                    globalBluetoothPreview.forceDismiss();
+                    event.accepted = true;
+                }
+            }
         }
 
         Bluetooth {
