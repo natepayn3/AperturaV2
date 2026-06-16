@@ -32,16 +32,18 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-settings"
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
-        
-        // Dynamically drops keyboard exclusivity when file selector opens to allow native typing inputs
-        WlrLayershell.keyboardFocus: (vpnLayoutSection && vpnLayoutSection.showFileBrowser) 
-            ? WlrLayershell.None 
-            : WlrLayershell.OnDemand
+        WlrLayershell.keyboardFocus: settingsModuleRoot.windowVisible ? WlrLayershell.OnDemand : WlrLayershell.None
 
         anchors {
             left: true; right: true; top: true; bottom: true
         }
         color: "transparent"
+
+        MouseArea {
+            anchors.fill: parent
+            enabled: settingsModuleRoot.windowVisible
+            onPressed: settingsModuleRoot.windowVisible = false
+        }
 
         property string currentPosition: "left"
         property string enabledDisplays: "0"
@@ -155,6 +157,19 @@ Scope {
                 height: 580
                 anchors.centerIn: parent
                 transformOrigin: Item.Center
+
+                MouseArea {
+                    anchors.fill: parent
+                    // This consumes the click so it doesn't hit the background shield
+                    onPressed: (event) => event.accepted = true
+                    onClicked: (event) => event.accepted = true
+                }
+
+                Shortcut {
+                    sequence: "Escape"
+                    enabled: settingsModuleRoot.windowVisible
+                    onActivated: settingsModuleRoot.windowVisible = false
+                }
 
                 // --- Animation States ---
                 states: [
