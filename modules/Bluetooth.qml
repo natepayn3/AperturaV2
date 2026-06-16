@@ -212,6 +212,8 @@ Item {
     }
 
     function pairDevice(mac) {
+        // Automatically trust the device so BlueZ silently authorizes A2DP/HFP profiles
+        bluetoothSession.write("trust " + mac + "\n");
         bluetoothSession.write("pair " + mac + "\n");
     }
 
@@ -413,6 +415,7 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             radius: 8
+                            
                             color: model.connected 
                                 ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
                                 : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
@@ -426,8 +429,6 @@ Item {
                                 anchors.rightMargin: 8
                                 spacing: 8
 
-                                // Wrapping the text in its own MouseArea for Connect/Disconnect
-                                // so it doesn't overlap the utility buttons
                                 Item {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
@@ -452,39 +453,52 @@ Item {
                                             font.pixelSize: 11
                                         }
                                     }
-
+                                    
+                                    // Click action removed; now exclusively handles visual hover feedback
                                     MouseArea {
                                         id: itemMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        onClicked: bluetoothRoot.handleDeviceClick(model.mac, model.connected)
                                     }
                                 }
-
-                                // Pair Button
+                                
+                                // Unified Action Button
                                 Rectangle {
                                     width: 32; height: 32; radius: 6
-                                    color: pairMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
+                                    color: actionMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
+                                    
                                     Text { 
                                         anchors.centerIn: parent
-                                        text: "link" 
+                                        // Icon logic: Pair -> link, Connect -> cable, Disconnect -> link_off
+                                        text: !model.paired ? "link" : (model.connected ? "link_off" : "cable")
                                         font.family: "Material Symbols Outlined"
                                         font.pixelSize: 18
                                         color: "#ffffff"
                                     }
+                                    
                                     MouseArea {
-                                        id: pairMouse
+                                        id: actionMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: bluetoothRoot.pairDevice(model.mac)
+                                        onClicked: {
+                                            // Route to correct function based on pairing state
+                                            if (!model.paired) {
+                                                bluetoothRoot.pairDevice(model.mac);
+                                            } else {
+                                                bluetoothRoot.handleDeviceClick(model.mac, model.connected);
+                                            }
+                                        }
                                     }
                                 }
 
                                 // Forget Button
                                 Rectangle {
+                                    // Only render this button if the device is actually remembered
+                                    visible: model.paired
                                     width: 32; height: 32; radius: 6
                                     color: forgetMouse.containsMouse ? Qt.rgba(255,90,90,0.1) : "transparent"
+                                    
                                     Text { 
                                         anchors.centerIn: parent
                                         text: "delete" 
@@ -492,6 +506,7 @@ Item {
                                         font.pixelSize: 18
                                         color: rootShell.colorClose
                                     }
+                                    
                                     MouseArea {
                                         id: forgetMouse
                                         anchors.fill: parent
