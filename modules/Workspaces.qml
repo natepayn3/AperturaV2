@@ -14,8 +14,9 @@ Item {
 
     property bool isVertical: shellTarget ? (shellTarget.activeLayoutOrientation === "vertical") : true
 
-    implicitWidth: isVertical ? 28 : (layoutLoader.item ? layoutLoader.item.implicitWidth : 0)
-    implicitHeight: isVertical ? (layoutLoader.item ? layoutLoader.item.implicitHeight : 0) : 28
+    // Baseline grid footprint
+    implicitWidth: isVertical ? 32 : (layoutLoader.item ? layoutLoader.item.implicitWidth : 0)
+    implicitHeight: isVertical ? (layoutLoader.item ? layoutLoader.item.implicitHeight : 0) : 32
 
     property int activeWorkspace: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : 1
     property var activeWorkspaceList: [1, 2]
@@ -54,7 +55,6 @@ Item {
 
         ids.sort((a, b) => a - b);
 
-        // FIX: Stripped conditional checks so the special node index is unconditionally appended
         if (!ids.includes(-99)) ids.push(-99);
 
         workspaceContainer.activeWorkspaceList = ids;
@@ -83,6 +83,18 @@ Item {
 
     Component.onCompleted: rebuildWorkspaceData()
 
+    // Unified Subtle Module Background Container Card
+    Rectangle {
+        id: wholeModuleBackground
+        anchors.fill: parent
+        radius: 8
+        // Uses a tight white overlay tint over your theme bar to stay light and clean
+        color: Qt.rgba(1, 1, 1, 0.03)
+        border.width: 1
+        border.color: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.colorBorder : "transparent"
+        z: 0
+    }
+
     Flickable {
         id: scrollContainer
         anchors.fill: parent
@@ -91,11 +103,13 @@ Item {
         flickableDirection: isVertical ? Flickable.VerticalFlick : Flickable.HorizontalFlick
         boundsBehavior: Flickable.StopAtBounds
         clip: true
+        z: 1
 
         Loader {
             id: layoutLoader
             width: isVertical ? parent.width : implicitWidth
             height: isVertical ? implicitHeight : parent.height
+            anchors.centerIn: parent 
             sourceComponent: workspaceContainer.isVertical ? verticalLayoutComponent : horizontalLayoutComponent
         }
     }
@@ -112,7 +126,8 @@ Item {
     Component {
         id: verticalLayoutComponent
         ColumnLayout {
-            spacing: 10
+            spacing: 4
+            anchors.centerIn: parent 
             Repeater {
                 model: workspaceContainer.activeWorkspaceList
                 delegate: workspaceButtonDelegate
@@ -123,7 +138,8 @@ Item {
     Component {
         id: horizontalLayoutComponent
         RowLayout {
-            spacing: 10
+            spacing: 4
+            anchors.centerIn: parent 
             Repeater {
                 model: workspaceContainer.activeWorkspaceList
                 delegate: workspaceButtonDelegate
@@ -139,23 +155,20 @@ Item {
             property bool isSpecialNode: wsId === -99
             property bool isActive: isSpecialNode ? workspaceContainer.isSpecialActive : (workspaceContainer.activeWorkspace === wsId && !workspaceContainer.isSpecialActive)
             property bool isOccupied: isSpecialNode ? workspaceContainer.isSpecialOccupied : workspaceContainer.occupiedMap[wsId] === true
-            property bool isNewIndicatorSlot: index === (workspaceContainer.activeWorkspaceList.length - 1)
-
-            property int targetWidth: isSpecialNode ? 28 : (workspaceContainer.isVertical ? 28 : (isActive ? 58 : 28))
-            property int targetHeight: isSpecialNode ? 28 : (workspaceContainer.isVertical ? (isActive ? 58 : 28) : 28)
+            
+            property int targetWidth: isSpecialNode ? 32 : (workspaceContainer.isVertical ? 32 : (isActive ? 54 : 32))
+            property int targetHeight: isSpecialNode ? 32 : (workspaceContainer.isVertical ? (isActive ? 54 : 32) : 32)
 
             implicitWidth: targetWidth
             implicitHeight: targetHeight
             cursorShape: Qt.PointingHandCursor
             hoverEnabled: true
 
-            Behavior on targetWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-            Behavior on targetHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            Behavior on targetWidth { NumberAnimation { duration: 180; easing.type: Easing.OutExpo } }
+            Behavior on targetHeight { NumberAnimation { duration: 180; easing.type: Easing.OutExpo } }
 
             onEntered: {
                 if (isSpecialNode) return;
-
-                // 1. Force close the app launcher across the module boundary
                 if (workspaceContainer.shellTarget && workspaceContainer.shellTarget.launcherRef) {
                     if (workspaceContainer.shellTarget.launcherRef.launcherActive) {
                         workspaceContainer.shellTarget.launcherRef.forceDismiss();
@@ -164,7 +177,6 @@ Item {
 
                 let popup = workspaceContainer.previewWindowInstance;
                 if (popup) {
-                    // Instantly kill the delayed dismiss timer from the previous onExited event
                     if (typeof popup.cancelDismiss === "function") {
                         popup.cancelDismiss();
                     }
@@ -198,35 +210,34 @@ Item {
                 }
             }
 
+            // 🎨 FIX: Pure white highlight sheen that lightens your translucent bar into the perfect slate-blue from image_5a6dbf.png
             Rectangle {
                 id: hoverBackground
-                width: parent.width
-                height: parent.height
+                anchors.fill: parent
                 radius: 6
-                anchors.centerIn: parent
-                color: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.colorAccent : "#89b4fa"
-                opacity: workspaceButton.containsMouse ? 0.3 : 0.0
+                color: workspaceButton.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
                 z: 1
             }
 
+            // --- Unified Standard Node Rendering Canvas ---
             Rectangle {
                 id: indicatorShape
                 anchors.centerIn: parent
                 visible: !isSpecialNode
                 
-                property int shapeWidth: workspaceContainer.isVertical ? (workspaceButton.isActive ? 14 : 12) : (workspaceButton.isActive ? 44 : 12)
-                property int shapeHeight: workspaceContainer.isVertical ? (workspaceButton.isActive ? 44 : 12) : (workspaceButton.isActive ? 14 : 12)
+                property int shapeWidth: workspaceContainer.isVertical ? (workspaceButton.isActive ? 8 : 8) : (workspaceButton.isActive ? 38 : 8)
+                property int shapeHeight: workspaceContainer.isVertical ? (workspaceButton.isActive ? 38 : 8) : (workspaceButton.isActive ? 8 : 8)
                 
                 width: shapeWidth
                 height: shapeHeight
                 radius: height / 2
                 z: 2
 
-                Behavior on shapeWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                Behavior on shapeHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                Behavior on shapeWidth { NumberAnimation { duration: 180; easing.type: Easing.OutExpo } }
+                Behavior on shapeHeight { NumberAnimation { duration: 180; easing.type: Easing.OutExpo } }
 
                 color: {
-                    if (!workspaceContainer.shellTarget) return "transparent";
+                    if (!workspaceContainer.shellTarget) return "#ffffff";
                     if (workspaceButton.isActive) return workspaceContainer.shellTarget.colorAccent;
                     if (workspaceButton.isOccupied) return workspaceContainer.shellTarget.colorText;
                     return "transparent";
@@ -239,27 +250,9 @@ Item {
                         ? workspaceContainer.shellTarget.colorSubtext
                         : "transparent";
                 }
-
-                Text {
-                    text: wsId.toString()
-                    anchors.fill: parent
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    font.family: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.shellFont : "Rubik"
-                    font.pixelSize: 11
-                    font.bold: true
-                    
-                    color: {
-                        if (!workspaceContainer.shellTarget) return "#ffffff";
-                        return workspaceButton.isActive
-                            ? workspaceContainer.shellTarget.colorBackground
-                            : workspaceContainer.shellTarget.colorText;
-                    }
-                    opacity: workspaceButton.isActive ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                }
             }
 
+            // --- Star Layer Icon Section ---
             Text {
                 id: specialIconLayer
                 visible: isSpecialNode
@@ -267,11 +260,9 @@ Item {
                 text: "star"
                 
                 font.family: "Material Symbols Outlined"
-                font.pixelSize: 16
+                font.pixelSize: workspaceButton.isActive ? 18 : 14
                 font.bold: true
                 z: 2
-                
-                font.letterSpacing: workspaceButton.isActive ? 0.01 : 0.0
                 
                 color: {
                     if (!workspaceContainer.shellTarget) return workspaceButton.isActive ? "#f5c2e7" : "#ffffff";
@@ -279,6 +270,8 @@ Item {
                         ? workspaceContainer.shellTarget.colorAccent 
                         : workspaceContainer.shellTarget.colorText;
                 }
+                
+                Behavior on font.pixelSize { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
             }
         }
     }
