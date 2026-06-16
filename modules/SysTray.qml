@@ -10,18 +10,14 @@ Item {
     property var shellTarget: null
     property bool isVertical: shellTarget ? (shellTarget.activeLayoutOrientation === "vertical") : true
 
-    // State property to track drawer status
     property bool drawerOpen: false
 
-    // Target tracking height limits calculated dynamically
     readonly property real expandedSize: trayLayout.implicitHeight + 8
-    readonly property real collapsedSize: 34 // Size of just the toggle button + padding
+    readonly property real collapsedSize: 34 
 
-    // Dimensions switch based on structural orientation vectors
     implicitWidth: isVertical ? 32 : (drawerOpen ? trayLayout.implicitWidth + 8 : collapsedSize)
     implicitHeight: isVertical ? (drawerOpen ? expandedSize : collapsedSize) : 32
 
-    // Smooth physics mapping transitions
     Behavior on implicitWidth { NumberAnimation { duration: 200; easing.type: Easing.OutExpo } }
     Behavior on implicitHeight { NumberAnimation { duration: 200; easing.type: Easing.OutExpo } }
 
@@ -35,7 +31,6 @@ Item {
         z: 0
     }
 
-    // Force strict layout boundaries during animation cycles
     Item {
         anchors.fill: parent
         clip: true
@@ -48,14 +43,12 @@ Item {
             rows: isVertical ? -1 : 1
             spacing: 8
 
-            // --- Drawer Toggle Button Module ---
             Rectangle {
                 width: 24; height: 24; radius: 4
                 color: toggleMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
 
                 Text {
                     anchors.centerIn: parent
-                    // Icon shifts dynamically to reflect expansion tracks
                     text: {
                         if (sysTrayContainer.isVertical) {
                             return sysTrayContainer.drawerOpen ? "keyboard_arrow_down" : "keyboard_arrow_up";
@@ -77,7 +70,6 @@ Item {
                 }
             }
 
-            // --- Collapsible Status Group Layout ---
             Item {
                 id: collapsibleGroup
                 width: sysTrayContainer.isVertical ? 24 : (sysTrayContainer.drawerOpen ? inlineHardwareLayout.implicitWidth : 0)
@@ -93,7 +85,6 @@ Item {
                     rows: sysTrayContainer.isVertical ? -1 : 1
                     spacing: 8
 
-                    // Bluetooth Status Node
                     Rectangle {
                         id: bluetoothIconWrapper
                         width: 24; height: 24; radius: 4
@@ -113,23 +104,24 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
 
-                            onEntered: {
+                            onClicked: {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef) {
-                                    let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
-                                    sysTrayContainer.shellTarget.bluetoothRef.anchorX = globalPos.x;
-                                    sysTrayContainer.shellTarget.bluetoothRef.anchorY = globalPos.y;
-                                    sysTrayContainer.shellTarget.bluetoothRef.showBluetooth();
-                                }
-                            }
-                            onExited: {
-                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef) {
-                                    sysTrayContainer.shellTarget.bluetoothRef.requestDismiss();
+                                    let popupWindow = sysTrayContainer.shellTarget.bluetoothRef;
+                                    
+                                    if (popupWindow.bluetoothActive) {
+                                        popupWindow.forceDismiss();
+                                    } else {
+                                        let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
+                                        popupWindow.hoverOriginX = globalPos.x;
+                                        popupWindow.hoverOriginY = globalPos.y;
+                                        
+                                        popupWindow.showBluetooth();
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // Network Wi-Fi Component Node
                     Rectangle {
                         id: wifiIconWrapper
                         width: 24; height: 24; radius: 4
@@ -141,7 +133,6 @@ Item {
                         MouseArea { id: wifiMouse; anchors.fill: parent; hoverEnabled: true }
                     }
 
-                    // Battery Status Component Node
                     Rectangle {
                         id: batteryIconWrapper
                         width: 24; height: 24; radius: 4
