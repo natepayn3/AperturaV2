@@ -90,13 +90,13 @@ PanelWindow {
                 anchors.horizontalCenter: parent.horizontalCenter
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onEntered: {
-                    if (rootShell.launcherRef.launcherActive) {
-                        rootShell.launcherRef.forceDismiss();
+                onClicked: {
+                    if (rootShell.calendarRef.calendarActive) {
+                        rootShell.calendarRef.forceDismiss();
+                    } else {
+                        rootShell.calendarRef.showCalendar();
                     }
-                    rootShell.calendarRef.showCalendar();
                 }
-                onExited: rootShell.calendarRef.requestDismiss()
 
                 Rectangle {
                     anchors.fill: parent; radius: 6
