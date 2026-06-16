@@ -101,14 +101,12 @@ PanelWindow {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 anchors.verticalCenter: parent.verticalCenter
-                onContainsMouseChanged: {
-                    if (containsMouse) {
-                        if (rootShell.launcherRef.launcherActive) {
-                            rootShell.launcherRef.forceDismiss();
-                        }
-                        rootShell.calendarRef.showCalendar();
+                onClicked: {
+                    let popup = rootShell.calendarRef;
+                    if (popup.calendarActive) {
+                        popup.forceDismiss();
                     } else {
-                        rootShell.calendarRef.requestDismiss();
+                        popup.showCalendar();
                     }
                 }
 
