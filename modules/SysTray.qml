@@ -11,7 +11,7 @@ Item {
     property bool isVertical: shellTarget ? (shellTarget.activeLayoutOrientation === "vertical") : true
 
     // State property to track drawer status
-    property bool drawerOpen: true
+    property bool drawerOpen: false
 
     // Target tracking height limits calculated dynamically
     readonly property real expandedSize: trayLayout.implicitHeight + 8
