@@ -280,11 +280,12 @@ Item {
             border.width: 0
             border.color: "transparent"
             
-            // Reverses flat edges based on bar location
+            // The edge touching the bar is sharp (0)
+            // AND the bottom corner where the wing attaches is sharp (0)
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
-            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : bluetoothRoot.radiusValue
+            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom" || rootShell.barPosition === "right") ? 0 : bluetoothRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
-            bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : bluetoothRoot.radiusValue
+            bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? 0 : bluetoothRoot.radiusValue
         }
 
         Item {
@@ -292,11 +293,12 @@ Item {
             visible: bluetoothRoot.width > 30
             z: 2 
 
-            // --- LEFT BAR WINGS ---
+            // --- LEFT BAR WINGS (Popup is on the right, wings merge up/down into the left bar) ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "left"
                 
+                // Top-Left Wing (Points UP)
                 Shape {
                     x: 0; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
@@ -309,8 +311,12 @@ Item {
                     }
                 }
                 
+                // Bottom-Left Wing (Points DOWN)
                 Shape {
-                    x: 0; y: parent.height
+                    rotation: -90
+                    transformOrigin: Item.TopLeft
+                    x: parent.width
+                    y: parent.height
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
@@ -322,12 +328,12 @@ Item {
                 }
             }
 
-            // --- RIGHT BAR WINGS ---
+            // --- RIGHT BAR WINGS (Popup is to the left of the bar) ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
 
-                // Top-Right Wing
+                // Top-Right Wing (Points UP)
                 Shape {
                     x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
@@ -339,10 +345,13 @@ Item {
                         PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
                     }
                 }
-                
-                // Bottom-Right Wing
+
+                // Bottom-Right Wing (Points DOWN)
                 Shape {
-                    x: parent.width - bluetoothRoot.wingSize; y: parent.height
+                    rotation: 90
+                    transformOrigin: Item.TopRight
+                    x: 0 - bluetoothRoot.wingSize
+                    y: parent.height
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
