@@ -14,9 +14,6 @@ Item {
     // Trigger this from your Bar's Clock component
     property bool active: false
     
-    // Unified Hover Logic: Hooks into both background and structural inner content
-    property bool isHovered: popupHoverArea.containsMouse || contentHoverHandler.hovered
-    
     property int hoverOriginX: 0
     property int hoverOriginY: 0
 
@@ -341,6 +338,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: 0
                     
+                    // Left Arrow
                     Rectangle {
                         width: 28; height: 28; radius: 6
                         color: prevMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
@@ -350,8 +348,16 @@ Item {
                             color: rootShell.colorAccent
                         }
                         MouseArea { 
-                            id: prevMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: { if (calendarRoot.currentMonthOffsetIndex > 0) { calendarRoot.currentMonthOffsetIndex--; calendarRoot.updateViewerDate(); } } 
+                            id: prevMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { 
+                                if (calendarRoot.currentMonthOffsetIndex > 0) { 
+                                    calendarRoot.currentMonthOffsetIndex--; 
+                                    calendarRoot.updateViewerDate(); 
+                                } 
+                            } 
                         }
                     }
                     
