@@ -33,9 +33,10 @@ Item {
     visible: true
     clip: false
 
-    // Perfectly mirrored X anchors for clearing the side bars
     x: rootShell.barPosition === "right" 
-       ? hoverOriginX - width - 35 
+       // Bypass the broken SysTray coordinates and lock it to the screen's right edge
+       // (parent.width is the monitor edge, minus popup width, minus ~55px for the bar + gap)
+       ? parent.width - width - 46
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
        
     y: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left" || rootShell.barPosition === "right") 
@@ -221,7 +222,6 @@ Item {
         id: animatedGroup
         anchors.fill: parent
 
-        // The origin point dictates which corner the window "grows" from
         transformOrigin: {
             if (rootShell.barPosition === "left") return Item.BottomLeft
             if (rootShell.barPosition === "right") return Item.BottomRight
@@ -236,11 +236,16 @@ Item {
                 when: !bluetoothRoot.active
                 PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
+                PropertyChanges { 
+                    target: animatedGroup
+                    x: (rootShell.barPosition === "right") ? 40 : -40
+                    y: (rootShell.barPosition === "top") ? -40 : 40 
+                }
             },
             State {
                 name: "shown"
                 when: bluetoothRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0 }
+                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
                 PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
             }
         ]
@@ -249,8 +254,7 @@ Item {
             Transition {
                 from: "hidden"; to: "shown"
                 ParallelAnimation {
-                    // Only animate scale so the window expands from its origin without shifting off its anchors
-                    NumberAnimation { target: animatedGroup; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
                     SequentialAnimation {
                         PauseAnimation { duration: 200 } 
@@ -262,7 +266,7 @@ Item {
                 from: "shown"; to: "hidden"
                 ParallelAnimation {
                     NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
                 }
             }
@@ -323,27 +327,29 @@ Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
 
+                // Top-Right Wing
                 Shape {
                     x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: bluetoothRoot.wingSize
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
+                        startX: bluetoothRoot.wingSize; startY: bluetoothRoot.wingSize
                         PathLine { x: 0; y: bluetoothRoot.wingSize }
+                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
+                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
                     }
                 }
                 
+                // Bottom-Right Wing
                 Shape {
                     x: parent.width - bluetoothRoot.wingSize; y: parent.height
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                        PathQuad { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        startX: bluetoothRoot.wingSize; startY: 0
                         PathLine { x: 0; y: 0 }
+                        PathQuad { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
                     }
                 }
             }
