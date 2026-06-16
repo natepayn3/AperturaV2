@@ -9,6 +9,8 @@ import Quickshell.Io
 Item {
     id: bluetoothRoot
 
+    property bool isLocked: false
+
     property string namespace: "quickshell-bluetooth-popup"
     property bool active: false
     
@@ -43,7 +45,21 @@ Item {
     property bool isPowered: false
     property bool isScanning: false
     property string activeStatusText: "Bluetooth is ON"
-    property var deviceModel: []
+    ListModel {
+        id: deviceModel
+
+        onCountChanged: {
+            console.log("DEVICE COUNT =", count);
+        }
+    }
+
+    // --- Unified Bluetooth Session ---
+
+    Process {
+        id: bluetoothSession
+        command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
+        running: bluetoothRoot.active
+    }
 
     // --- Core Bluetooth Processes ---
     Process {
@@ -52,60 +68,78 @@ Item {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                if (togglePowerProc.running || toggleScanProc.running) { stateFetcher.running = false; return; }
-                
-                let textLines = this.text.replace(/\r/g, "").split("\n");
-                let powered = false;
-                let discovering = false;
-                
-                for (let line of textLines) {
-                    let cleanLine = line.trim();
-                    if (cleanLine.includes("Powered: yes")) powered = true;
-                    if (cleanLine.includes("Discovering: yes")) discovering = true;
+                if (bluetoothRoot.isLocked) {
+                    stateFetcher.running = false;
+                    return;
                 }
+                let textLines = this.text.split("\n");
+                bluetoothRoot.isPowered = textLines.some(l => l.includes("Powered: yes"));
+                bluetoothRoot.isScanning = textLines.some(l => l.includes("Discovering: yes"));
                 
-                bluetoothRoot.isPowered = powered;
-                bluetoothRoot.isScanning = discovering;
-                
-                if (!powered) {
-                    bluetoothRoot.activeStatusText = "Bluetooth is OFF";
-                    bluetoothRoot.deviceModel = [];
-                } else if (discovering) {
-                    bluetoothRoot.activeStatusText = "Scanning for devices...";
-                } else {
-                    bluetoothRoot.activeStatusText = scanDurationTimer.running ? "Scanning for devices..." : "Bluetooth is ON";
-                }
-                
+                bluetoothRoot.activeStatusText = bluetoothRoot.isScanning ? "Scanning..." : (bluetoothRoot.isPowered ? "Bluetooth is ON" : "Bluetooth is OFF");
                 stateFetcher.running = false;
-                if (powered && !togglePowerProc.running && !toggleScanProc.running) deviceFetcher.running = true;
             }
         }
     }
 
     Process {
         id: deviceFetcher
-        command: ["/usr/bin/bluetoothctl", "devices"]
+        // Uses bash string matching instead of subshells (grep/awk) to keep the 1.5s polling loop fast
+        command: [
+            "/bin/bash", 
+            "-c", 
+            "bluetoothctl devices | while read -r _ mac name; do info=$(bluetoothctl info \"$mac\"); [[ \"$info\" == *\"Paired: yes\"* ]] && paired='true' || paired='false'; [[ \"$info\" == *\"Connected: yes\"* ]] && conn='true' || conn='false'; echo \"$mac|$name|$paired|$conn\"; done"
+        ]
         running: false
+
         stdout: StdioCollector {
             onStreamFinished: {
-                if (togglePowerProc.running || !bluetoothRoot.isPowered || toggleScanProc.running) { deviceFetcher.running = false; return; }
-                let lines = this.text.replace(/\r/g, "").split("\n");
-                let parsedDevices = [];
+                let lines = this.text.trim().split("\n");
                 
-                for (let line of lines) {
-                    let match = line.trim().match(/^Device\s+([0-9A-Fa-f:]+)\s+(.*)$/);
-                    if (match) {
-                        parsedDevices.push({
-                            "mac": match[1],
-                            "name": match[2].trim(),
-                            "connected": false
-                        });
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i] === "") continue;
+                    
+                    let parts = lines[i].split("|");
+                    if (parts.length < 4) continue;
+
+                    let mac = parts[0];
+                    let name = parts[1].trim();
+                    let isPaired = parts[2] === "true";
+                    let isConnected = parts[3] === "true";
+                    
+                    let found = false;
+
+                    for (let j = 0; j < deviceModel.count; j++) {
+                        if (deviceModel.get(j).mac === mac) {
+                            found = true;
+                            // Update statuses live so colors/bolding change instantly
+                            deviceModel.setProperty(j, "connected", isConnected);
+                            deviceModel.setProperty(j, "paired", isPaired);
+                            
+                            if (name !== "" && deviceModel.get(j).name !== name) {
+                                deviceModel.setProperty(j, "name", name);
+                            }
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        let deviceData = {
+                            mac: mac,
+                            name: name,
+                            connected: isConnected,
+                            paired: isPaired
+                        };
+
+                        // Pin paired/connected devices to the top, push unknown scan results to the bottom
+                        if (isPaired || isConnected) {
+                            deviceModel.insert(0, deviceData);
+                        } else {
+                            deviceModel.append(deviceData);
+                        }
                     }
                 }
-                bluetoothRoot.deviceModel = parsedDevices;
                 deviceFetcher.running = false;
-                
-                if (parsedDevices.length > 0 && bluetoothRoot.isPowered && !togglePowerProc.running && !toggleScanProc.running) connectionVerifier.running = true;
             }
         }
     }
@@ -116,32 +150,13 @@ Item {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                if (!bluetoothRoot.isPowered || togglePowerProc.running || toggleScanProc.running) { connectionVerifier.running = false; return; }
-                let updatedModel = [...bluetoothRoot.deviceModel];
-                for (let i = 0; i < updatedModel.length; i++) {
-                    if (this.text.includes(updatedModel[i].mac) && this.text.includes("Connected: yes")) {
-                        updatedModel[i].connected = true;
-                    }
-                }
-                bluetoothRoot.deviceModel = updatedModel;
                 connectionVerifier.running = false;
             }
         }
     }
 
-    Process { 
-        id: togglePowerProc
-        running: false 
-        onRunningChanged: { if (!running) stateFetcherTimer.restart(); }
-    }
-    
-    // 🎯 FIX: Explicitly sync state strings when scanning engine runs down
-    Process { 
-        id: toggleScanProc
-        running: false 
-        onRunningChanged: { if (!running) stateFetcherTimer.restart(); }
-    }
-    
+    Process { id: togglePowerProc; running: false; onRunningChanged: { if (!running) stateFetcher.running = true; } }
+    Process { id: toggleScanProc; running: false; onRunningChanged: { if (!running) stateFetcher.running = true; } }
     Process { id: deviceActionProc; running: false }
 
     Timer {
@@ -158,57 +173,66 @@ Item {
 
     Timer {
         id: stateFetcherTimer
-        interval: 300
-        repeat: false
-        onTriggered: stateFetcher.running = true
-    }
-
-    function triggerScan() {
-        if (!bluetoothRoot.isPowered || togglePowerProc.running || toggleScanProc.running) return;
-        scanDurationTimer.stop();
-        bluetoothRoot.activeStatusText = "Scanning for devices...";
-        toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "on"];
-        toggleScanProc.running = true;
-        scanDurationTimer.start();
-    }
-
-    function togglePower() {
-        if (togglePowerProc.running || toggleScanProc.running) return;
-        scanDurationTimer.stop();
-        
-        let turningOn = !bluetoothRoot.isPowered;
-        deviceFetcher.running = false;
-        connectionVerifier.running = false;
-        
-        if (!turningOn) {
-            bluetoothRoot.activeStatusText = "Bluetooth is OFF";
-            bluetoothRoot.deviceModel = [];
-            // 🎯 FIX: Clear the scanning states immediately before execution to ensure sequential delivery
-            bluetoothRoot.isScanning = false; 
-            
-            // Execute absolute chain task block to force kill active hardware loops safely
-            toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "off"];
-            togglePowerProc.command = ["/usr/bin/bluetoothctl", "power", "off"];
-            toggleScanProc.running = true;
-            togglePowerProc.running = true;
-        } else {
-            bluetoothRoot.activeStatusText = "Bluetooth is ON";
-            togglePowerProc.command = ["/usr/bin/bluetoothctl", "power", "on"];
-            togglePowerProc.running = true;
+        interval: 1500
+        repeat: true
+        running: bluetoothRoot.active
+        onTriggered: {
+            if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
+                stateFetcher.running = true;
+                // Fetch the live device list continuously while the popup is active
+                deviceFetcher.running = true; 
+            }
         }
     }
 
+    function triggerScan() {
+        deviceModel.clear();
+        console.log("MODEL CLEARED");
+
+        bluetoothSession.write("agent on\n");
+        bluetoothSession.write("default-agent\n");
+        bluetoothSession.write("scan on\n");
+
+        scanDurationTimer.restart();
+
+        bluetoothRoot.isScanning = true;
+        bluetoothRoot.activeStatusText = "Scanning...";
+    }
+
+    function togglePower() {
+        let cmd = bluetoothRoot.isPowered ? "power off\n" : "power on\n";
+        bluetoothSession.write(cmd);
+        Qt.callLater(() => { stateFetcher.running = true; }, 1000);
+    }
+
     function handleDeviceClick(mac, isConnected) {
-        if (togglePowerProc.running || toggleScanProc.running || !bluetoothRoot.isPowered) return;
         let mode = isConnected ? "disconnect" : "connect";
-        deviceActionProc.command = ["/usr/bin/bluetoothctl", mode, mac];
-        deviceActionProc.running = true;
-        stateFetcherTimer.restart();
+        bluetoothSession.write(mode + " " + mac + "\n");
+        Qt.callLater(() => { stateFetcher.running = true; }, 500);
+    }
+
+    function pairDevice(mac) {
+        bluetoothSession.write("pair " + mac + "\n");
+    }
+
+    function removeDevice(mac) {
+        bluetoothSession.write("remove " + mac + "\n");
+        // Optimistically remove from the UI so it vanishes instantly
+        for (let i = 0; i < deviceModel.count; i++) {
+            if (deviceModel.get(i).mac === mac) {
+                deviceModel.remove(i);
+                break;
+            }
+        }
     }
 
     onActiveChanged: {
         if (active) {
+
+            deviceModel.clear();
+
             stateFetcher.running = true;
+            deviceFetcher.running = true;
         }
     }
 
@@ -280,7 +304,6 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "top") ? bluetoothRoot.radiusValue : 0
         }
 
-        // --- Wings Component ---
         Item {
             anchors.fill: parent
             visible: bluetoothRoot.width > 30
@@ -315,7 +338,6 @@ Item {
 
         MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
 
-        // --- Internal System Content View ---
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
@@ -349,63 +371,134 @@ Item {
                             color: rootShell.colorAccent
                         }
                         MouseArea {
-                            id: refreshMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: bluetoothRoot.triggerScan()
+                            id: refreshMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                stateFetcherTimer.running = false;
+                                bluetoothRoot.triggerScan();
+                                Qt.callLater(() => { stateFetcherTimer.running = true; }, 2000);
+                            }
                         }
                     }
                 }
 
-                ScrollView {
-                    Layout.fillWidth: true; Layout.fillHeight: true
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     clip: true
-                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    model: deviceModel
+                    spacing: 4
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                    ColumnLayout {
-                        width: parent.width
-                        spacing: 6
-
+                    header: Item {
+                        width: ListView.view ? ListView.view.width : 0
+                        // Forces height to 0 when powered on to kill the ghost gap
+                        height: !bluetoothRoot.isPowered ? 24 : 0
+                        visible: !bluetoothRoot.isPowered
+                        
                         Text {
-                            visible: !bluetoothRoot.isPowered
                             text: "Adapter Powered Off"
-                            font.family: rootShell.shellFont; font.pixelSize: 13
+                            font.family: rootShell.shellFont
+                            font.pixelSize: 13
                             color: rootShell.colorSubtext
-                            Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 40
                         }
+                    }
 
-                        Repeater {
-                            model: bluetoothRoot.isPowered ? bluetoothRoot.deviceModel : 0
-                            delegate: Rectangle {
-                                id: delegateBody
-                                Layout.fillWidth: true; Layout.preferredHeight: 44; radius: 8
-                                color: itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent"
-                                border.width: modelData.connected ? 1 : 0
-                                border.color: rootShell.colorAccent
+                    delegate: Item {
+                        width: ListView.view.width
+                        height: 48
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12; anchors.rightMargin: 12
-                                    spacing: 0
-                                    
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: model.connected 
+                                ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
+                                : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
+
+                            border.width: model.connected ? 1 : 0
+                            border.color: rootShell.colorAccent
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 8
+                                spacing: 8
+
+                                // Wrapping the text in its own MouseArea for Connect/Disconnect
+                                // so it doesn't overlap the utility buttons
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+
                                     ColumnLayout {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width
                                         spacing: 0
-                                        Layout.fillWidth: true
+
                                         Text {
-                                            text: modelData.name !== "" ? modelData.name : modelData.mac
-                                            font.family: rootShell.shellFont; font.pixelSize: 13; font.weight: Font.Medium
-                                            color: "#ffffff"; elide: Text.ElideRight; Layout.fillWidth: true
+                                            text: model.name !== "" ? model.name : model.mac
+                                            color: "#ffffff"
+                                            font.pixelSize: 13
+                                            font.weight: model.connected ? Font.Bold : Font.Normal
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
                                         }
+
                                         Text {
-                                            text: modelData.mac
-                                            font.family: rootShell.shellFont; font.pixelSize: 10; color: rootShell.colorSubtext
-                                            opacity: 0.7; elide: Text.ElideRight; Layout.fillWidth: true
+                                            text: model.connected ? "Connected" : (model.paired ? "Paired" : model.mac)
+                                            color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
+                                            font.pixelSize: 11
                                         }
+                                    }
+
+                                    MouseArea {
+                                        id: itemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: bluetoothRoot.handleDeviceClick(model.mac, model.connected)
                                     }
                                 }
 
-                                MouseArea {
-                                    id: itemMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                    z: 20 
-                                    onClicked: bluetoothRoot.handleDeviceClick(modelData.mac, modelData.connected)
+                                // Pair Button
+                                Rectangle {
+                                    width: 32; height: 32; radius: 6
+                                    color: pairMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
+                                    Text { 
+                                        anchors.centerIn: parent
+                                        text: "link" 
+                                        font.family: "Material Symbols Outlined"
+                                        font.pixelSize: 18
+                                        color: "#ffffff"
+                                    }
+                                    MouseArea {
+                                        id: pairMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: bluetoothRoot.pairDevice(model.mac)
+                                    }
+                                }
+
+                                // Forget Button
+                                Rectangle {
+                                    width: 32; height: 32; radius: 6
+                                    color: forgetMouse.containsMouse ? Qt.rgba(255,90,90,0.1) : "transparent"
+                                    Text { 
+                                        anchors.centerIn: parent
+                                        text: "delete" 
+                                        font.family: "Material Symbols Outlined"
+                                        font.pixelSize: 18
+                                        color: rootShell.colorClose
+                                    }
+                                    MouseArea {
+                                        id: forgetMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: bluetoothRoot.removeDevice(model.mac)
+                                    }
                                 }
                             }
                         }
@@ -417,7 +510,6 @@ Item {
                     color: Qt.rgba(255,255,255,0.1)
                 }
 
-                // --- Standardized Footer Panel Layout ---
                 Item {
                     Layout.fillWidth: true; Layout.preferredHeight: 56
 
@@ -426,7 +518,6 @@ Item {
                         spacing: 12
 
                         Text {
-                            id: bigFooterIcon
                             text: bluetoothRoot.isPowered ? "bluetooth" : "bluetooth_disabled"
                             font.family: "Material Symbols Outlined"; font.pixelSize: 32
                             color: bluetoothRoot.isPowered ? rootShell.colorAccent : rootShell.colorClose
