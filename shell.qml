@@ -17,6 +17,7 @@ Scope {
     readonly property var calendarRef: globalCalendarPreview
     readonly property var launcherRef: globalAppLauncherPreview
     readonly property var workspaceRef: globalWorkspacePreview
+    readonly property var bluetoothRef: globalBluetoothPreview
 
     property string barPosition: "left"
     property string enabledDisplayStr: "0"
@@ -47,6 +48,7 @@ Scope {
     property real previewProgress: 0.0
     property real calendarProgress: 0.0
     property real launcherProgress: 0.0
+    property real bluetoothProgress: 0.0
 
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
@@ -120,6 +122,17 @@ Scope {
         id: hideLauncherAnim
         NumberAnimation { target: rootShell; property: "launcherProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalAppLauncherPreview; property: "launcherActive"; value: false }
+    }
+
+    ParallelAnimation {
+        id: showBluetoothAnim
+        NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideBluetoothAnim
+        NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalBluetoothPreview; property: "bluetoothActive"; value: false }
     }
 
     function isDisplayEnabled(idx) {
@@ -234,7 +247,6 @@ Scope {
         target: "launcher"
         function toggle(): void {
             if (globalAppLauncherPreview) {
-                // Instantly flips window visibility state on or off
                 globalAppLauncherPreview.active = !globalAppLauncherPreview.active;
             }
         }
@@ -259,6 +271,18 @@ Scope {
         onTriggered: {
             if (!innerCalendarCard.isHovered) {
                 hideCalendarAnim.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: bluetoothDismissTimer
+        interval: 150
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!innerBluetoothCard.isHovered) {
+                hideBluetoothAnim.restart();
             }
         }
     }
@@ -390,9 +414,70 @@ Scope {
         }
     }
 
+    PanelWindow {
+        id: globalBluetoothPreview
+        property bool bluetoothActive: false
+        property alias cardRef: innerBluetoothCard
+
+        screen: Quickshell.screens[0]
+        
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-bluetooth-preview"
+        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: bluetoothActive || rootShell.bluetoothProgress > 0.0
+        color: "transparent"
+        mask: Region { item: innerBluetoothCard }
+
+        property int hoverOriginX: 0
+        property int hoverOriginY: 0
+
+        function showBluetooth() { 
+            bluetoothDismissTimer.stop(); 
+            bluetoothActive = true; 
+            globalBluetoothPreview.requestActivate(); 
+            showBluetoothAnim.restart(); 
+        }
+        function requestDismiss() { 
+            if (!innerBluetoothCard.isHovered) bluetoothDismissTimer.restart(); 
+        }
+        function forceDismiss() {
+            bluetoothDismissTimer.stop();
+            bluetoothActive = false;
+            hideBluetoothAnim.restart();
+        }
+
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_Escape && bluetoothActive) {
+                forceDismiss();
+                event.accepted = true;
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            z: 1
+            onClicked: globalBluetoothPreview.forceDismiss()
+        }
+
+        Bluetooth {
+            id: innerBluetoothCard
+            active: globalBluetoothPreview.bluetoothActive
+            z: 2
+            
+            hoverOriginX: globalBluetoothPreview.hoverOriginX
+            hoverOriginY: globalBluetoothPreview.hoverOriginY
+            
+            onIsHoveredChanged: {
+                if (isHovered) bluetoothDismissTimer.stop();
+                else globalBluetoothPreview.requestDismiss();
+            }
+        }
+    }
+
     // --- Dynamic Instantiators using Unified Modules ---
-    
-    // Alias the root scope so the delegates don't confuse it with their internal properties
     Item {
         id: globalCtx
         property var ref: rootShell
