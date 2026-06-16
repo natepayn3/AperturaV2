@@ -90,7 +90,7 @@ Item {
         radius: 8
         // Uses a tight white overlay tint over your theme bar to stay light and clean
         color: Qt.rgba(1, 1, 1, 0.03)
-        border.width: 1
+        border.width: 0
         border.color: workspaceContainer.shellTarget ? workspaceContainer.shellTarget.colorBorder : "transparent"
         z: 0
     }
@@ -109,7 +109,11 @@ Item {
             id: layoutLoader
             width: isVertical ? parent.width : implicitWidth
             height: isVertical ? implicitHeight : parent.height
-            anchors.centerIn: parent 
+            
+            // 🎯 FIX: Forces the loader box canvas to lock strictly to the horizontal midpoint axis
+            anchors.horizontalCenter: isVertical ? parent.horizontalCenter : undefined
+            anchors.verticalCenter: !isVertical ? parent.verticalCenter : undefined
+            
             sourceComponent: workspaceContainer.isVertical ? verticalLayoutComponent : horizontalLayoutComponent
         }
     }
