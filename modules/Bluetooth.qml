@@ -12,7 +12,6 @@ Item {
     property string namespace: "quickshell-bluetooth-popup"
     property bool active: false
     
-    // Unified Hover Logic mirroring original Calendar architecture spec
     property bool isHovered: popupHoverArea.containsMouse || contentHoverHandler.hovered
     
     property int hoverOriginX: 0
@@ -32,7 +31,6 @@ Item {
     visible: true
     clip: false
 
-    // --- Dynamic Root Anchoring ---
     x: rootShell.barPosition === "right" 
        ? hoverOriginX - width 
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
@@ -44,33 +42,42 @@ Item {
     // --- State Management ---
     property bool isPowered: false
     property bool isScanning: false
-    property string activeController: "Unknown"
+    property string activeStatusText: "Bluetooth is ON"
     property var deviceModel: []
 
-    // --- Core Bluetooth Processes via absolute path allocations ---
+    // --- Core Bluetooth Processes ---
     Process {
         id: stateFetcher
         command: ["/usr/bin/bluetoothctl", "show"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                let textLines = this.text.split("\n");
+                if (togglePowerProc.running || toggleScanProc.running) { stateFetcher.running = false; return; }
+                
+                let textLines = this.text.replace(/\r/g, "").split("\n");
                 let powered = false;
                 let discovering = false;
-                let name = "Unknown";
                 
                 for (let line of textLines) {
-                    if (line.includes("Powered: yes")) powered = true;
-                    if (line.includes("Discovering: yes")) discovering = true;
-                    if (line.includes("Name:")) name = line.replace(/.*Name:\s*/, "").trim();
+                    let cleanLine = line.trim();
+                    if (cleanLine.includes("Powered: yes")) powered = true;
+                    if (cleanLine.includes("Discovering: yes")) discovering = true;
                 }
                 
                 bluetoothRoot.isPowered = powered;
                 bluetoothRoot.isScanning = discovering;
-                bluetoothRoot.activeController = name;
-                stateFetcher.running = false;
                 
-                if (powered) deviceFetcher.running = true;
+                if (!powered) {
+                    bluetoothRoot.activeStatusText = "Bluetooth is OFF";
+                    bluetoothRoot.deviceModel = [];
+                } else if (discovering) {
+                    bluetoothRoot.activeStatusText = "Scanning for devices...";
+                } else {
+                    bluetoothRoot.activeStatusText = scanDurationTimer.running ? "Scanning for devices..." : "Bluetooth is ON";
+                }
+                
+                stateFetcher.running = false;
+                if (powered && !togglePowerProc.running && !toggleScanProc.running) deviceFetcher.running = true;
             }
         }
     }
@@ -81,15 +88,16 @@ Item {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                let lines = this.text.split("\n");
+                if (togglePowerProc.running || !bluetoothRoot.isPowered || toggleScanProc.running) { deviceFetcher.running = false; return; }
+                let lines = this.text.replace(/\r/g, "").split("\n");
                 let parsedDevices = [];
                 
                 for (let line of lines) {
-                    let match = line.match(/^Device\s+([0-9A-Fa-f:]+)\s+(.*)$/);
+                    let match = line.trim().match(/^Device\s+([0-9A-Fa-f:]+)\s+(.*)$/);
                     if (match) {
                         parsedDevices.push({
                             "mac": match[1],
-                            "name": match[2],
+                            "name": match[2].trim(),
                             "connected": false
                         });
                     }
@@ -97,7 +105,7 @@ Item {
                 bluetoothRoot.deviceModel = parsedDevices;
                 deviceFetcher.running = false;
                 
-                if (parsedDevices.length > 0) connectionVerifier.running = true;
+                if (parsedDevices.length > 0 && bluetoothRoot.isPowered && !togglePowerProc.running && !toggleScanProc.running) connectionVerifier.running = true;
             }
         }
     }
@@ -108,6 +116,7 @@ Item {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
+                if (!bluetoothRoot.isPowered || togglePowerProc.running || toggleScanProc.running) { connectionVerifier.running = false; return; }
                 let updatedModel = [...bluetoothRoot.deviceModel];
                 for (let i = 0; i < updatedModel.length; i++) {
                     if (this.text.includes(updatedModel[i].mac) && this.text.includes("Connected: yes")) {
@@ -120,28 +129,81 @@ Item {
         }
     }
 
-    Process { id: togglePowerProc; running: false }
-    Process { id: toggleScanProc; running: false }
+    Process { 
+        id: togglePowerProc
+        running: false 
+        onRunningChanged: { if (!running) stateFetcherTimer.restart(); }
+    }
+    
+    // 🎯 FIX: Explicitly sync state strings when scanning engine runs down
+    Process { 
+        id: toggleScanProc
+        running: false 
+        onRunningChanged: { if (!running) stateFetcherTimer.restart(); }
+    }
+    
     Process { id: deviceActionProc; running: false }
 
-    function togglePower() {
-        togglePowerProc.command = ["/usr/bin/bluetoothctl", bluetoothRoot.isPowered ? "power off" : "power on"];
-        togglePowerProc.running = true;
-        stateFetcher.running = true;
+    Timer {
+        id: scanDurationTimer
+        interval: 10000
+        repeat: false
+        onTriggered: {
+            bluetoothRoot.isScanning = false;
+            bluetoothRoot.activeStatusText = "Bluetooth is ON";
+            toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "off"];
+            toggleScanProc.running = true;
+        }
     }
 
-    function toggleScan() {
-        if (!bluetoothRoot.isPowered) return;
-        toggleScanProc.command = ["/usr/bin/bluetoothctl", bluetoothRoot.isScanning ? "scan off" : "scan on"];
+    Timer {
+        id: stateFetcherTimer
+        interval: 300
+        repeat: false
+        onTriggered: stateFetcher.running = true
+    }
+
+    function triggerScan() {
+        if (!bluetoothRoot.isPowered || togglePowerProc.running || toggleScanProc.running) return;
+        scanDurationTimer.stop();
+        bluetoothRoot.activeStatusText = "Scanning for devices...";
+        toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "on"];
         toggleScanProc.running = true;
-        stateFetcher.running = true;
+        scanDurationTimer.start();
+    }
+
+    function togglePower() {
+        if (togglePowerProc.running || toggleScanProc.running) return;
+        scanDurationTimer.stop();
+        
+        let turningOn = !bluetoothRoot.isPowered;
+        deviceFetcher.running = false;
+        connectionVerifier.running = false;
+        
+        if (!turningOn) {
+            bluetoothRoot.activeStatusText = "Bluetooth is OFF";
+            bluetoothRoot.deviceModel = [];
+            // 🎯 FIX: Clear the scanning states immediately before execution to ensure sequential delivery
+            bluetoothRoot.isScanning = false; 
+            
+            // Execute absolute chain task block to force kill active hardware loops safely
+            toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "off"];
+            togglePowerProc.command = ["/usr/bin/bluetoothctl", "power", "off"];
+            toggleScanProc.running = true;
+            togglePowerProc.running = true;
+        } else {
+            bluetoothRoot.activeStatusText = "Bluetooth is ON";
+            togglePowerProc.command = ["/usr/bin/bluetoothctl", "power", "on"];
+            togglePowerProc.running = true;
+        }
     }
 
     function handleDeviceClick(mac, isConnected) {
+        if (togglePowerProc.running || toggleScanProc.running || !bluetoothRoot.isPowered) return;
         let mode = isConnected ? "disconnect" : "connect";
         deviceActionProc.command = ["/usr/bin/bluetoothctl", mode, mac];
         deviceActionProc.running = true;
-        stateFetcher.running = true;
+        stateFetcherTimer.restart();
     }
 
     onActiveChanged: {
@@ -156,7 +218,7 @@ Item {
         anchors.fill: parent
 
         transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.BottomLeft  // Cloned from Calendar "bottom"
+            if (rootShell.barPosition === "left") return Item.BottomLeft
             if (rootShell.barPosition === "right") return Item.TopRight
             if (rootShell.barPosition === "top") return Item.TopLeft
             if (rootShell.barPosition === "bottom") return Item.BottomLeft
@@ -171,24 +233,8 @@ Item {
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
                 PropertyChanges { 
                     target: animatedGroup
-                    x: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return -40; // Cloned from Calendar "bottom"
-                            case "bottom": return -40; 
-                            case "right":  return 40;  
-                            case "top":    return -40; 
-                            default:       return 0;
-                        }
-                    }
-                    y: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return 40;  // Cloned from Calendar "bottom"
-                            case "bottom": return 40;  
-                            case "right":  return -40; 
-                            case "top":    return -40; 
-                            default:       return 0;
-                        }
-                    }
+                    x: (rootShell.barPosition === "right") ? 40 : -40
+                    y: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 40 : -40
                 }
             },
             State {
@@ -226,15 +272,12 @@ Item {
             anchors.fill: parent
             color: rootShell.colorBackground
             z: 2
-            
             border.width: 0
             border.color: "transparent"
-
-            // Mapped left to exactly match Calendar's bottom corner rounding
             topLeftRadius: 0
             topRightRadius: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? bluetoothRoot.radiusValue : 0
             bottomLeftRadius: rootShell.barPosition === "right" ? bluetoothRoot.radiusValue : 0
-            bottomRightRadius: rootShell.barPosition === "top" ? bluetoothRoot.radiusValue : 0
+            bottomRightRadius: (rootShell.barPosition === "top") ? bluetoothRoot.radiusValue : 0
         }
 
         // --- Wings Component ---
@@ -243,14 +286,11 @@ Item {
             visible: bluetoothRoot.width > 30
             z: 2 
 
-            // Exact 1:1 copy of Calendar's "bottom" wing code, applied to both left and bottom
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "left" || rootShell.barPosition === "bottom"
-
                 Shape {
-                    x: 0; y: -bluetoothRoot.wingSize
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    x: 0; y: -bluetoothRoot.wingSize; width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: bluetoothRoot.wingSize
@@ -260,11 +300,8 @@ Item {
                     }
                 }
                 Shape {
-                    rotation: -90
-                    transformOrigin: Item.TopLeft
-                    x: parent.width
-                    y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    rotation: -90; transformOrigin: Item.TopLeft
+                    x: parent.width; y: parent.height; width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
@@ -274,74 +311,9 @@ Item {
                     }
                 }
             }
-
-            // Original Calendar "top" wing code
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "top"
-
-                Shape {
-                    x: 0; y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: bluetoothRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-                Shape {
-                    x: parent.width; y: 0
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: 0; y: bluetoothRoot.wingSize }
-                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            // Original Calendar "right" wing code
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "right"
-
-                Shape {
-                    x: -bluetoothRoot.wingSize; y: 0
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                    }
-                }
-                
-                Shape {
-                    x: parent.width - bluetoothRoot.wingSize; y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
         }
 
-        // Structural background hover area intercepts clicks inside card boundary
-        MouseArea { 
-            id: popupHoverArea
-            anchors.fill: parent 
-            hoverEnabled: true 
-            z: 1
-        }
+        MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
 
         // --- Internal System Content View ---
         Item {
@@ -378,29 +350,13 @@ Item {
                         }
                         MouseArea {
                             id: refreshMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: stateFetcher.running = true
-                        }
-                    }
-
-                    Rectangle {
-                        width: 28; height: 28; radius: 6
-                        color: scanMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
-                        Text { 
-                            anchors.centerIn: parent
-                            text: bluetoothRoot.isScanning ? "radar" : "search"
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 18
-                            color: bluetoothRoot.isScanning ? rootShell.colorAccent : rootShell.colorSubtext
-                        }
-                        MouseArea {
-                            id: scanMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: bluetoothRoot.toggleScan()
+                            onClicked: bluetoothRoot.triggerScan()
                         }
                     }
                 }
 
                 ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    Layout.fillWidth: true; Layout.fillHeight: true
                     clip: true
                     ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
@@ -413,50 +369,42 @@ Item {
                             text: "Adapter Powered Off"
                             font.family: rootShell.shellFont; font.pixelSize: 13
                             color: rootShell.colorSubtext
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.topMargin: 40
+                            Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 40
                         }
 
                         Repeater {
                             model: bluetoothRoot.isPowered ? bluetoothRoot.deviceModel : 0
                             delegate: Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 40
-                                radius: 8
+                                id: delegateBody
+                                Layout.fillWidth: true; Layout.preferredHeight: 44; radius: 8
                                 color: itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent"
                                 border.width: modelData.connected ? 1 : 0
                                 border.color: rootShell.colorAccent
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: Math.round(8)
-                                    spacing: 10
-
-                                    Text {
-                                        text: modelData.connected ? "bluetooth_connected" : "bluetooth"
-                                        font.family: "Material Symbols Outlined"; font.pixelSize: 18
-                                        color: modelData.connected ? rootShell.colorAccent : "#ffffff"
-                                    }
-
+                                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                                    spacing: 0
+                                    
                                     ColumnLayout {
                                         spacing: 0
                                         Layout.fillWidth: true
                                         Text {
                                             text: modelData.name !== "" ? modelData.name : modelData.mac
                                             font.family: rootShell.shellFont; font.pixelSize: 13; font.weight: Font.Medium
-                                            color: "#ffffff"
-                                            elide: Text.ElideRight
+                                            color: "#ffffff"; elide: Text.ElideRight; Layout.fillWidth: true
                                         }
                                         Text {
                                             text: modelData.mac
-                                            font.family: rootShell.shellFont; font.pixelSize: 10
-                                            color: rootShell.colorSubtext
+                                            font.family: rootShell.shellFont; font.pixelSize: 10; color: rootShell.colorSubtext
+                                            opacity: 0.7; elide: Text.ElideRight; Layout.fillWidth: true
                                         }
                                     }
                                 }
 
                                 MouseArea {
                                     id: itemMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    z: 20 
                                     onClicked: bluetoothRoot.handleDeviceClick(modelData.mac, modelData.connected)
                                 }
                             }
@@ -469,50 +417,43 @@ Item {
                     color: Qt.rgba(255,255,255,0.1)
                 }
 
+                // --- Standardized Footer Panel Layout ---
                 Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 56
+                    Layout.fillWidth: true; Layout.preferredHeight: 56
 
                     RowLayout {
-                        anchors.fill: parent; spacing: 14
+                        anchors.fill: parent
+                        spacing: 12
 
                         Text {
+                            id: bigFooterIcon
                             text: bluetoothRoot.isPowered ? "bluetooth" : "bluetooth_disabled"
                             font.family: "Material Symbols Outlined"; font.pixelSize: 32
                             color: bluetoothRoot.isPowered ? rootShell.colorAccent : rootShell.colorClose
+                            Layout.alignment: Qt.AlignVCenter
                         }
 
-                        ColumnLayout {
-                            spacing: 2
-                            Layout.alignment: Qt.AlignVCenter
+                        Text {
+                            text: bluetoothRoot.activeStatusText
+                            font.family: rootShell.shellFont; font.pixelSize: 13
+                            color: "#ffffff"; opacity: 0.8
+                            elide: Text.ElideRight
                             Layout.fillWidth: true
-
-                            Text {
-                                text: bluetoothRoot.activeController
-                                font.family: rootShell.shellFont; font.pixelSize: 14; font.weight: Font.Bold
-                                color: "#ffffff"
-                                elide: Text.ElideRight
-                            }
-
-                            Text {
-                                text: bluetoothRoot.isScanning ? "Scanning for devices..." : "Radio Idle"
-                                font.family: rootShell.shellFont; font.pixelSize: 12
-                                color: "#ffffff"; opacity: 0.6
-                            }
+                            Layout.alignment: Qt.AlignVCenter
                         }
 
                         Switch {
                             id: powerSwitch
                             checked: bluetoothRoot.isPowered
-                            onPositionChanged: {
-                                if ((checked && !bluetoothRoot.isPowered) || (!checked && bluetoothRoot.isPowered)) {
-                                    bluetoothRoot.togglePower();
-                                }
-                            }
+                            implicitWidth: 42
+                            implicitHeight: 24
+                            Layout.alignment: Qt.AlignVCenter
+                            
+                            onClicked: bluetoothRoot.togglePower()
                             
                             indicator: Rectangle {
-                                implicitWidth: 42; implicitHeight: 24
-                                x: powerSwitch.leftPadding; y: parent.height / 2 - height / 2
+                                width: powerSwitch.implicitWidth
+                                height: powerSwitch.implicitHeight
                                 radius: 12
                                 color: powerSwitch.checked ? rootShell.colorAccent : "transparent"
                                 border.color: powerSwitch.checked ? rootShell.colorAccent : rootShell.colorBorder
@@ -520,13 +461,10 @@ Item {
 
                                 Rectangle {
                                     x: powerSwitch.checked ? parent.width - width - 4 : 4
-                                    y: parent.height / 2 - height / 2
+                                    anchors.verticalCenter: parent.verticalCenter
                                     width: 14; height: 14; radius: 7
                                     color: powerSwitch.checked ? rootShell.colorBackground : rootShell.colorSubtext
-                                    
-                                    Behavior on x {
-                                        NumberAnimation { duration: 120; easing.type: Easing.OutQuad }
-                                    }
+                                    Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
                                 }
                             }
                         }
