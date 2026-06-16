@@ -20,6 +20,17 @@ Item {
     property bool showFileBrowser: false
     property string currentBrowserPath: "file://" + Quickshell.env("HOME")
 
+    // Centralized Fallback Palette (Uses shellTarget / settingsWindow bindings or defaults)
+    QtObject {
+        id: vpnTheme
+        readonly property color text: shellTarget ? shellTarget.colorText : "#cdd6f4"
+        readonly property color subtext: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+        readonly property color accent: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+        readonly property color border: shellTarget ? shellTarget.colorBorder : "#313244"
+        // FIX: Extract font family explicitly as a safe primitive string to prevent object-clashing
+        readonly property string fontFamily: settingsWindow ? settingsWindow.selectedFont : "sans-serif"
+    }
+
     // Auto-clears the red text error state cleanly after 5 seconds
     Timer {
         id: errorDismissTimer
@@ -266,10 +277,10 @@ Item {
 
                 Text {
                     text: "Available profiles:"
-                    font.family: settingsWindow.selectedFont
+                    font.family: vpnTheme.fontFamily
                     font.pixelSize: 16
                     font.bold: true
-                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                    color: vpnTheme.text
                     Layout.fillWidth: true
                 }
 
@@ -280,10 +291,13 @@ Item {
                     implicitHeight: 34
 
                     background: Rectangle {
-                        color: importBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
-                        border.color: shellTarget ? shellTarget.colorBorder : "#313244"
+                        color: importBtn.hovered ? vpnTheme.border : "transparent"
+                        border.color: importBtn.hovered ? vpnTheme.accent : vpnTheme.border
                         border.width: 1
                         radius: 8
+                        
+                        Behavior on border.color { ColorAnimation { duration: 110 } }
+                        Behavior on color { ColorAnimation { duration: 110 } }
                     }
 
                     contentItem: Item {
@@ -296,14 +310,14 @@ Item {
                                 text: "upload_file"
                                 font.family: "Material Symbols Outlined"
                                 font.pixelSize: 16
-                                color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                                color: vpnTheme.accent
                             }
                             Text {
                                 text: "Import Profile"
-                                font.family: settingsWindow.selectedFont
+                                font.family: vpnTheme.fontFamily
                                 font.pixelSize: 13
                                 font.bold: true
-                                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                color: vpnTheme.text
                             }
                         }
                     }
@@ -322,16 +336,16 @@ Item {
                 Layout.preferredHeight: 90
                 color: Qt.rgba(0, 0, 0, 0.15)
                 radius: 12
-                border.color: shellTarget ? shellTarget.colorBorder : "#313244"
+                border.color: vpnTheme.border
                 border.width: 1
                 visible: vpnListModel.count === 0
 
                 Text {
                     anchors.centerIn: parent
                     text: "No VPN Profiles found. Click 'Import Profile' above to add a .conf file."
-                    font.family: settingsWindow.selectedFont
+                    font.family: vpnTheme.fontFamily
                     font.pixelSize: 13
-                    color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                    color: vpnTheme.subtext
                 }
             }
 
@@ -371,9 +385,7 @@ Item {
                         height: 84
                         color: Qt.rgba(0, 0, 0, 0.15)
                         radius: 12
-                        border.color: vpnLayoutRoot.activeVpnName === profileName 
-                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                            : (shellTarget ? shellTarget.colorBorder : "#313244")
+                        border.color: vpnLayoutRoot.activeVpnName === profileName ? vpnTheme.accent : vpnTheme.border
                         border.width: 1
 
                         RowLayout {
@@ -390,7 +402,7 @@ Item {
                                     text: vpnLayoutRoot.activeVpnName === profileName ? "vpn_key" : "vpn_key_off"
                                     font.family: "Material Symbols Outlined"
                                     font.pixelSize: 20
-                                    color: vpnLayoutRoot.activeVpnName === profileName ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : (shellTarget ? shellTarget.colorSubtext : "#a6adc8")
+                                    color: vpnLayoutRoot.activeVpnName === profileName ? vpnTheme.accent : vpnTheme.subtext
                                 }
                             }
 
@@ -400,10 +412,10 @@ Item {
 
                                 Text {
                                     text: profileName 
-                                    font.family: settingsWindow.selectedFont
+                                    font.family: vpnTheme.fontFamily
                                     font.bold: true
                                     font.pixelSize: 14
-                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    color: vpnTheme.text
                                     elide: Text.ElideRight
                                 }
 
@@ -413,18 +425,18 @@ Item {
 
                                     Text {
                                         text: vpnLayoutRoot.activeVpnName === profileName ? "Connected" : "Disconnected"
-                                        font.family: settingsWindow.selectedFont
+                                        font.family: vpnTheme.fontFamily
                                         font.pixelSize: 12
-                                        color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                                        color: vpnTheme.subtext
                                     }
 
                                     Text {
                                         text: (vpnLayoutRoot.activeVpnName === profileName && vpnLayoutRoot.publicIpAddress !== "") 
                                             ? vpnLayoutRoot.publicIpAddress 
                                             : "No active endpoint"
-                                        font.family: settingsWindow.selectedFont
+                                        font.family: vpnTheme.fontFamily
                                         font.pixelSize: 11
-                                        color: vpnLayoutRoot.activeVpnName === profileName ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
+                                        color: vpnLayoutRoot.activeVpnName === profileName ? vpnTheme.accent : "transparent"
                                         opacity: vpnLayoutRoot.textVisible ? 1.0 : 0.0
                                         Behavior on opacity { NumberAnimation { duration: 100 } }
                                     }
@@ -443,9 +455,7 @@ Item {
                                     implicitWidth: 44
                                     implicitHeight: 22
                                     radius: 11
-                                    color: itemToggleSwitch.checked 
-                                        ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                                        : (shellTarget ? shellTarget.colorBorder : "#313244")
+                                    color: itemToggleSwitch.checked ? vpnTheme.accent : vpnTheme.border
                                     
                                     Rectangle {
                                         width: 16; height: 16; radius: 8; color: "#11111b"
@@ -465,7 +475,7 @@ Item {
                 Text {
                     id: floatingErrorText
                     text: "Error: check your config"
-                    font.family: settingsWindow.selectedFont
+                    font.family: vpnTheme.fontFamily
                     font.pixelSize: 13
                     font.bold: true
                     color: "#f38ba8"
@@ -492,10 +502,10 @@ Item {
 
                 Text {
                     text: "Select WireGuard Config File:"
-                    font.family: settingsWindow.selectedFont
+                    font.family: vpnTheme.fontFamily
                     font.pixelSize: 15
                     font.bold: true
-                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                    color: vpnTheme.text
                     Layout.fillWidth: true
                 }
 
@@ -504,16 +514,19 @@ Item {
                     flat: true
                     implicitWidth: 80
                     implicitHeight: 30
+                    
                     background: Rectangle {
-                        color: cancelBrowserBtn.hovered ? Qt.rgba(1,1,1,0.08) : "transparent"
+                        color: cancelBrowserBtn.hovered ? vpnTheme.border : "transparent"
+                        border.color: cancelBrowserBtn.hovered ? vpnTheme.accent : "transparent"
+                        border.width: 1
                         radius: 6
                     }
                     contentItem: Text {
                         text: "Cancel"
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        font.family: settingsWindow.selectedFont
-                        color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                        font.family: vpnTheme.fontFamily
+                        color: vpnTheme.subtext
                     }
                     onClicked: vpnLayoutRoot.showFileBrowser = false
                 }
@@ -521,9 +534,9 @@ Item {
 
             Text {
                 text: vpnLayoutRoot.currentBrowserPath.replace("file://", "")
-                font.family: settingsWindow.selectedFont
+                font.family: vpnTheme.fontFamily
                 font.pixelSize: 12
-                color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                color: vpnTheme.accent
                 elide: Text.ElideLeft
                 Layout.fillWidth: true
             }
@@ -533,7 +546,7 @@ Item {
                 Layout.fillHeight: true
                 color: Qt.rgba(0, 0, 0, 0.2)
                 radius: 10
-                border.color: shellTarget ? shellTarget.colorBorder : "#313244"
+                border.color: vpnTheme.border
                 border.width: 1
                 clip: true
 
@@ -566,11 +579,16 @@ Item {
                         populate: null
 
                         delegate: ItemDelegate {
+                            id: fileDelegateItem
                             width: fileListView.width
-                            height: 38
                             
+                            height: fileName === "." ? 0 : 38
+                            visible: fileName !== "."
+
                             background: Rectangle {
-                                color: hovered ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
+                                color: fileDelegateItem.hovered ? Qt.rgba(255/255, 255/255, 255/255, 0.04) : "transparent"
+                                border.color: fileDelegateItem.hovered ? Qt.rgba(137/255, 180/255, 250/255, 0.3) : "transparent"
+                                border.width: 1
                                 radius: 6
                             }
 
@@ -583,25 +601,22 @@ Item {
                                     text: fileIsDir ? "folder" : "description"
                                     font.family: "Material Symbols Outlined"
                                     font.pixelSize: 18
-                                    color: fileIsDir ? "#f9e2af" : (shellTarget ? shellTarget.colorAccent : "#89b4fa")
+                                    color: fileIsDir ? "#f9e2af" : vpnTheme.accent
                                 }
 
                                 Text {
                                     text: fileName
-                                    font.family: settingsWindow.selectedFont
+                                    font.family: vpnTheme.fontFamily
                                     font.pixelSize: 13
-                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    color: vpnTheme.text
                                     Layout.fillWidth: true
                                 }
                             }
 
                             onClicked: {
                                 if (fileIsDir) {
-                                    // 🛠️ FIX: Store the click metadata safely without altering the model target path yet
                                     browserViewContainer.lastPath = vpnLayoutRoot.currentBrowserPath;
                                     browserViewContainer.pendingPath = fileUrl.toString();
-                                    
-                                    // Fire sequential outward animation block first
                                     pathFadeAnimation.start();
                                 } else {
                                     let urlString = fileUrl.toString();
@@ -621,12 +636,9 @@ Item {
                         ScrollBar.vertical: ScrollBar {}
                     }
 
-                    // 🛠️ FIX: Staged timeline prevents model text blinking.
-                    // The old directory view slides completely away to blank space *before* updating the path strings.
                     SequentialAnimation {
                         id: pathFadeAnimation
                         
-                        // Phase 1: Slide and fade out the existing frozen directory view data
                         ParallelAnimation {
                             PropertyAnimation {
                                 target: browserViewContainer
@@ -644,21 +656,18 @@ Item {
                             }
                         }
                         
-                        // Phase 2: Complete the path transition safely while hidden
                         ScriptAction {
                             script: {
                                 vpnLayoutRoot.currentBrowserPath = browserViewContainer.pendingPath;
                             }
                         }
                         
-                        // Phase 3: Teleport the canvas boundary wrapper to its incoming opposite offset vector
                         PropertyAction {
                             target: browserViewContainer
                             property: "x"
                             value: (browserViewContainer.pendingPath.length > browserViewContainer.lastPath.length) ? 30 : -30
                         }
                         
-                        // Phase 4: Slide cleanly back up from blank space to center position with the fresh data layout loaded
                         ParallelAnimation {
                             PropertyAnimation {
                                 target: browserViewContainer
