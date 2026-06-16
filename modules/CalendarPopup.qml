@@ -325,25 +325,12 @@ Item {
             }
         }
 
-        // Structural background hover area
-        MouseArea { 
-            id: popupHoverArea
-            anchors.fill: parent 
-            hoverEnabled: true 
-            z: 1
-        }
-
         // --- Internal Content ---
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
             anchors.margins: 18
             z: 5
-
-            // Passive tracker captures cross-hierarchy hover changes cleanly
-            HoverHandler {
-                id: contentHoverHandler
-            }
 
             ColumnLayout {
                 anchors.fill: parent
