@@ -33,8 +33,9 @@ Item {
     visible: true
     clip: false
 
+    // Perfectly mirrored X anchors for clearing the side bars
     x: rootShell.barPosition === "right" 
-       ? hoverOriginX - width 
+       ? hoverOriginX - width - 35 
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
        
     y: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left" || rootShell.barPosition === "right") 
@@ -45,20 +46,17 @@ Item {
     property bool isPowered: false
     property bool isScanning: false
     property string activeStatusText: "Bluetooth is ON"
+    
     ListModel {
         id: deviceModel
-
-        onCountChanged: {
-            console.log("DEVICE COUNT =", count);
-        }
     }
 
     // --- Unified Bluetooth Session ---
-
     Process {
         id: bluetoothSession
         command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
         running: bluetoothRoot.active
+        // stdout stripped: Process is strictly an interactive writer now to prevent stream lockups
     }
 
     // --- Core Bluetooth Processes ---
@@ -84,11 +82,11 @@ Item {
 
     Process {
         id: deviceFetcher
-        // Uses bash string matching instead of subshells (grep/awk) to keep the 1.5s polling loop fast
+        // Bash pipeline fetches exact connection and pairing states efficiently 
         command: [
             "/bin/bash", 
             "-c", 
-            "bluetoothctl devices | while read -r _ mac name; do info=$(bluetoothctl info \"$mac\"); [[ \"$info\" == *\"Paired: yes\"* ]] && paired='true' || paired='false'; [[ \"$info\" == *\"Connected: yes\"* ]] && conn='true' || conn='false'; echo \"$mac|$name|$paired|$conn\"; done"
+            "bluetoothctl devices | grep '^Device ' | while read -r _ mac name; do info=$(bluetoothctl info \"$mac\"); [[ \"$info\" == *\"Paired: yes\"* ]] && paired='true' || paired='false'; [[ \"$info\" == *\"Connected: yes\"* ]] && conn='true' || conn='false'; echo \"$mac|$name|$paired|$conn\"; done"
         ]
         running: false
 
@@ -112,7 +110,6 @@ Item {
                     for (let j = 0; j < deviceModel.count; j++) {
                         if (deviceModel.get(j).mac === mac) {
                             found = true;
-                            // Update statuses live so colors/bolding change instantly
                             deviceModel.setProperty(j, "connected", isConnected);
                             deviceModel.setProperty(j, "paired", isPaired);
                             
@@ -131,7 +128,6 @@ Item {
                             paired: isPaired
                         };
 
-                        // Pin paired/connected devices to the top, push unknown scan results to the bottom
                         if (isPaired || isConnected) {
                             deviceModel.insert(0, deviceData);
                         } else {
@@ -140,17 +136,6 @@ Item {
                     }
                 }
                 deviceFetcher.running = false;
-            }
-        }
-    }
-
-    Process {
-        id: connectionVerifier
-        command: ["/usr/bin/bluetoothctl", "info"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                connectionVerifier.running = false;
             }
         }
     }
@@ -179,16 +164,13 @@ Item {
         onTriggered: {
             if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
                 stateFetcher.running = true;
-                // Fetch the live device list continuously while the popup is active
-                deviceFetcher.running = true; 
+                deviceFetcher.running = true;
             }
         }
     }
 
     function triggerScan() {
         deviceModel.clear();
-        console.log("MODEL CLEARED");
-
         bluetoothSession.write("agent on\n");
         bluetoothSession.write("default-agent\n");
         bluetoothSession.write("scan on\n");
@@ -212,14 +194,12 @@ Item {
     }
 
     function pairDevice(mac) {
-        // Automatically trust the device so BlueZ silently authorizes A2DP/HFP profiles
         bluetoothSession.write("trust " + mac + "\n");
         bluetoothSession.write("pair " + mac + "\n");
     }
 
     function removeDevice(mac) {
         bluetoothSession.write("remove " + mac + "\n");
-        // Optimistically remove from the UI so it vanishes instantly
         for (let i = 0; i < deviceModel.count; i++) {
             if (deviceModel.get(i).mac === mac) {
                 deviceModel.remove(i);
@@ -230,9 +210,7 @@ Item {
 
     onActiveChanged: {
         if (active) {
-
             deviceModel.clear();
-
             stateFetcher.running = true;
             deviceFetcher.running = true;
         }
@@ -243,9 +221,10 @@ Item {
         id: animatedGroup
         anchors.fill: parent
 
+        // The origin point dictates which corner the window "grows" from
         transformOrigin: {
             if (rootShell.barPosition === "left") return Item.BottomLeft
-            if (rootShell.barPosition === "right") return Item.TopRight
+            if (rootShell.barPosition === "right") return Item.BottomRight
             if (rootShell.barPosition === "top") return Item.TopLeft
             if (rootShell.barPosition === "bottom") return Item.BottomLeft
             return Item.Center
@@ -257,16 +236,11 @@ Item {
                 when: !bluetoothRoot.active
                 PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
                 PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
-                PropertyChanges { 
-                    target: animatedGroup
-                    x: (rootShell.barPosition === "right") ? 40 : -40
-                    y: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 40 : -40
-                }
             },
             State {
                 name: "shown"
                 when: bluetoothRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
+                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0 }
                 PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
             }
         ]
@@ -275,7 +249,8 @@ Item {
             Transition {
                 from: "hidden"; to: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                    // Only animate scale so the window expands from its origin without shifting off its anchors
+                    NumberAnimation { target: animatedGroup; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
                     SequentialAnimation {
                         PauseAnimation { duration: 200 } 
@@ -287,7 +262,7 @@ Item {
                 from: "shown"; to: "hidden"
                 ParallelAnimation {
                     NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                    NumberAnimation { target: animatedGroup; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
                     NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
                 }
             }
@@ -300,10 +275,12 @@ Item {
             z: 2
             border.width: 0
             border.color: "transparent"
-            topLeftRadius: 0
-            topRightRadius: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? bluetoothRoot.radiusValue : 0
-            bottomLeftRadius: rootShell.barPosition === "right" ? bluetoothRoot.radiusValue : 0
-            bottomRightRadius: (rootShell.barPosition === "top") ? bluetoothRoot.radiusValue : 0
+            
+            // Reverses flat edges based on bar location
+            topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
+            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : bluetoothRoot.radiusValue
+            topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
+            bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : bluetoothRoot.radiusValue
         }
 
         Item {
@@ -311,11 +288,14 @@ Item {
             visible: bluetoothRoot.width > 30
             z: 2 
 
+            // --- LEFT BAR WINGS ---
             Item {
                 anchors.fill: parent
-                visible: rootShell.barPosition === "left" || rootShell.barPosition === "bottom"
+                visible: rootShell.barPosition === "left"
+                
                 Shape {
-                    x: 0; y: -bluetoothRoot.wingSize; width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    x: 0; y: -bluetoothRoot.wingSize
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: bluetoothRoot.wingSize
@@ -324,14 +304,45 @@ Item {
                         PathLine { x: 0; y: bluetoothRoot.wingSize }
                     }
                 }
+                
                 Shape {
-                    rotation: -90; transformOrigin: Item.TopLeft
-                    x: parent.width; y: parent.height; width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    x: 0; y: parent.height
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: bluetoothRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: bluetoothRoot.wingSize; controlX: 0; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
+                    }
+                }
+            }
+
+            // --- RIGHT BAR WINGS ---
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "right"
+
+                Shape {
+                    x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: bluetoothRoot.wingSize
+                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
+                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
+                        PathLine { x: 0; y: bluetoothRoot.wingSize }
+                    }
+                }
+                
+                Shape {
+                    x: parent.width - bluetoothRoot.wingSize; y: parent.height
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
+                        PathQuad { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize; controlX: bluetoothRoot.wingSize; controlY: 0 }
                         PathLine { x: 0; y: 0 }
                     }
                 }
@@ -396,7 +407,6 @@ Item {
 
                     header: Item {
                         width: ListView.view ? ListView.view.width : 0
-                        // Forces height to 0 when powered on to kill the ghost gap
                         height: !bluetoothRoot.isPowered ? 24 : 0
                         visible: !bluetoothRoot.isPowered
                         
@@ -417,8 +427,8 @@ Item {
                             radius: 8
                             
                             color: model.connected 
-                                ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
-                                : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
+                                   ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
+                                   : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
 
                             border.width: model.connected ? 1 : 0
                             border.color: rootShell.colorAccent
@@ -454,7 +464,6 @@ Item {
                                         }
                                     }
                                     
-                                    // Click action removed; now exclusively handles visual hover feedback
                                     MouseArea {
                                         id: itemMouse
                                         anchors.fill: parent
@@ -462,14 +471,12 @@ Item {
                                     }
                                 }
                                 
-                                // Unified Action Button
                                 Rectangle {
                                     width: 32; height: 32; radius: 6
                                     color: actionMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
                                     
                                     Text { 
                                         anchors.centerIn: parent
-                                        // Icon logic: Pair -> link, Connect -> cable, Disconnect -> link_off
                                         text: !model.paired ? "link" : (model.connected ? "link_off" : "cable")
                                         font.family: "Material Symbols Outlined"
                                         font.pixelSize: 18
@@ -482,7 +489,6 @@ Item {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            // Route to correct function based on pairing state
                                             if (!model.paired) {
                                                 bluetoothRoot.pairDevice(model.mac);
                                             } else {
@@ -492,9 +498,7 @@ Item {
                                     }
                                 }
 
-                                // Forget Button
                                 Rectangle {
-                                    // Only render this button if the device is actually remembered
                                     visible: model.paired
                                     width: 32; height: 32; radius: 6
                                     color: forgetMouse.containsMouse ? Qt.rgba(255,90,90,0.1) : "transparent"
