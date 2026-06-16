@@ -7,10 +7,9 @@ import ".."
 PanelWindow {
     id: verticalBar
     
-    // Injected dependencies
     property var rootShell: null
     property var targetScreen: null
-    property string edge: "left" // "left" or "right"
+    property string edge: "left"
 
     screen: targetScreen
     WlrLayershell.namespace: "quickshell-bar"
@@ -19,7 +18,6 @@ PanelWindow {
     exclusiveZone: 36 * rootShell.verticalBarProgress
     color: "transparent"
     
-    // Dynamic anchors based on edge string
     anchors.left: edge === "left"
     anchors.right: edge === "right"
     anchors.top: true
@@ -32,11 +30,12 @@ PanelWindow {
     
     Item { 
         anchors.fill: parent
+
+        // Top Main Controls Stack
         Column {
             anchors.top: parent.top
             anchors.topMargin: 12
             anchors.horizontalCenter: parent.horizontalCenter
-            // Offset logic dynamically flips based on edge
             anchors.horizontalCenterOffset: edge === "left" ? 1 : -1
             spacing: 12
             width: parent.width
@@ -72,29 +71,16 @@ PanelWindow {
                 anchors.horizontalCenter: parent.horizontalCenter
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                
-                onClicked: {
-                    if (rootShell.launcherRef) {
-                        rootShell.launcherRef.active = !rootShell.launcherRef.active;
-                    }
-                }
+                onClicked: { if (rootShell.launcherRef) rootShell.launcherRef.active = !rootShell.launcherRef.active; }
 
                 Rectangle {
                     anchors.fill: parent; radius: 6
                     color: rootShell.colorAccent
                     opacity: launcherMouse.containsMouse || rootShell.launcherRef.launcherActive ? 0.3 : 0.0
                 }
-                
                 Text {
-                    text: "apps" // Or your designated icon string
-                    font.family: "Material Symbols Outlined"
-                    font.pixelSize: 22
-                    anchors.centerIn: parent 
-                    
-                    // Dynamic color matching the Settings active state logic
-                    color: (rootShell.launcherRef && rootShell.launcherRef.active)
-                        ? rootShell.colorAccent 
-                        : rootShell.colorText
+                    text: "apps"; font.family: "Material Symbols Outlined"; font.pixelSize: 22; anchors.centerIn: parent 
+                    color: (rootShell.launcherRef && rootShell.launcherRef.active) ? rootShell.colorAccent : rootShell.colorText
                 }
             }
             
@@ -119,8 +105,7 @@ PanelWindow {
                 }
                 Column {
                     id: clockCol
-                    anchors.centerIn: parent; spacing: 2
-                    width: parent.width
+                    anchors.centerIn: parent; spacing: 2; width: parent.width
                     Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     Text { 
                         text: { 
@@ -135,9 +120,31 @@ PanelWindow {
             }
             
             Workspaces { 
-                width: 28; anchors.horizontalCenter: parent.horizontalCenter; 
-                shellTarget: rootShell; parentBarWindow: verticalBar; 
+                // 🎯 FIX: Expand from 28 to 32 to accommodate the full pixel footprint of the nodes
+                width: 32 
+                anchors.horizontalCenter: parent.horizontalCenter; 
+                
+                shellTarget: rootShell; 
+                parentBarWindow: verticalBar; 
                 previewWindowInstance: rootShell.workspaceRef 
+            }
+        }
+
+        // Bottom Controls Container (SysTray + Navigation Modules)
+        Column {
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 12
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.horizontalCenterOffset: edge === "left" ? 1 : -1
+            spacing: 10
+            width: parent.width
+
+            // Mount the new unified hardware modules wrapper card
+            SysTray {
+                width: 32
+                anchors.horizontalCenter: parent.horizontalCenter
+                shellTarget: rootShell
+                parentBarWindow: verticalBar
             }
         }
     }
