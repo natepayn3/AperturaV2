@@ -33,8 +33,8 @@ Scope {
         WlrLayershell.namespace: "quickshell-settings"
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
         
-        // Dynamically drops keyboard exclusivity when Zenity opens to allow input processing
-        WlrLayershell.keyboardFocus: (vpnLayoutSection && vpnLayoutSection.isPickerOpen) 
+        // Dynamically drops keyboard exclusivity when file selector opens to allow native typing inputs
+        WlrLayershell.keyboardFocus: (vpnLayoutSection && vpnLayoutSection.showFileBrowser) 
             ? WlrLayershell.None 
             : WlrLayershell.OnDemand
 
@@ -142,7 +142,7 @@ Scope {
             anchors.fill: parent
             
             onClicked: {
-                if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.isPickerOpen) {
+                if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.showFileBrowser) {
                     return;
                 }
                 settingsModuleRoot.windowVisible = false;
@@ -184,7 +184,6 @@ Scope {
                         SequentialAnimation {
                             ParallelAnimation {
                                 NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                                // FIX: Restored Easing enum identifier lookup mapping safely here
                                 NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
                             }
                             ScriptAction {
@@ -207,7 +206,7 @@ Scope {
                     
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Escape) {
-                            if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.isPickerOpen) {
+                            if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.showFileBrowser) {
                                 event.accepted = true;
                                 return;
                             }
@@ -216,64 +215,89 @@ Scope {
                         }
                     }
 
+                    // Main Framework Window Plate
                     Rectangle {
                         anchors.fill: parent
+                        // Matugen Hook: Dynamic translucent container color matching your blurred windows
                         color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
-                        radius: 20
-                        border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
-                        border.width: 3
+                        radius: 16
+                        // Matugen Hook: Uses standard thin split border instead of thick styling strokes
+                        border.color: shellTarget ? shellTarget.colorBorder : "#313244" 
+                        border.width: 1
                         antialiasing: true
 
                         Row {
                             anchors.fill: parent
 
+                            // --- Left Navigation Sidebar Panel ---
                             Rectangle {
                                 width: 220
                                 height: parent.height
                                 color: "transparent"
 
+                                // Minimal split dividing segment
                                 Rectangle {
                                     anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
-                                    width: 2
-                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    width: 1
+                                    color: shellTarget ? shellTarget.colorBorder : "#313244"
                                 }
 
                                 Column {
                                     anchors.fill: parent; anchors.margins: 20
-                                    spacing: 12
+                                    spacing: 8
 
                                     Text {
                                         text: "Preferences"
                                         font.family: settingsWindow.selectedFont
-                                        font.pixelSize: 14
+                                        font.pixelSize: 13
                                         font.bold: true
-                                        font.letterSpacing: 1
+                                        font.letterSpacing: 0.5
                                         color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
                                         height: 30
-                                        x: 20
+                                        x: 12
+                                        verticalAlignment: Text.AlignVCenter
                                     }
 
+                                    // Component Prototype: Sidebar Category Button
                                     component CategoryButton : Button {
+                                        id: catBtnItem
                                         property string categoryName: ""
                                         flat: true
                                         width: parent.width
-                                        height: 44
+                                        height: 40
+                                        
+                                        // Matugen Hook: Unified translucent card hover border highlights 
                                         background: Rectangle { 
-                                            color: settingsWindow.activeCategory === categoryName ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
-                                            radius: 10 
+                                            color: settingsWindow.activeCategory === categoryName 
+                                                ? (shellTarget ? shellTarget.colorBorder : "#313244") 
+                                                : (catBtnItem.hovered ? Qt.rgba(255/255, 255/255, 255/255, 0.04) : "transparent")
+                                            
+                                            border.color: catBtnItem.hovered 
+                                                ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
+                                                : "transparent"
+                                            border.width: 1
+                                            radius: 8 
+                                            
+                                            Behavior on color { ColorAnimation { duration: 110 } }
+                                            Behavior on border.color { ColorAnimation { duration: 110 } }
                                         }
+                                        
                                         contentItem: Text { 
                                             text: parent.categoryName
-                                            color: settingsWindow.activeCategory === categoryName ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : (shellTarget ? shellTarget.colorText : "#cdd6f4")
+                                            color: settingsWindow.activeCategory === categoryName 
+                                                ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
+                                                : (shellTarget ? shellTarget.colorText : "#cdd6f4")
                                             font.family: settingsWindow.selectedFont
-                                            font.pixelSize: 16
+                                            font.pixelSize: 14
                                             font.bold: settingsWindow.activeCategory === categoryName
-                                            anchors.left: parent.left; anchors.leftMargin: 20
+                                            anchors.left: parent.left; anchors.leftMargin: 16
                                             verticalAlignment: Text.AlignVCenter 
                                         }
+                                        
                                         onClicked: settingsWindow.activeCategory = categoryName
                                         HoverHandler { cursorShape: Qt.PointingHandCursor }
                                     }
+                                    
                                     CategoryButton { categoryName: "Layout" }
                                     CategoryButton { categoryName: "Font" }
                                     CategoryButton { categoryName: "VPN" }
@@ -282,6 +306,7 @@ Scope {
                                 }
                             }
 
+                            // --- Right Content Area ---
                             Item {
                                 width: parent.width - 220
                                 height: parent.height
@@ -294,7 +319,7 @@ Scope {
                                     Text {
                                         text: settingsWindow.activeCategory
                                         font.family: settingsWindow.selectedFont
-                                        font.pixelSize: 26; font.bold: true
+                                        font.pixelSize: 24; font.bold: true
                                         color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                                         anchors.left: parent.left; anchors.leftMargin: 30
                                         anchors.verticalCenter: parent.verticalCenter
@@ -304,22 +329,28 @@ Scope {
                                         id: closeBtn; flat: true
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.topMargin: 20
-                                        anchors.rightMargin: 20
-                                        implicitWidth: 40
-                                        implicitHeight: 40
+                                        anchors.topMargin: 18
+                                        anchors.rightMargin: 25
+                                        implicitWidth: 36
+                                        implicitHeight: 36
                                         
+                                        // Matugen Hook: Unified close button hover outline border
                                         background: Rectangle { 
                                             anchors.fill: parent
                                             color: closeBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
-                                            radius: 10 
+                                            border.color: closeBtn.hovered ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
+                                            border.width: 1
+                                            radius: 8 
+                                            
+                                            Behavior on color { ColorAnimation { duration: 110 } }
+                                            Behavior on border.color { ColorAnimation { duration: 110 } }
                                         }
                                         
                                         Text { 
                                             text: "close" 
-                                            font.family: "Material Icons" 
-                                            font.pixelSize: 22
-                                            font.bold: false
+                                            // Unified font implementation matching your Material icons setup
+                                            font.family: "Material Symbols Outlined" 
+                                            font.pixelSize: 20
                                             color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
                                             anchors.centerIn: parent
                                         }
@@ -361,7 +392,7 @@ Scope {
                                         sourceComponent: Component {
                                             Text { 
                                                 text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
-                                                font.family: settingsWindow.selectedFont; font.pixelSize: 20
+                                                font.family: settingsWindow.selectedFont; font.pixelSize: 18
                                                 color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
                                                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                             }
