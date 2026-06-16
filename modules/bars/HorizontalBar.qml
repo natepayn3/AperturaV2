@@ -32,11 +32,12 @@ PanelWindow {
     
     Item { 
         anchors.fill: parent
+
+        // --- Left-aligned Core Controls Stack ---
         Row {
             anchors.left: parent.left
             anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            // Offset logic
             anchors.verticalCenterOffset: edge === "top" ? 1 : -1
             spacing: 12
             height: parent.height
@@ -86,15 +87,11 @@ PanelWindow {
                 }
                 
                 Text {
-                    text: "apps" // Or your designated icon string
+                    text: "apps"
                     font.family: "Material Symbols Outlined"
                     font.pixelSize: 22
                     anchors.centerIn: parent 
-                    
-                    // Dynamic color matching the Settings active state logic
-                    color: (rootShell.launcherRef && rootShell.launcherRef.active)
-                        ? rootShell.colorAccent 
-                        : rootShell.colorText
+                    color: (rootShell.launcherRef && rootShell.launcherRef.active) ? rootShell.colorAccent : rootShell.colorText
                 }
             }
             
@@ -140,6 +137,22 @@ PanelWindow {
             Workspaces { 
                 anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; 
                 parentBarWindow: horizontalBar; previewWindowInstance: rootShell.workspaceRef 
+            }
+        }
+
+        // --- Right-aligned System Tray Drawer Container ---
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: edge === "top" ? 1 : -1
+            height: parent.height
+
+            SysTray {
+                height: 32
+                anchors.verticalCenter: parent.verticalCenter
+                shellTarget: rootShell
+                parentBarWindow: horizontalBar
             }
         }
     }
