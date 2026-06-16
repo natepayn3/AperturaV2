@@ -421,15 +421,19 @@ Scope {
 
         screen: Quickshell.screens[0]
         
-        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "quickshell-bluetooth-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
+        
+        // Explicit ID prefix ensures the engine always finds the property
+        WlrLayershell.keyboardFocus: globalBluetoothPreview.bluetoothActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        // Explicit ID prefix for the Region item binding
+        mask: Region { item: globalBluetoothPreview.bluetoothActive ? clickArea : null }
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: bluetoothActive || rootShell.bluetoothProgress > 0.0
         color: "transparent"
-        mask: Region { item: innerBluetoothCard }
 
         property int hoverOriginX: 0
         property int hoverOriginY: 0
@@ -437,32 +441,36 @@ Scope {
         function showBluetooth() { 
             bluetoothDismissTimer.stop(); 
             bluetoothActive = true; 
-            globalBluetoothPreview.requestActivate(); 
-            showBluetoothAnim.restart(); 
+            showBluetoothAnim.restart();
+            innerBluetoothCard.forceActiveFocus();
         }
-        function requestDismiss() { 
-            if (!innerBluetoothCard.isHovered) bluetoothDismissTimer.restart(); 
-        }
+        
+        function requestDismiss() { }
+        
         function forceDismiss() {
-            bluetoothDismissTimer.stop();
             bluetoothActive = false;
             hideBluetoothAnim.restart();
         }
 
-        MouseArea {
-            anchors.fill: parent
-            z: 1
-            
-            // 🎯 FIX: Force active focus on this Item layer to intercept inputs cleanly
-            focus: globalBluetoothPreview.bluetoothActive
-            
-            onClicked: globalBluetoothPreview.forceDismiss()
+        Shortcut {
+            sequence: "Escape"
+            enabled: globalBluetoothPreview.bluetoothActive
+            onActivated: globalBluetoothPreview.forceDismiss()
+        }
 
-            // 🎯 FIX: Relocated here where Keys are natively supported by the engine
-            Keys.onPressed: (event) => {
-                if (event.key === Qt.Key_Escape && globalBluetoothPreview.bluetoothActive) {
-                    globalBluetoothPreview.forceDismiss();
-                    event.accepted = true;
+        Item {
+            id: clickArea
+            anchors.fill: parent
+            
+            TapHandler {
+                enabled: globalBluetoothPreview.bluetoothActive
+                onTapped: function(eventPoint, button) {
+                    let p = eventPoint.position;
+                    let c = innerBluetoothCard;
+                    
+                    if (p.x < c.x || p.x > c.x + c.width || p.y < c.y || p.y > c.y + c.height) {
+                        globalBluetoothPreview.forceDismiss();
+                    }
                 }
             }
         }
@@ -474,11 +482,6 @@ Scope {
             
             hoverOriginX: globalBluetoothPreview.hoverOriginX
             hoverOriginY: globalBluetoothPreview.hoverOriginY
-            
-            onIsHoveredChanged: {
-                if (isHovered) bluetoothDismissTimer.stop();
-                else globalBluetoothPreview.requestDismiss();
-            }
         }
     }
 
