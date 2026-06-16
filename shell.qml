@@ -91,6 +91,12 @@ Scope {
         orientationAnim.restart();
     }
 
+    function closeAllPopups() {
+        if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
+        if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+        if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
+    }
+
     ParallelAnimation {
         id: showPreviewAnim
         NumberAnimation { target: rootShell; property: "previewProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
@@ -383,33 +389,57 @@ Scope {
         id: globalCalendarPreview
         property bool calendarActive: false
         
-        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.None
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: calendarActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: calendarActive || rootShell.calendarProgress > 0.0
         color: "transparent"
-        mask: Region { item: innerCalendarCard }
 
-        function showCalendar() { calendarDismissTimer.stop(); calendarActive = true; showCalendarAnim.restart(); }
-        function requestDismiss() { if (!innerCalendarCard.isHovered) calendarDismissTimer.restart(); }
+        MouseArea {
+            anchors.fill: parent
+            enabled: globalCalendarPreview.calendarActive
+            
+            onPressed: (mouse) => {
+                // Map the click to the coordinate space of the popup card
+                let localPoint = innerCalendarCard.mapFromItem(null, mouse.x, mouse.y);
+                
+                // If the click is INSIDE the card, we do NOT dismiss. 
+                // We also set accepted = false so the event bubbles to the card's internal MouseAreas.
+                if (innerCalendarCard.contains(localPoint)) {
+                    mouse.accepted = false; 
+                } else {
+                    // Click is in the "void", so dismiss.
+                    globalCalendarPreview.forceDismiss();
+                    mouse.accepted = true;
+                }
+            }
+        }
 
+        function showCalendar() { calendarActive = true; showCalendarAnim.restart(); }
+        function forceDismiss() { calendarActive = false; hideCalendarAnim.restart(); }
+
+        Shortcut {
+            sequence: "Escape"
+            enabled: globalCalendarPreview.calendarActive
+            onActivated: globalCalendarPreview.forceDismiss()
+        }
+
+        // 2. The actual content
         CalendarPopup {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
-            onIsHoveredChanged: {
-                if (isHovered) { calendarDismissTimer.stop(); globalCalendarPreview.showCalendar(); }
-                else globalCalendarPreview.requestDismiss();
-            }
+            z: 1 // Ensure it sits above the shield
+
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
-                return rootShell.barPosition === "left" ? 44 : 8; 
+                return rootShell.barPosition === "left" ? 46 : 10; 
             }
             hoverOriginY: {
                 if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
-                return rootShell.barPosition === "top" ? 44 : 8; 
+                return rootShell.barPosition === "top" ? 46 : 10; 
             }
         }
     }
