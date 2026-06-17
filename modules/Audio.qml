@@ -30,13 +30,23 @@ Item {
     width: Math.round(maxCardWidth)
     height: implicitHeight
 
-    x: rootShell.barPosition === "right" 
-       ? parent.width - width - 46
-       : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
-       
-    y: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left" || rootShell.barPosition === "right") 
-       ? hoverOriginY - height + 94
-       : hoverOriginY
+    x: {
+        if (rootShell.barPosition === "top") return Screen.width - width - 10;
+        if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
+        if (rootShell.barPosition === "right") return Screen.width - width - 46;
+        if (rootShell.barPosition === "left") return 46; // Fixed offset from left
+        return hoverOriginX; // Keep X centered on icon or override as needed
+    }
+
+    y: {
+        switch (rootShell.barPosition) {
+            case "bottom": return Screen.height - height - 46; // 46px from bottom
+            case "top":    return 46;                             // 46px from top
+            case "left":   return Screen.height - height - 10        // Fixed start of bar
+            case "right":  return Screen.height - height - 10;
+            default:       return hoverOriginY;
+        }
+    }
 
     property real currentVolume: 0.0
     property bool isMuted: false
@@ -216,8 +226,8 @@ Item {
         transformOrigin: {
             if (rootShell.barPosition === "left") return Item.BottomLeft
             if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopLeft
-            if (rootShell.barPosition === "bottom") return Item.BottomLeft
+            if (rootShell.barPosition === "top") return Item.TopRight
+            if (rootShell.barPosition === "bottom") return Item.BottomRight
             return Item.Center
         }
 
@@ -239,11 +249,36 @@ Item {
             anchors.fill: parent
             color: rootShell.colorBackground
             z: 2
-            
-            topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : audioRoot.radiusValue
-            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom" || rootShell.barPosition === "right") ? 0 : audioRoot.radiusValue
-            topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : audioRoot.radiusValue
-            bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? 0 : audioRoot.radiusValue
+            border.width: 0
+
+            // Define the radii using a helper function
+            topLeftRadius:     getCornerRadius("topLeft")
+            topRightRadius:    getCornerRadius("topRight")
+            bottomLeftRadius:  getCornerRadius("bottomLeft")
+            bottomRightRadius: getCornerRadius("bottomRight")
+
+            function getCornerRadius(corner) {
+                let pos = rootShell.barPosition;
+                let rad = audioRoot.radiusValue;
+
+                if (pos === "top") {
+                    return (corner === "bottomLeft") ? rad : 0;
+                }
+                if (pos === "bottom") {
+                    return (corner === "topLeft") ? rad : 0;
+                }
+                if (pos === "left") {
+                    // Only right side rounded
+                    return (corner === "topRight") ? rad : 0;
+                }
+                if (pos === "right") {
+                    // Only left side rounded
+                    return (corner === "topLeft") ? rad : 0;
+                }
+                
+                // Default fallback
+                return rad;
+            }
         }
 
         Item {
@@ -308,6 +343,67 @@ Item {
                         startX: audioRoot.wingSize; startY: 0
                         PathLine { x: 0; y: 0 }
                         PathQuad { x: audioRoot.wingSize; y: audioRoot.wingSize; controlX: audioRoot.wingSize; controlY: 0 }
+                        PathLine { x: audioRoot.wingSize; y: 0 }
+                    }
+                }
+            }
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "top"
+
+                Shape {
+                    x: -audioRoot.wingSize; y: 0
+                    width: audioRoot.wingSize; height: audioRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: audioRoot.wingSize; startY: 0
+                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: audioRoot.wingSize; controlY: 0 }
+                        PathLine { x: audioRoot.wingSize; y: 0 }
+                    }
+                }
+                
+                Shape {
+                    x: parent.width - audioRoot.wingSize; y: parent.height
+                    width: audioRoot.wingSize; height: audioRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: audioRoot.wingSize; startY: 0
+                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: audioRoot.wingSize; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
+                    }
+                }
+            }
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "bottom" // Flip visibility check to right side
+                
+                // Top wing (mirrored horizontally)
+                Shape {
+                    // Position at top-right corner, offset upwards by wingSize
+                    x: parent.width - audioRoot.wingSize; y: -audioRoot.wingSize
+                    width: audioRoot.wingSize; height: audioRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: audioRoot.wingSize; startY: audioRoot.wingSize
+                        PathLine { x: 0; y: audioRoot.wingSize }
+                        PathQuad { x: audioRoot.wingSize; y: 0; controlX: audioRoot.wingSize; controlY: audioRoot.wingSize }
+                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
+                    }
+                }
+                
+                // Bottom wing (mirrored horizontally)
+                Shape {
+                    rotation: 180 // Rotates the shape to form the inverted curve
+                    transformOrigin: Item.TopLeft
+                    x: parent.width - maxCardWidth; y: parent.height // Anchored to bottom-right edge
+                    width: audioRoot.wingSize; height: audioRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: audioRoot.wingSize; y: 0 }
+                        PathQuad { x: 0; y: audioRoot.wingSize; controlX: 0; controlY: 0 }
                         PathLine { x: 0; y: 0 }
                     }
                 }
