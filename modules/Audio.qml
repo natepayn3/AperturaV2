@@ -109,7 +109,30 @@ Item {
         id: setVolumeProc
         running: false
         
+        // Use a variable to track if a command is pending
+        property real pendingVolume: 0.0
+
         function setVol(volVal) {
+            pendingVolume = volVal;
+            
+            // 1. If currently muted, we must toggle it first
+            if (audioRoot.isMuted) {
+                // Execute just the mute toggle
+                Quickshell.exec(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"]);
+                
+                // Update local state immediately
+                audioRoot.isMuted = false;
+                
+                // Wait a tiny bit for the pipewire server to update the node's mute flag
+                Qt.callLater(() => {
+                    executeVolumeSet(pendingVolume);
+                });
+            } else {
+                executeVolumeSet(volVal);
+            }
+        }
+
+        function executeVolumeSet(volVal) {
             command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", volVal.toFixed(2)];
             running = false; 
             running = true;
@@ -164,11 +187,24 @@ Item {
     Process { 
         id: setDefaultSinkProc
         running: false 
+        
         function switchSink(sinkId) {
+            // 1. Optimistic UI Update: Immediately toggle the local model
+            for (let i = 0; i < sinkModel.count; i++) {
+                let item = sinkModel.get(i);
+                item.isDefault = (item.sinkId === sinkId);
+                sinkModel.set(i, item);
+            }
+            
+            // 2. Execute the backend change
             command = ["wpctl", "set-default", sinkId];
             running = true;
-            fetchSinksProc.running = false;
-            fetchSinksProc.running = true;
+            
+            // 3. Trigger a background refresh to stay in sync with the real system
+            Qt.callLater(() => {
+                fetchSinksProc.running = false;
+                fetchSinksProc.running = true;
+            });
         }
     }
 
@@ -340,6 +376,9 @@ Item {
                         
                         onMoved: {
                             audioRoot.currentVolume = value;
+                            // Force the mute state to false locally immediately
+                            if (audioRoot.isMuted) audioRoot.isMuted = false;
+                            
                             setVolumeProc.setVol(value);
                         }
 
