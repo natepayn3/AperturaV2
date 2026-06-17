@@ -236,10 +236,20 @@ Scope {
                         // Matugen Hook: Dynamic translucent container color matching your blurred windows
                         color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
                         radius: 16
-                        // Matugen Hook: Uses standard thin split border instead of thick styling strokes
-                        border.color: shellTarget ? shellTarget.colorBorder : "#313244" 
-                        border.width: 1
+                        border.width: 0 
                         antialiasing: true
+
+                        // Outer 3px Border Wrapper Overlay (Matches text color)
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -3 // Forces the 3px border to sit strictly on the outside
+                            color: "transparent"
+                            radius: 19 // Scaled radius (16 + 3) to preserve clean corner uniformity
+                            border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
+                            border.width: 3
+                            antialiasing: true
+                            z: 10 // Ensures layout edges don't bleed through the outer frame
+                        }
 
                         Row {
                             anchors.fill: parent
@@ -250,11 +260,13 @@ Scope {
                                 height: parent.height
                                 color: "transparent"
 
-                                // Minimal split dividing segment
+                                // Updated 3px minimal split dividing segment (Matches text color)
                                 Rectangle {
-                                    anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
-                                    width: 1
-                                    color: shellTarget ? shellTarget.colorBorder : "#313244"
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: 3 
+                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                                 }
 
                                 Column {
@@ -323,7 +335,7 @@ Scope {
 
                             // --- Right Content Area ---
                             Item {
-                                width: parent.width - 220
+                                width: parent.width - 223 
                                 height: parent.height
 
                                 Item {
@@ -363,7 +375,6 @@ Scope {
                                         
                                         Text { 
                                             text: "close" 
-                                            // Unified font implementation matching your Material icons setup
                                             font.family: "Material Symbols Outlined" 
                                             font.pixelSize: 20
                                             color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
