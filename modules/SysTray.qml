@@ -43,14 +43,11 @@ Item {
         clip: true
         z: 1
 
-        Grid {
+        Flow {
             id: trayLayout
             anchors.centerIn: parent
-            
-            // Automatically creates a 1D line based on active items
-            columns: isVertical ? 1 : visibleChildren.length
-            rows: isVertical ? visibleChildren.length : 1
             spacing: 8
+            flow: sysTrayContainer.isVertical ? Flow.TopToBottom : Flow.LeftToRight
 
             // --- Drawer Toggle Button Module ---
             Rectangle {
@@ -87,6 +84,7 @@ Item {
                 // Keep the drawer locked open when either toggled or when the Bluetooth window is active on screen
                 property bool shouldBeVisible: sysTrayContainer.drawerOpen || (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef && sysTrayContainer.shellTarget.bluetoothRef.bluetoothActive)
                 
+                // Fix: Bind directly to implicit metrics without anchors overriding the boundaries
                 width: sysTrayContainer.isVertical ? 24 : (shouldBeVisible ? inlineHardwareLayout.implicitWidth : 0)
                 height: sysTrayContainer.isVertical ? (shouldBeVisible ? inlineHardwareLayout.implicitHeight : 0) : 24
                 visible: opacity > 0.0
@@ -94,13 +92,11 @@ Item {
                 
                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
-                Grid {
+                Flow {
                     id: inlineHardwareLayout
-                    
-                    // Add as many modules as you want; this will scale perfectly
-                    columns: sysTrayContainer.isVertical ? 1 : visibleChildren.length
-                    rows: sysTrayContainer.isVertical ? visibleChildren.length : 1
+                    // Fix: Removed anchors.fill so implicit dimensions can propagate up correctly
                     spacing: 8
+                    flow: sysTrayContainer.isVertical ? Flow.TopToBottom : Flow.LeftToRight
 
                     // Bluetooth Status Node
                     Rectangle {
@@ -129,13 +125,9 @@ Item {
                                     if (popupWindow.bluetoothActive) {
                                         popupWindow.forceDismiss();
                                     } else {
-                                        // Capture our absolute icon screen-grid coordinate baseline matrix
                                         let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
-                                        
-                                        // Route parameter mappings through the shared cardRef element model safely
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
-                                        
                                         popupWindow.showBluetooth();
                                     }
                                 }
@@ -151,7 +143,6 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            // Toggles the icon dynamically when the popup is open
                             text: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef && sysTrayContainer.shellTarget.audioRef.audioActive) ? "volume_up" : "volume_down"
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 16
@@ -171,13 +162,9 @@ Item {
                                     if (popupWindow.audioActive) {
                                         popupWindow.forceDismiss();
                                     } else {
-                                        // Capture our absolute icon screen-grid coordinate baseline
                                         let globalPos = audioIconWrapper.mapToItem(null, 0, 0);
-                                        
-                                        // Route parameter mappings to the audio shell component
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
-                                        
                                         popupWindow.showAudio();
                                     }
                                 }
