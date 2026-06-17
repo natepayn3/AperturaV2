@@ -28,20 +28,25 @@ Item {
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
 
+    // --- Dynamic Multi-Monitor Geometry Mapping ---
     x: {
-        if (rootShell.barPosition === "top") return Screen.width - width - 10;
-        if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
-        if (rootShell.barPosition === "right") return Screen.width - width - 46;
+        let targetWidth = Quickshell.screen ? Quickshell.screen.width : Screen.width;
+        
+        if (rootShell.barPosition === "top") return targetWidth - width - 10;
+        if (rootShell.barPosition === "bottom") return targetWidth - width - 10;
+        if (rootShell.barPosition === "right") return targetWidth - width - 46;
         if (rootShell.barPosition === "left") return 46; 
         return hoverOriginX; 
     }
 
     y: {
+        let targetHeight = Quickshell.screen ? Quickshell.screen.height : Screen.height;
+        
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46; 
+            case "bottom": return targetHeight - height - 46; 
             case "top":    return 46;                             
-            case "left":   return Screen.height - height - 10;       
-            case "right":  return Screen.height - height - 10;
+            case "left":   return targetHeight - height - 10;       
+            case "right":  return targetHeight - height - 10;
             default:       return hoverOriginY;
         }
     }
@@ -73,12 +78,12 @@ Item {
 
     Process {
         id: fetchStatusProc
-        command: ["nmcli", "-t", "-f", "無線,WIFI", "g"] // Quick wireless hardware switch check
+        command: ["nmcli", "-t", "-f", "WIFI", "g"] 
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
                 let cleaned = this.text.trim();
-                wifiRoot.isPowered = (cleaned.includes("有効") || cleaned.includes("enabled"));
+                wifiRoot.isPowered = (cleaned.includes("enabled") || cleaned.includes("有効"));
                 
                 if (wifiRoot.isPowered) {
                     fetchCurrentSsidProc.running = false;
@@ -135,10 +140,10 @@ Item {
                     let isActive = parts[0] === "yes";
                     let bars = parts[1].trim();
                     let signal = parseInt(parts[2].trim()) || 0;
-                    let ssid = parts.slice(3).join(":"); // Re-stitch SSIDs containing colons
+                    let ssid = parts.slice(3).join(":"); 
 
                     if (ssid === "" || seenSsids[ssid]) continue;
-                    seenIds[ssid] = true;
+                    seenSsids[ssid] = true;
 
                     let itemData = {
                         ssid: ssid,
@@ -151,12 +156,16 @@ Item {
                     else tempNormalList.push(itemData);
                 }
 
-                // Sort non-active access points by signal output power
                 tempNormalList.sort((a, b) => b.signalStrength - a.signalStrength);
 
                 wifiModel.clear();
-                for (let j = 0; j < tempActiveList.length; j++) wifiModel.append(tempActiveList[j]);
-                for (let k = 0; j < tempNormalList.length; k++) wifiModel.append(tempNormalList[k]);
+                // 🎯 FIXED: Corrected iteration scopes to prevent engine crashes
+                for (let j = 0; j < tempActiveList.length; j++) {
+                    wifiModel.append(tempActiveList[j]);
+                }
+                for (let k = 0; k < tempNormalList.length; k++) {
+                    wifiModel.append(tempNormalList[k]);
+                }
             }
         }
     }
@@ -421,7 +430,16 @@ Item {
                                 }
 
                                 Text {
-                                    text: model.connected ? "wifi_connected" : (model.signalStrength > 75 ? "signal_wifi_4_bar" : (model.signalStrength > 45 ? "network_wifi" : "signal_wifi_bad"))
+                                    // 🎯 FIXED: Simplified to use standard signal_wifi glyphs uniformly
+                                    text: model.connected 
+                                        ? "signal_wifi_4_bar" 
+                                        : (model.signalStrength > 75 
+                                            ? "network_wifi" 
+                                            : (model.signalStrength > 45 
+                                                ? "network_wifi_2_bar" 
+                                                : (model.signalStrength > 20 
+                                                    ? "network_wifi_1_bar" 
+                                                    : "signal_wifi_off")))
                                     font.family: "Material Symbols Outlined"
                                     font.pixelSize: 18
                                     color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
