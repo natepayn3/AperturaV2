@@ -29,7 +29,8 @@ Scope {
         id: settingsWindow
         visible: false
         
-        WlrLayershell.layer: WlrLayer.Overlay
+        // Wayland Layer Shell adjustments to allow background click/hover propagation
+        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-settings"
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
         WlrLayershell.keyboardFocus: settingsModuleRoot.windowVisible ? WlrLayershell.OnDemand : WlrLayershell.None
@@ -39,10 +40,19 @@ Scope {
         }
         color: "transparent"
 
+        // --- Pass-Through Outer Dismissal Tripwire ---
         MouseArea {
             anchors.fill: parent
-            enabled: settingsModuleRoot.windowVisible
-            onPressed: settingsModuleRoot.windowVisible = false
+            propagateComposedEvents: true
+            
+            onPressed: (mouse) => {
+                // Instantly hide the settings app window
+                settingsModuleRoot.windowVisible = false;
+                
+                // CRITICAL: Reject the event so Wayland passes the click 
+                // straight down to the underlying panel button or window
+                mouse.accepted = false;
+            }
         }
 
         property string currentPosition: "left"
@@ -138,290 +148,267 @@ Scope {
             running: false
         }
 
-        // --- Fullscreen Input Backdrop Catcher ---
-        MouseArea {
-            id: settingsBackdropCatcher
-            anchors.fill: parent
-            
-            onClicked: {
-                if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.showFileBrowser) {
-                    return;
-                }
-                settingsModuleRoot.windowVisible = false;
+        // Centralized container tracking settings layout bounds
+        Item {
+            id: settingsCardFrame
+            width: 800
+            height: 580
+            anchors.centerIn: parent
+            transformOrigin: Item.Center
+
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
             }
 
-            // Centralized container tracking settings layout bounds
-            Item {
-                id: settingsCardFrame
-                width: 800
-                height: 580
-                anchors.centerIn: parent
-                transformOrigin: Item.Center
+            Shortcut {
+                sequence: "Escape"
+                enabled: settingsModuleRoot.windowVisible
+                onActivated: settingsModuleRoot.windowVisible = false
+            }
 
-                MouseArea {
-                    anchors.fill: parent
-                    // This consumes the click so it doesn't hit the background shield
-                    onPressed: (event) => event.accepted = true
-                    onClicked: (event) => event.accepted = true
+            // --- Animation States ---
+            states: [
+                State {
+                    name: "hidden"
+                    when: !settingsModuleRoot.windowVisible
+                    PropertyChanges { target: settingsCardFrame; opacity: 0.0; scale: 0.0 }
+                },
+                State {
+                    name: "shown"
+                    when: settingsModuleRoot.windowVisible
+                    PropertyChanges { target: settingsCardFrame; opacity: 1.0; scale: 1.0 }
                 }
+            ]
 
-                Shortcut {
-                    sequence: "Escape"
-                    enabled: settingsModuleRoot.windowVisible
-                    onActivated: settingsModuleRoot.windowVisible = false
-                }
-
-                // --- Animation States ---
-                states: [
-                    State {
-                        name: "hidden"
-                        when: !settingsModuleRoot.windowVisible
-                        PropertyChanges { target: settingsCardFrame; opacity: 0.0; scale: 0.0 }
-                    },
-                    State {
-                        name: "shown"
-                        when: settingsModuleRoot.windowVisible
-                        PropertyChanges { target: settingsCardFrame; opacity: 1.0; scale: 1.0 }
+            // --- Animation Transitions ---
+            transitions: [
+                Transition {
+                    from: "hidden"; to: "shown"
+                    ParallelAnimation {
+                        NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                        NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
                     }
-                ]
-
-                // --- Animation Transitions ---
-                transitions: [
-                    Transition {
-                        from: "hidden"; to: "shown"
+                },
+                Transition {
+                    from: "shown"; to: "hidden"
+                    SequentialAnimation {
                         ParallelAnimation {
-                            NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                            NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                            NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
                         }
-                    },
-                    Transition {
-                        from: "shown"; to: "hidden"
-                        SequentialAnimation {
-                            ParallelAnimation {
-                                NumberAnimation { target: settingsCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                                NumberAnimation { target: settingsCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                            }
-                            ScriptAction {
-                                script: settingsWindow.visible = false
-                            }
+                        ScriptAction {
+                            script: settingsWindow.visible = false
                         }
                     }
-                ]
+                }
+            ]
 
-                // Floor input blocker sits behind interactive content elements
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: (mouse) => { mouse.accepted = true; }
+            // Focus Scope grabs active window interactions cleanly to evaluate hotkeys
+            FocusScope {
+                anchors.fill: parent
+                Component.onCompleted: forceActiveFocus()
+                
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Escape) {
+                        if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.showFileBrowser) {
+                            event.accepted = true;
+                            return;
+                        }
+                        settingsModuleRoot.windowVisible = false;
+                        event.accepted = true;
+                    }
                 }
 
-                // Focus Scope grabs active window interactions cleanly to evaluate hotkeys
-                FocusScope {
+                // Main Framework Window Plate
+                Rectangle {
                     anchors.fill: parent
-                    Component.onCompleted: forceActiveFocus()
-                    
-                    Keys.onPressed: (event) => {
-                        if (event.key === Qt.Key_Escape) {
-                            if (settingsWindow.activeCategory === "VPN" && vpnLayoutSection.showFileBrowser) {
-                                event.accepted = true;
-                                return;
-                            }
-                            settingsModuleRoot.windowVisible = false;
-                            event.accepted = true;
-                        }
-                    }
+                    color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
+                    radius: 16
+                    border.width: 0 
+                    antialiasing: true
 
-                    // Main Framework Window Plate
+                    // Outer 3px Border Wrapper Overlay (Matches text color)
                     Rectangle {
                         anchors.fill: parent
-                        // Matugen Hook: Dynamic translucent container color matching your blurred windows
-                        color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
-                        radius: 16
-                        border.width: 0 
+                        anchors.margins: -3 
+                        color: "transparent"
+                        radius: 19 
+                        border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
+                        border.width: 3
                         antialiasing: true
+                        z: 10 
+                    }
 
-                        // Outer 3px Border Wrapper Overlay (Matches text color)
+                    Row {
+                        anchors.fill: parent
+
+                        // --- Left Navigation Sidebar Panel ---
                         Rectangle {
-                            anchors.fill: parent
-                            anchors.margins: -3 // Forces the 3px border to sit strictly on the outside
+                            width: 220
+                            height: parent.height
                             color: "transparent"
-                            radius: 19 // Scaled radius (16 + 3) to preserve clean corner uniformity
-                            border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
-                            border.width: 3
-                            antialiasing: true
-                            z: 10 // Ensures layout edges don't bleed through the outer frame
-                        }
 
-                        Row {
-                            anchors.fill: parent
-
-                            // --- Left Navigation Sidebar Panel ---
+                            // Updated 3px minimal split dividing segment (Matches text color)
                             Rectangle {
-                                width: 220
-                                height: parent.height
-                                color: "transparent"
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: 3 
+                                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                            }
 
-                                // Updated 3px minimal split dividing segment (Matches text color)
-                                Rectangle {
-                                    anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
-                                    width: 3 
-                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                            Column {
+                                anchors.fill: parent; anchors.margins: 20
+                                spacing: 8
+
+                                Text {
+                                    text: "Preferences"
+                                    font.family: settingsWindow.selectedFont
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    font.letterSpacing: 0.5
+                                    color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                                    height: 30
+                                    x: 12
+                                    verticalAlignment: Text.AlignVCenter
                                 }
 
-                                Column {
-                                    anchors.fill: parent; anchors.margins: 20
-                                    spacing: 8
-
-                                    Text {
-                                        text: "Preferences"
-                                        font.family: settingsWindow.selectedFont
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        font.letterSpacing: 0.5
-                                        color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
-                                        height: 30
-                                        x: 12
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    // Component Prototype: Sidebar Category Button
-                                    component CategoryButton : Button {
-                                        id: catBtnItem
-                                        property string categoryName: ""
-                                        flat: true
-                                        width: parent.width
-                                        height: 40
+                                // Component Prototype: Sidebar Category Button
+                                component CategoryButton : Button {
+                                    id: catBtnItem
+                                    property string categoryName: ""
+                                    flat: true
+                                    width: parent.width
+                                    height: 40
+                                    
+                                    background: Rectangle { 
+                                        color: settingsWindow.activeCategory === categoryName 
+                                            ? (shellTarget ? shellTarget.colorBorder : "#313244") 
+                                            : (catBtnItem.hovered ? Qt.rgba(255/255, 255/255, 255/255, 0.04) : "transparent")
                                         
-                                        // Matugen Hook: Unified translucent card hover border highlights 
-                                        background: Rectangle { 
-                                            color: settingsWindow.activeCategory === categoryName 
-                                                ? (shellTarget ? shellTarget.colorBorder : "#313244") 
-                                                : (catBtnItem.hovered ? Qt.rgba(255/255, 255/255, 255/255, 0.04) : "transparent")
-                                            
-                                            border.color: catBtnItem.hovered 
-                                                ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                                                : "transparent"
-                                            border.width: 1
-                                            radius: 8 
-                                            
-                                            Behavior on color { ColorAnimation { duration: 110 } }
-                                            Behavior on border.color { ColorAnimation { duration: 110 } }
-                                        }
+                                        border.color: catBtnItem.hovered 
+                                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
+                                            : "transparent"
+                                        border.width: 1
+                                        radius: 8 
                                         
-                                        contentItem: Text { 
-                                            text: parent.categoryName
-                                            color: settingsWindow.activeCategory === categoryName 
-                                                ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                                                : (shellTarget ? shellTarget.colorText : "#cdd6f4")
-                                            font.family: settingsWindow.selectedFont
-                                            font.pixelSize: 14
-                                            font.bold: settingsWindow.activeCategory === categoryName
-                                            anchors.left: parent.left; anchors.leftMargin: 16
-                                            verticalAlignment: Text.AlignVCenter 
-                                        }
-                                        
-                                        onClicked: settingsWindow.activeCategory = categoryName
-                                        HoverHandler { cursorShape: Qt.PointingHandCursor }
+                                        Behavior on color { ColorAnimation { duration: 110 } }
+                                        Behavior on border.color { ColorAnimation { duration: 110 } }
                                     }
                                     
-                                    CategoryButton { categoryName: "Layout" }
-                                    CategoryButton { categoryName: "Font" }
-                                    CategoryButton { categoryName: "VPN" }
-                                    CategoryButton { categoryName: "Modules" }
-                                    CategoryButton { categoryName: "Behavior" }
+                                    contentItem: Text { 
+                                        text: parent.categoryName
+                                        color: settingsWindow.activeCategory === categoryName 
+                                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
+                                            : (shellTarget ? shellTarget.colorText : "#cdd6f4")
+                                        font.family: settingsWindow.selectedFont
+                                        font.pixelSize: 14
+                                        font.bold: settingsWindow.activeCategory === categoryName
+                                        anchors.left: parent.left; anchors.leftMargin: 16
+                                        verticalAlignment: Text.AlignVCenter 
+                                    }
+                                    
+                                    onClicked: settingsWindow.activeCategory = categoryName
+                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                                }
+                                
+                                CategoryButton { categoryName: "Layout" }
+                                CategoryButton { categoryName: "Font" }
+                                CategoryButton { categoryName: "VPN" }
+                                CategoryButton { categoryName: "Modules" }
+                                CategoryButton { categoryName: "Behavior" }
+                            }
+                        }
+
+                        // --- Right Content Area ---
+                        Item {
+                            width: parent.width - 223 
+                            height: parent.height
+
+                            Item {
+                                id: contentHeader
+                                width: parent.width; height: 70
+                                anchors.top: parent.top
+
+                                Text {
+                                    text: settingsWindow.activeCategory
+                                    font.family: settingsWindow.selectedFont
+                                    font.pixelSize: 24; font.bold: true
+                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    anchors.left: parent.left; anchors.leftMargin: 30
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                Button {
+                                    id: closeBtn; flat: true
+                                    anchors.top: parent.top
+                                    anchors.right: parent.right
+                                    anchors.topMargin: 18
+                                    anchors.rightMargin: 25
+                                    implicitWidth: 36
+                                    implicitHeight: 36
+                                    
+                                    background: Rectangle { 
+                                        anchors.fill: parent
+                                        color: closeBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
+                                        border.color: closeBtn.hovered ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
+                                        border.width: 1
+                                        radius: 8 
+                                        
+                                        Behavior on color { ColorAnimation { duration: 110 } }
+                                        Behavior on border.color { ColorAnimation { duration: 110 } }
+                                    }
+                                    
+                                    Text { 
+                                        text: "close" 
+                                        font.family: "Material Symbols Outlined" 
+                                        font.pixelSize: 20
+                                        color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                                        anchors.centerIn: parent
+                                    }
+                                    
+                                    onClicked: settingsModuleRoot.windowVisible = false
+                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                                 }
                             }
 
-                            // --- Right Content Area ---
                             Item {
-                                width: parent.width - 223 
-                                height: parent.height
+                                anchors.top: contentHeader.bottom; anchors.bottom: parent.bottom
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.margins: 30
 
-                                Item {
-                                    id: contentHeader
-                                    width: parent.width; height: 70
-                                    anchors.top: parent.top
-
-                                    Text {
-                                        text: settingsWindow.activeCategory
-                                        font.family: settingsWindow.selectedFont
-                                        font.pixelSize: 24; font.bold: true
-                                        color: shellTarget ? shellTarget.colorText : "#cdd6f4"
-                                        anchors.left: parent.left; anchors.leftMargin: 30
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                    Button {
-                                        id: closeBtn; flat: true
-                                        anchors.top: parent.top
-                                        anchors.right: parent.right
-                                        anchors.topMargin: 18
-                                        anchors.rightMargin: 25
-                                        implicitWidth: 36
-                                        implicitHeight: 36
-                                        
-                                        // Matugen Hook: Unified close button hover outline border
-                                        background: Rectangle { 
-                                            anchors.fill: parent
-                                            color: closeBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
-                                            border.color: closeBtn.hovered ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
-                                            border.width: 1
-                                            radius: 8 
-                                            
-                                            Behavior on color { ColorAnimation { duration: 110 } }
-                                            Behavior on border.color { ColorAnimation { duration: 110 } }
-                                        }
-                                        
-                                        Text { 
-                                            text: "close" 
-                                            font.family: "Material Symbols Outlined" 
-                                            font.pixelSize: 20
-                                            color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
-                                            anchors.centerIn: parent
-                                        }
-                                        
-                                        onClicked: settingsModuleRoot.windowVisible = false
-                                        HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                    }
+                                MonitorLayout {
+                                    anchors.fill: parent
+                                    visible: settingsWindow.activeCategory === "Layout"
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    settingsWindow: settingsWindow
                                 }
 
-                                Item {
-                                    anchors.top: contentHeader.bottom; anchors.bottom: parent.bottom
-                                    anchors.left: parent.left; anchors.right: parent.right; anchors.margins: 30
+                                Fonts {
+                                    anchors.fill: parent
+                                    visible: settingsWindow.activeCategory === "Font"
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    settingsWindow: settingsWindow
+                                }
 
-                                    MonitorLayout {
-                                        anchors.fill: parent
-                                        visible: settingsWindow.activeCategory === "Layout"
-                                        shellTarget: settingsModuleRoot.shellTarget
-                                        settingsWindow: settingsWindow
-                                    }
-
-                                    Fonts {
-                                        anchors.fill: parent
-                                        visible: settingsWindow.activeCategory === "Font"
-                                        shellTarget: settingsModuleRoot.shellTarget
-                                        settingsWindow: settingsWindow
-                                    }
-
-                                    VpnLayout {
-                                        id: vpnLayoutSection
-                                        anchors.fill: parent
-                                        visible: settingsWindow.activeCategory === "VPN"
-                                        shellTarget: settingsModuleRoot.shellTarget
-                                        settingsWindow: settingsWindow
-                                    }
-                                    
-                                    Loader {
-                                        anchors.fill: parent
-                                        active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "VPN"
-                                        sourceComponent: Component {
-                                            Text { 
-                                                text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
-                                                font.family: settingsWindow.selectedFont; font.pixelSize: 18
-                                                color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
-                                                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                            }
+                                VpnLayout {
+                                    id: vpnLayoutSection
+                                    anchors.fill: parent
+                                    visible: settingsWindow.activeCategory === "VPN"
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    settingsWindow: settingsWindow
+                                }
+                                
+                                Loader {
+                                    anchors.fill: parent
+                                    active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "VPN"
+                                    sourceComponent: Component {
+                                        Text { 
+                                            text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
+                                            font.family: settingsWindow.selectedFont; font.pixelSize: 18
+                                            color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                         }
                                     }
                                 }
