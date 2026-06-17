@@ -50,6 +50,9 @@ Scope {
     property real launcherProgress: 0.0
     property real bluetoothProgress: 0.0
 
+    readonly property var audioRef: globalAudioPreview
+    property real audioProgress: 0.0
+
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
     onShellFontChanged: saveConfig()
@@ -139,6 +142,17 @@ Scope {
         id: hideBluetoothAnim
         NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalBluetoothPreview; property: "bluetoothActive"; value: false }
+    }
+
+    ParallelAnimation {
+        id: showAudioAnim
+        NumberAnimation { target: rootShell; property: "audioProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideAudioAnim
+        NumberAnimation { target: rootShell; property: "audioProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalAudioPreview; property: "audioActive"; value: false }
     }
 
     function isDisplayEnabled(idx) {
@@ -258,6 +272,16 @@ Scope {
         }
     }
 
+    IpcHandler {
+        target: "audio"
+        // Called by: shell-ipc-command --target audio --action updateVolume
+        function updateVolume(): void {
+            if (globalAudioPreview && globalAudioPreview.cardRef) {
+                globalAudioPreview.cardRef.showOsd();
+            }
+        }
+    }
+
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
     Timer { 
@@ -289,6 +313,18 @@ Scope {
         onTriggered: {
             if (!innerBluetoothCard.isHovered) {
                 hideBluetoothAnim.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: audioDismissTimer
+        interval: 150
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!innerAudioCard.isHovered) {
+                hideAudioAnim.restart();
             }
         }
     }
@@ -441,6 +477,75 @@ Scope {
                 if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
                 return rootShell.barPosition === "top" ? 46 : 10; 
             }
+        }
+    }
+
+    PanelWindow {
+        id: globalAudioPreview
+        property bool audioActive: false
+        property alias cardRef: innerAudioCard
+
+        screen: Quickshell.screens[0] 
+        
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "quickshell-audio-preview"
+        
+        WlrLayershell.keyboardFocus: globalAudioPreview.audioActive ? WlrLayershell.OnDemand : WlrLayershell.None
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        mask: Region { item: globalAudioPreview.audioActive ? clickAreaAudio : null }
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: audioActive || rootShell.audioProgress > 0.0
+        color: "transparent"
+
+        property int hoverOriginX: 0
+        property int hoverOriginY: 0
+
+        function showAudio() { 
+            audioDismissTimer.stop(); 
+            audioActive = true; 
+            showAudioAnim.restart();
+            innerAudioCard.forceActiveFocus();
+        }
+        
+        function requestDismiss() { }
+        
+        function forceDismiss() {
+            audioActive = false;
+            hideAudioAnim.restart();
+        }
+
+        Shortcut {
+            sequence: "Escape"
+            enabled: globalAudioPreview.audioActive
+            onActivated: globalAudioPreview.forceDismiss()
+        }
+
+        Item {
+            id: clickAreaAudio
+            anchors.fill: parent
+            
+            TapHandler {
+                enabled: globalAudioPreview.audioActive
+                onTapped: function(eventPoint, button) {
+                    let p = eventPoint.position;
+                    let c = innerAudioCard;
+                    
+                    if (p.x < c.x || p.x > c.x + c.width || p.y < c.y || p.y > c.y + c.height) {
+                        globalAudioPreview.forceDismiss();
+                    }
+                }
+            }
+        }
+
+        Audio {
+            id: innerAudioCard
+            active: globalAudioPreview.audioActive
+            z: 2
+            
+            hoverOriginX: globalAudioPreview.hoverOriginX
+            hoverOriginY: globalAudioPreview.hoverOriginY
         }
     }
 
