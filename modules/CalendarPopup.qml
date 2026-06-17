@@ -28,7 +28,7 @@ Item {
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
 
-    x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
+    x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width - 2) : hoverOriginX
     y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
 
     // --- State Properties ---
