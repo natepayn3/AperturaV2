@@ -29,24 +29,20 @@ Item {
     implicitHeight: Math.round(maxCardHeight)
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
-    opacity: 1.0
-    visible: true
-    clip: false
 
-    // In Bluetooth.qml
     x: {
         if (rootShell.barPosition === "top") return Screen.width - width - 10;
         if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
         if (rootShell.barPosition === "right") return Screen.width - width - 46;
-        if (rootShell.barPosition === "left") return 46; // Fixed offset from left
-        return hoverOriginX; // Keep X centered on icon or override as needed
+        if (rootShell.barPosition === "left") return 46; 
+        return hoverOriginX; 
     }
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46; // 46px from bottom
-            case "top":    return 46;                             // 46px from top
-            case "left":   return Screen.height - height - 10        // Fixed start of bar
+            case "bottom": return Screen.height - height - 46; 
+            case "top":    return 46;                             
+            case "left":   return Screen.height - height - 10        
             case "right":  return Screen.height - height - 10;
             default:       return hoverOriginY;
         }
@@ -57,7 +53,6 @@ Item {
     property bool isScanning: false
     property bool _lockoutPolling: false 
     
-    // Pure reactive status binding eliminates manual string assignment races
     property string activeStatusText: isScanning 
         ? "Scanning..." 
         : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
@@ -156,7 +151,6 @@ Item {
                 }
                 deviceFetcher.running = false;
                 
-                // Safe non-blocking chain to process status updates without resource collisions
                 if (!bluetoothRoot._lockoutPolling) {
                     stateFetcher.running = true;
                 }
@@ -191,7 +185,6 @@ Item {
         running: bluetoothRoot.active
         onTriggered: {
             if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
-                // Serial chain driver kicks off here cleanly
                 if (!stateFetcher.running && !deviceFetcher.running) {
                     deviceFetcher.running = true;
                 }
@@ -259,47 +252,18 @@ Item {
             return Item.Center
         }
 
-        states: [
-            State {
-                name: "hidden"
-                when: !bluetoothRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
-                PropertyChanges { 
-                    target: animatedGroup
-                    x: (rootShell.barPosition === "right") ? 40 : -40
-                    y: (rootShell.barPosition === "top") ? -40 : 40 
-                }
-            },
-            State {
-                name: "shown"
-                when: bluetoothRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
-            }
-        ]
+        // --- Streamlined Fluid Behavior Hooks ---
+        opacity: bluetoothRoot.active ? 1.0 : 0.0
+        scale: bluetoothRoot.active ? 1.0 : 0.0
+        x: bluetoothRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
+        y: bluetoothRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
+        
+        visible: opacity > 0.01
 
-        transitions: [
-            Transition {
-                from: "hidden"; to: "shown"
-                ParallelAnimation {
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: 200 } 
-                        NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
-                    }
-                }
-            },
-            Transition {
-                from: "shown"; to: "hidden"
-                ParallelAnimation {
-                    NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                }
-            }
-        ]
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
+        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
 
         Rectangle {
             id: cardMainBody
@@ -308,7 +272,6 @@ Item {
             z: 2
             border.width: 0
 
-            // Define the radii using a helper function
             topLeftRadius:     getCornerRadius("topLeft")
             topRightRadius:    getCornerRadius("topRight")
             bottomLeftRadius:  getCornerRadius("bottomLeft")
@@ -325,15 +288,11 @@ Item {
                     return (corner === "topLeft") ? rad : 0;
                 }
                 if (pos === "left") {
-                    // Only right side rounded
                     return (corner === "topRight") ? rad : 0;
                 }
                 if (pos === "right") {
-                    // Only left side rounded
                     return (corner === "topLeft") ? rad : 0;
                 }
-                
-                // Default fallback
                 return rad;
             }
         }
@@ -434,11 +393,9 @@ Item {
             }
             Item {
                 anchors.fill: parent
-                visible: rootShell.barPosition === "bottom" // Flip visibility check to right side
+                visible: rootShell.barPosition === "bottom"
                 
-                // Top wing (mirrored horizontally)
                 Shape {
-                    // Position at top-right corner, offset upwards by wingSize
                     x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
@@ -450,11 +407,10 @@ Item {
                     }
                 }
                 
-                // Bottom wing (mirrored horizontally)
                 Shape {
-                    rotation: 180 // Rotates the shape to form the inverted curve
+                    rotation: 180 
                     transformOrigin: Item.TopLeft
-                    x: parent.width - maxCardWidth; y: parent.height // Anchored to bottom-right edge
+                    x: parent.width - maxCardWidth; y: parent.height 
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
@@ -601,7 +557,6 @@ Item {
                         anchors.fill: parent
                         spacing: 12
 
-                        // Permanent dedicated scan button
                         Rectangle {
                             width: 32; height: 32; radius: 6
                             color: footerScanMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
