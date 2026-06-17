@@ -36,18 +36,18 @@ Item {
     // In Bluetooth.qml
     x: {
         if (rootShell.barPosition === "top") return Screen.width - width - 10;
-        if (rootShell.barPosition === "bottom") return rootShell.width - width - 46;
-        if (rootShell.barPosition === "right") return rootShell.width - width - 46;
+        if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
+        if (rootShell.barPosition === "right") return Screen.width - width - 46;
         if (rootShell.barPosition === "left") return 46; // Fixed offset from left
         return hoverOriginX; // Keep X centered on icon or override as needed
     }
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return rootShell.height - height - 46; // 46px from bottom
+            case "bottom": return Screen.height - height - 46; // 46px from bottom
             case "top":    return 46;                             // 46px from top
             case "left":   return Screen.height - height - 10        // Fixed start of bar
-            case "right":  return 46;
+            case "right":  return Screen.height - height - 10;
             default:       return hoverOriginY;
         }
     }
@@ -255,7 +255,7 @@ Item {
             if (rootShell.barPosition === "left") return Item.BottomLeft
             if (rootShell.barPosition === "right") return Item.BottomRight
             if (rootShell.barPosition === "top") return Item.TopRight
-            if (rootShell.barPosition === "bottom") return Item.BottomLeft
+            if (rootShell.barPosition === "bottom") return Item.BottomRight
             return Item.Center
         }
 
