@@ -177,11 +177,38 @@ Item {
                         id: wifiIconWrapper
                         width: 24; height: 24; radius: 4
                         color: wifiMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+                        
                         Text {
-                            anchors.centerIn: parent; text: "wifi"; font.family: "Material Symbols Outlined"; font.pixelSize: 16
-                            color: sysTrayContainer.shellTarget ? sysTrayContainer.shellTarget.colorText : "#ffffff"
+                            anchors.centerIn: parent
+                            // Explicitly shift icons dynamically if active on-screen
+                            text: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef && sysTrayContainer.shellTarget.wifiRef.wifiActive) ? "signal_wifi_4_bar" : "wifi"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef && sysTrayContainer.shellTarget.wifiRef.wifiActive) ? sysTrayContainer.shellTarget.colorAccent : sysTrayContainer.shellTarget.colorText
                         }
-                        MouseArea { id: wifiMouse; anchors.fill: parent; hoverEnabled: true }
+
+                        MouseArea {
+                            id: wifiMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef) {
+                                    let popupWindow = sysTrayContainer.shellTarget.wifiRef;
+                                    
+                                    if (popupWindow.wifiActive) {
+                                        popupWindow.forceDismiss();
+                                    } else {
+                                        // Coordinates projection calculation maps geometry layout point context metrics cleanly
+                                        let globalPos = wifiIconWrapper.mapToItem(null, 0, 0);
+                                        popupWindow.hoverOriginX = globalPos.x;
+                                        popupWindow.hoverOriginY = globalPos.y;
+                                        popupWindow.showWifi();
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Battery Status Component Node
