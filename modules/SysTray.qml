@@ -134,7 +134,7 @@ Item {
                 id: collapsibleGroup
                 
                 // Keep the drawer locked open when toggled or when Bluetooth window is active
-                property bool shouldBeVisible: sysTrayContainer.drawerOpen || (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef && sysTrayContainer.shellTarget.bluetoothRef.bluetoothActive)
+                property bool shouldBeVisible: sysTrayContainer.drawerOpen
                 
                 width: sysTrayContainer.isVertical ? 24 : (shouldBeVisible ? inlineHardwareLayout.implicitWidth : 0)
                 height: sysTrayContainer.isVertical ? (shouldBeVisible ? inlineHardwareLayout.implicitHeight : 0) : 24
