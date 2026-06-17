@@ -687,8 +687,7 @@ Scope {
         WlrLayershell.keyboardFocus: globalWifiPreview.wifiActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
-        // Bulletproof click-passthrough unmapping region fix
-        mask: Region { item: globalWifiPreview.wifiActive ? innerWifiCard : null }
+
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: wifiActive || rootShell.wifiProgress > 0.0
