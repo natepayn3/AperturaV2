@@ -522,12 +522,6 @@ Scope {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
 
-            MouseArea {
-                anchors.fill: parent
-                onPressed: (event) => event.accepted = true
-                onClicked: (event) => event.accepted = true
-            }
-
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
                 return rootShell.barPosition === "left" ? 46 : 10; 
@@ -595,13 +589,6 @@ Scope {
         Audio {
             id: innerAudioCard
             active: globalAudioPreview.audioActive
-            
-            MouseArea {
-                anchors.fill: parent
-                onPressed: (event) => event.accepted = true
-                onClicked: (event) => event.accepted = true
-            }
-
             hoverOriginX: globalAudioPreview.hoverOriginX
             hoverOriginY: globalAudioPreview.hoverOriginY
         }
@@ -663,13 +650,6 @@ Scope {
         Bluetooth {
             id: innerBluetoothCard
             active: globalBluetoothPreview.bluetoothActive
-            
-            MouseArea {
-                anchors.fill: parent
-                onPressed: (event) => event.accepted = true
-                onClicked: (event) => event.accepted = true
-            }
-
             hoverOriginX: globalBluetoothPreview.hoverOriginX
             hoverOriginY: globalBluetoothPreview.hoverOriginY
         }
