@@ -33,13 +33,24 @@ Item {
     visible: true
     clip: false
 
-    x: rootShell.barPosition === "right" 
-       ? parent.width - width - 46
-       : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
-       
-    y: (rootShell.barPosition === "bottom" || rootShell.barPosition === "left" || rootShell.barPosition === "right") 
-       ? hoverOriginY - height + 94
-       : hoverOriginY
+    // In Bluetooth.qml
+    x: {
+        if (rootShell.barPosition === "top") return Screen.width - width - 10;
+        if (rootShell.barPosition === "bottom") return rootShell.width - width - 46;
+        if (rootShell.barPosition === "right") return rootShell.width - width - 46;
+        if (rootShell.barPosition === "left") return 46; // Fixed offset from left
+        return hoverOriginX; // Keep X centered on icon or override as needed
+    }
+
+    y: {
+        switch (rootShell.barPosition) {
+            case "bottom": return rootShell.height - height - 46; // 46px from bottom
+            case "top":    return 46;                             // 46px from top
+            case "left":   return Screen.height - height - 10        // Fixed start of bar
+            case "right":  return 46;
+            default:       return hoverOriginY;
+        }
+    }
 
     // --- State Management ---
     property bool isPowered: false
@@ -243,7 +254,7 @@ Item {
         transformOrigin: {
             if (rootShell.barPosition === "left") return Item.BottomLeft
             if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopLeft
+            if (rootShell.barPosition === "top") return Item.TopRight
             if (rootShell.barPosition === "bottom") return Item.BottomLeft
             return Item.Center
         }
@@ -296,12 +307,36 @@ Item {
             color: rootShell.colorBackground
             z: 2
             border.width: 0
-            border.color: "transparent"
-            
-            topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
-            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom" || rootShell.barPosition === "right") ? 0 : bluetoothRoot.radiusValue
-            topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
-            bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? 0 : bluetoothRoot.radiusValue
+
+            // Define the radii using a helper function
+            topLeftRadius:     getCornerRadius("topLeft")
+            topRightRadius:    getCornerRadius("topRight")
+            bottomLeftRadius:  getCornerRadius("bottomLeft")
+            bottomRightRadius: getCornerRadius("bottomRight")
+
+            function getCornerRadius(corner) {
+                let pos = rootShell.barPosition;
+                let rad = bluetoothRoot.radiusValue;
+
+                if (pos === "top") {
+                    // STRICT: Only bottom-left gets the radius, everything else is 0
+                    if (corner === "bottomLeft") return rad;
+                    return 0;
+                }
+
+                // Standard logic for other sides
+                if (pos === "left") {
+                    return (corner === "topRight" || corner === "bottomRight") ? rad : 0;
+                }
+                if (pos === "right") {
+                    return (corner === "topLeft" || corner === "bottomLeft") ? rad : 0;
+                }
+                if (pos === "bottom") {
+                    return (corner === "topLeft" || corner === "topRight") ? rad : 0;
+                }
+                
+                return rad;
+            }
         }
 
         Item {
@@ -367,6 +402,34 @@ Item {
                         PathLine { x: 0; y: 0 }
                         PathQuad { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize; controlX: bluetoothRoot.wingSize; controlY: 0 }
                         PathLine { x: bluetoothRoot.wingSize; y: 0 }
+                    }
+                }
+            }
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "top"
+
+                Shape {
+                    x: -bluetoothRoot.wingSize; y: 0
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: bluetoothRoot.wingSize; startY: 0
+                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
+                    }
+                }
+                
+                Shape {
+                    x: parent.width - bluetoothRoot.wingSize; y: parent.height
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: bluetoothRoot.wingSize; startY: 0
+                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
                     }
                 }
             }
