@@ -53,6 +53,9 @@ Scope {
     readonly property var audioRef: globalAudioPreview
     property real audioProgress: 0.0
 
+    readonly property var wifiRef: globalWifiPreview
+    property real wifiProgress: 0.0
+
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
     onShellFontChanged: saveConfig()
@@ -87,22 +90,6 @@ Scope {
     NumberAnimation { id: expandHorizontalBar; target: rootShell; property: "horizontalBarProgress"; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
     NumberAnimation { id: expandVerticalFrame; target: rootShell; property: "verticalFrameProgress"; to: 1.0; duration: 150; easing.type: Easing.OutQuad }
     NumberAnimation { id: expandHorizontalFrame; target: rootShell; property: "horizontalFrameProgress"; to: 1.0; duration: 150; easing.type: Easing.OutQuad }
-
-    function triggerOrientationChange(newEdge) {
-        if (barPosition === newEdge) return;
-        targetPosition = newEdge;
-        orientationAnim.restart();
-    }
-
-    function closeAllPopups() {
-        if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
-        if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
-        if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
-        
-        // Explicitly clear both application windows simultaneously
-        if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
-        if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
-    }
 
     ParallelAnimation {
         id: showPreviewAnim
@@ -157,6 +144,33 @@ Scope {
         id: hideAudioAnim
         NumberAnimation { target: rootShell; property: "audioProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalAudioPreview; property: "audioActive"; value: false }
+    }
+
+    ParallelAnimation {
+        id: showWifiAnim
+        NumberAnimation { target: rootShell; property: "wifiProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideWifiAnim
+        NumberAnimation { target: rootShell; property: "wifiProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalWifiPreview; property: "wifiActive"; value: false }
+    }
+
+    function triggerOrientationChange(newEdge) {
+        if (barPosition === newEdge) return;
+        targetPosition = newEdge;
+        orientationAnim.restart();
+    }
+
+    function closeAllPopups() {
+        if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
+        if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+        if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+        if (globalWifiPreview.wifiActive) globalWifiPreview.forceDismiss();
+        
+        if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
+        if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
     }
 
     function isDisplayEnabled(idx) {
@@ -275,6 +289,20 @@ Scope {
         function onActiveChanged() {
             if (globalAppLauncherPreview.active) {
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
+                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
+                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+            }
+        }
+    }
+
+    Connections {
+        target: globalWifiPreview
+        ignoreUnknownSignals: true
+        function onWifiActiveChanged() {
+            if (globalWifiPreview.wifiActive) {
+                if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
+                if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
                 if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
                 if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
                 if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
@@ -644,6 +672,74 @@ Scope {
 
             hoverOriginX: globalBluetoothPreview.hoverOriginX
             hoverOriginY: globalBluetoothPreview.hoverOriginY
+        }
+    }
+
+    PanelWindow {
+        id: globalWifiPreview
+        property bool wifiActive: false
+        property alias cardRef: innerWifiCard
+
+        screen: Quickshell.screens[0]
+        
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-wifi-preview"
+        WlrLayershell.keyboardFocus: globalWifiPreview.wifiActive ? WlrLayershell.OnDemand : WlrLayershell.None
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        // Bulletproof click-passthrough unmapping region fix
+        mask: Region { item: globalWifiPreview.wifiActive ? innerWifiCard : null }
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: wifiActive || rootShell.wifiProgress > 0.0
+        color: "transparent"
+
+        property int hoverOriginX: 0
+        property int hoverOriginY: 0
+
+        MouseArea {
+            anchors.fill: parent
+            propagateComposedEvents: true
+            enabled: globalWifiPreview.wifiActive
+            
+            onPressed: (mouse) => {
+                globalWifiPreview.forceDismiss();
+                mouse.accepted = false;
+            }
+        }
+
+        function showWifi() { 
+            if (!wifiActive) {
+                closeAllPopups();
+                wifiActive = true; 
+                showWifiAnim.restart();
+                innerWifiCard.forceActiveFocus();
+            }
+        }
+        
+        function forceDismiss() {
+            wifiActive = false;
+            hideWifiAnim.restart();
+        }
+
+        Shortcut {
+            sequence: "Escape"
+            enabled: globalWifiPreview.wifiActive
+            onActivated: globalWifiPreview.forceDismiss()
+        }
+
+        Wifi {
+            id: innerWifiCard
+            active: globalWifiPreview.wifiActive
+            
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
+            }
+
+            hoverOriginX: globalWifiPreview.hoverOriginX
+            hoverOriginY: globalWifiPreview.hoverOriginY
         }
     }
 
