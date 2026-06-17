@@ -1,3 +1,4 @@
+// modules/Audio.qml
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
@@ -21,17 +22,16 @@ Item {
     property real wingSize: 14
 
     property real maxCardWidth: 340
-    property real maxCardHeight: 240 // Shorter than Bluetooth's 440
+    property real baseLayoutHeight: 140
+    property real calculatedHeight: baseLayoutHeight + (sinkModel.count > 0 ? (sinkModel.count - 1) * 54 : 0)
+    property real maxCardHeight: 300
 
     implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.round(maxCardHeight)
+    implicitHeight: Math.min(Math.round(calculatedHeight), Math.round(maxCardHeight))
     width: Math.round(maxCardWidth)
-    height: Math.round(maxCardHeight)
-    opacity: 1.0
-    visible: true
-    clip: false
+    height: implicitHeight
 
-    // Coordinate mapping mirroring your visual matrix exactly
+    // Position anchoring
     x: rootShell.barPosition === "right" 
        ? parent.width - width - 46
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
@@ -40,7 +40,6 @@ Item {
        ? hoverOriginY - height + 94
        : hoverOriginY
 
-    // --- State Management ---
     property real currentVolume: 0.0
     property bool isMuted: false
 
@@ -48,62 +47,106 @@ Item {
         id: sinkModel
     }
 
-    // Triggered externally by your shell's IPC listener on Wayland binds
-    function showOsd() {
-        fetchVolumeProc.running = true;
-        osdWindow.visible = true;
-        osdTimer.restart();
+    // --- Core Polling Loop ---
+    Timer {
+        interval: 400
+        running: audioRoot.active
+        repeat: true
+        onTriggered: {
+            if (!mainSlider.pressed) {
+                fetchVolumeProc.running = false;
+                fetchVolumeProc.running = true;
+            }
+            fetchSinksProc.running = false;
+            fetchSinksProc.running = true;
+        }
     }
 
     // --- Core Audio Processes ---
     Process {
         id: fetchVolumeProc
-        command: ["/usr/bin/wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
+        command: ["/bin/bash", "-c", "TARGET=$(wpctl status | awk '/Audio/,/Video/' | grep '*' | awk '{print $2}' | tr -d '.') && if [ -n \"$TARGET\" ]; then wpctl get-volume $TARGET; else wpctl get-volume @DEFAULT_AUDIO_SINK@; fi"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                let text = this.text.trim();
-                if (text === "") return;
+                let cleaned = this.text.trim();
+                if (cleaned === "") return;
                 
-                // Parses output like: Volume: 0.45 [MUTED]
-                let isMuteStr = text.includes("[MUTED]");
-                let volMatch = text.match(/[0-9]+\.[0-9]+/);
-                
-                if (volMatch) {
-                    audioRoot.currentVolume = parseFloat(volMatch[0]);
+                audioRoot.isMuted = cleaned.includes("[MUTED]");
+                let parts = cleaned.split(" ");
+                if (parts.length >= 2) {
+                    let volVal = parseFloat(parts[1]);
+                    if (!isNaN(volVal) && !mainSlider.pressed) {
+                        audioRoot.currentVolume = volVal;
+                    }
                 }
-                audioRoot.isMuted = isMuteStr;
             }
         }
     }
 
     Process {
         id: fetchSinksProc
-        // Extracts the active asterisk, ID, and Name directly
-        command: ["/bin/bash", "-c", "wpctl status | awk '/Sinks:/ {flag=1; next} /Sink endpoints:/ {flag=0} flag {print}' | grep 'vol' | sed -E 's/.*(│)? *(\\*?) *([0-9]+)\\. (.*) \\[vol.*/\\2|\\3|\\4/'"]
+        command: ["/bin/bash", "-c", "wpctl status | awk '/Audio/,/Video/'"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                let lines = this.text.trim().split("\n");
+                let lines = this.text.split("\n");
                 sinkModel.clear();
-                
+                let seenIds = {};
+                let parsingSinks = false;
+
                 for (let i = 0; i < lines.length; i++) {
-                    if (lines[i] === "") continue;
-                    let parts = lines[i].split("|");
-                    if (parts.length < 3) continue;
-                    
-                    sinkModel.append({
-                        isDefault: parts[0].trim() === "*",
-                        sinkId: parts[1].trim(),
-                        sinkName: parts[2].trim()
-                    });
+                    let line = lines[i];
+
+                    if (line.includes("Sinks:")) {
+                        parsingSinks = true;
+                        continue;
+                    }
+
+                    if (parsingSinks && (line.includes("Sources:") || line.includes("Filters:") || line.includes("Streams:"))) {
+                        parsingSinks = false;
+                    }
+
+                    if (parsingSinks) {
+                        let match = line.match(/(\*\s*)?\s*(\d+)\.\s+(.*)/);
+                        if (match) {
+                            let isDef = (match[1] !== undefined && match[1].includes("*"));
+                            let id = match[2].trim();
+                            
+                            if (seenIds[id]) continue;
+                            seenIds[id] = true;
+
+                            let rawName = match[3].trim();
+                            let name = rawName.split("[")[0].trim();
+
+                            name = name.replace(/[├─└─│]/g, "").trim();
+                            if (name === "") continue;
+
+                            sinkModel.append({
+                                isDefault: isDef,
+                                sinkId: id,
+                                sinkName: name
+                            });
+                        }
+                    }
                 }
             }
         }
     }
 
-    Process { id: setVolumeProc; running: false }
-    Process { id: setDefaultSinkProc; running: false }
+    Process {
+        id: setVolumeProc
+        running: false
+    }
+    
+    Process { 
+        id: setDefaultSinkProc
+        running: false 
+        function switchSink(sinkId) {
+            command = ["wpctl", "set-default", sinkId];
+            running = true;
+        }
+    }
 
     onActiveChanged: {
         if (active) {
@@ -112,63 +155,7 @@ Item {
         }
     }
 
-    function setVolume(val) {
-        setVolumeProc.command = ["/usr/bin/wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", val.toString()];
-        setVolumeProc.running = true;
-        audioRoot.currentVolume = val;
-    }
-
-    function setDefaultSink(id) {
-        setDefaultSinkProc.command = ["/usr/bin/wpctl", "set-default", id];
-        setDefaultSinkProc.running = true;
-        Qt.callLater(() => { fetchSinksProc.running = true; }, 300);
-    }
-
-    PanelWindow {
-        id: osdWindow
-        
-        WlrLayershell.namespace: "quickshell-osd"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-        
-        anchors {
-            bottom: true
-        }
-        
-        margins {
-            bottom: 100
-        }
-        
-        // Use implicit dimensions for Wayland surfaces
-        implicitWidth: 300
-        implicitHeight: 50
-        
-        visible: false
-        color: "transparent"
-        
-        Timer {
-            id: osdTimer
-            interval: 1500
-            onTriggered: osdWindow.visible = false
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: rootShell.colorBackground
-            border.color: rootShell.colorBorder
-            border.width: 2
-            radius: 12
-            
-            ProgressBar {
-                anchors.centerIn: parent
-                width: parent.width - 24
-                value: audioRoot.currentVolume
-            }
-        }
-    }
-
-    // --- Visuals & Animations (Matches Bluetooth Exactly) ---
+    // --- Visual Control Panel Component Layout ---
     Item {
         id: animatedGroup
         anchors.fill: parent
@@ -228,8 +215,6 @@ Item {
             anchors.fill: parent
             color: rootShell.colorBackground
             z: 2
-            border.width: 0
-            border.color: "transparent"
             
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : audioRoot.radiusValue
             bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom" || rootShell.barPosition === "right") ? 0 : audioRoot.radiusValue
@@ -300,7 +285,7 @@ Item {
                         startX: audioRoot.wingSize; startY: 0
                         PathLine { x: 0; y: 0 }
                         PathQuad { x: audioRoot.wingSize; y: audioRoot.wingSize; controlX: audioRoot.wingSize; controlY: 0 }
-                        PathLine { x: audioRoot.wingSize; y: 0 }
+                        PathLine { x: 0; y: 0 }
                     }
                 }
             }
@@ -320,7 +305,6 @@ Item {
                 anchors.margins: 16
                 spacing: 12
 
-                // Volume Slider Header
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
@@ -334,13 +318,18 @@ Item {
                     Slider {
                         id: mainSlider
                         Layout.fillWidth: true
+                        from: 0.0
+                        to: 1.0
                         value: audioRoot.currentVolume
                         
-                        onValueChanged: {
-                            if (pressed) {
-                                audioRoot.setVolume(value.toFixed(2));
-                                showOsd();
-                            }
+                        onMoved: {
+                            let cmd = "TARGET=$(wpctl status | awk '/Audio/,/Video/' | grep '*' | awk '{print $2}' | tr -d '.') && " +
+                                      "if [ -n \"$TARGET\" ]; then wpctl set-volume $TARGET " + mainSlider.value.toFixed(2) + "; " +
+                                      "else wpctl set-volume @DEFAULT_AUDIO_SINK@ " + mainSlider.value.toFixed(2) + "; fi";
+                            
+                            setVolumeProc.command = ["/bin/bash", "-c", cmd];
+                            setVolumeProc.running = false;
+                            setVolumeProc.running = true;
                         }
                     }
                 }
@@ -350,7 +339,6 @@ Item {
                     color: Qt.rgba(255,255,255,0.1)
                 }
 
-                // Available Outputs List
                 ListView {
                     id: mainDeviceList
                     Layout.fillWidth: true
@@ -378,7 +366,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 12
-                                anchors.rightMargin: 12
+                                anchors.rightMargin: 16
 
                                 Text {
                                     text: model.sinkName
@@ -389,12 +377,11 @@ Item {
                                     Layout.fillWidth: true
                                 }
                                 
-                                Text {
+                                Rectangle {
                                     visible: model.isDefault
-                                    text: "check_circle"
-                                    font.family: "Material Symbols Outlined"
-                                    font.pixelSize: 18
+                                    width: 8; height: 8; radius: 4
                                     color: rootShell.colorAccent
+                                    Layout.alignment: Qt.AlignVCenter
                                 }
                             }
 
@@ -403,7 +390,11 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: audioRoot.setDefaultSink(model.sinkId)
+                                onClicked: {
+                                    setDefaultSinkProc.switchSink(model.sinkId);
+                                    fetchSinksProc.running = false;
+                                    fetchSinksProc.running = true;
+                                }
                             }
                         }
                     }
