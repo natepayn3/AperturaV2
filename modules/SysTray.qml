@@ -178,6 +178,12 @@ Item {
                                         let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
+                                        
+                                        // 🎯 Pass the screen context of the bar window to the popup module
+                                        if (sysTrayContainer.parentBarWindow) {
+                                            popupWindow.screen = sysTrayContainer.parentBarWindow.screen;
+                                        }
+                                        
                                         popupWindow.showBluetooth();
                                     }
                                 }
@@ -210,12 +216,18 @@ Item {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef) {
                                     let popupWindow = sysTrayContainer.shellTarget.audioRef;
                                     
-                                    if (popupWindow.audioActive) {
+                                    if (popupWindow.bluetoothActive) {
                                         popupWindow.forceDismiss();
                                     } else {
-                                        let globalPos = audioIconWrapper.mapToItem(null, 0, 0);
+                                        let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
+                                        
+                                        // 🎯 Pass the screen context of the bar window to the popup module
+                                        if (sysTrayContainer.parentBarWindow) {
+                                            popupWindow.screen = sysTrayContainer.parentBarWindow.screen;
+                                        }
+                                        
                                         popupWindow.showAudio();
                                     }
                                 }
@@ -249,12 +261,18 @@ Item {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef) {
                                     let popupWindow = sysTrayContainer.shellTarget.wifiRef;
                                     
-                                    if (popupWindow.wifiActive) {
+                                    if (popupWindow.bluetoothActive) {
                                         popupWindow.forceDismiss();
                                     } else {
-                                        let globalPos = wifiIconWrapper.mapToItem(null, 0, 0);
+                                        let globalPos = bluetoothIconWrapper.mapToItem(null, 0, 0);
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
+                                        
+                                        // 🎯 Pass the screen context of the bar window to the popup module
+                                        if (sysTrayContainer.parentBarWindow) {
+                                            popupWindow.screen = sysTrayContainer.parentBarWindow.screen;
+                                        }
+                                        
                                         popupWindow.showWifi();
                                     }
                                 }
