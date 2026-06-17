@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io // For Process and StdioCollector
 
 Item {
     id: sysTrayContainer
@@ -22,6 +23,57 @@ Item {
     // Dimensions switch based on structural orientation vectors
     implicitWidth: isVertical ? 32 : (drawerOpen ? trayLayout.implicitWidth + 8 : collapsedSize)
     implicitHeight: isVertical ? (drawerOpen ? expandedSize : collapsedSize) : 32
+
+    // --- Hardware Adapter Engines ---
+    Process {
+        id: wifiHardwareCheck
+        // Scans sysfs for wireless interfaces (wlan0, wlp3s0, etc.)
+        command: ["sh", "-c", "ls /sys/class/net | grep -q '^wl' && echo true || echo false"]
+        running: true
+
+        property bool hasAdapter: false
+
+        stdout: StdioCollector {
+            onTextChanged: {
+                wifiHardwareCheck.hasAdapter = (text.trim() === "true");
+            }
+        }
+    }
+
+    Process {
+        id: batteryHardwareCheck
+        // Checks if a battery sub-system directory exists under power_supply
+        command: ["sh", "-c", "ls /sys/class/power_supply | grep -q '^BAT' && echo true || echo false"]
+        running: true
+
+        property bool hasBattery: false
+
+        stdout: StdioCollector {
+            onTextChanged: {
+                batteryHardwareCheck.hasBattery = (text.trim() === "true");
+            }
+        }
+    }
+
+    // --- Audio State Engine (Event-Driven) ---
+    Process {
+        id: audioMuteCheck
+        // Listens to PipeWire sink events cleanly and executes an instantaneous check on every output line
+        command: [
+            "sh", "-c", 
+            "pactl subscribe | stdbuf -oL grep --line-buffered \"'change' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q 'MUTED' && echo true || echo false; done"
+        ]
+        running: true
+        
+        property bool isMuted: false
+
+        // Using SplitParser to parse stream lines natively without accumulation blocks
+        stdout: SplitParser {
+            onRead: data => {
+                audioMuteCheck.isMuted = (data.trim() === "true");
+            }
+        }
+    }
 
     // Smooth physics mapping transitions
     Behavior on implicitWidth { NumberAnimation { duration: 200; easing.type: Easing.OutExpo } }
@@ -81,10 +133,9 @@ Item {
             Item {
                 id: collapsibleGroup
                 
-                // Keep the drawer locked open when either toggled or when the Bluetooth window is active on screen
+                // Keep the drawer locked open when toggled or when Bluetooth window is active
                 property bool shouldBeVisible: sysTrayContainer.drawerOpen || (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef && sysTrayContainer.shellTarget.bluetoothRef.bluetoothActive)
                 
-                // Fix: Bind directly to implicit metrics without anchors overriding the boundaries
                 width: sysTrayContainer.isVertical ? 24 : (shouldBeVisible ? inlineHardwareLayout.implicitWidth : 0)
                 height: sysTrayContainer.isVertical ? (shouldBeVisible ? inlineHardwareLayout.implicitHeight : 0) : 24
                 visible: opacity > 0.0
@@ -94,7 +145,6 @@ Item {
 
                 Flow {
                     id: inlineHardwareLayout
-                    // Fix: Removed anchors.fill so implicit dimensions can propagate up correctly
                     spacing: 8
                     flow: sysTrayContainer.isVertical ? Flow.TopToBottom : Flow.LeftToRight
 
@@ -143,7 +193,8 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef && sysTrayContainer.shellTarget.audioRef.audioActive) ? "volume_up" : "volume_down"
+                            // Always volume_up unless the engine flags a hardware mute state
+                            text: audioMuteCheck.isMuted ? "volume_off" : "volume_up"
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 16
                             color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef && sysTrayContainer.shellTarget.audioRef.audioActive) ? sysTrayContainer.shellTarget.colorAccent : sysTrayContainer.shellTarget.colorText
@@ -178,9 +229,10 @@ Item {
                         width: 24; height: 24; radius: 4
                         color: wifiMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
                         
+                        visible: wifiHardwareCheck.hasAdapter
+                        
                         Text {
                             anchors.centerIn: parent
-                            // Explicitly shift icons dynamically if active on-screen
                             text: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef && sysTrayContainer.shellTarget.wifiRef.wifiActive) ? "signal_wifi_4_bar" : "wifi"
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 16
@@ -200,7 +252,6 @@ Item {
                                     if (popupWindow.wifiActive) {
                                         popupWindow.forceDismiss();
                                     } else {
-                                        // Coordinates projection calculation maps geometry layout point context metrics cleanly
                                         let globalPos = wifiIconWrapper.mapToItem(null, 0, 0);
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
@@ -216,6 +267,9 @@ Item {
                         id: batteryIconWrapper
                         width: 24; height: 24; radius: 4
                         color: batteryMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+                        
+                        visible: batteryHardwareCheck.hasBattery
+
                         Text {
                             anchors.centerIn: parent; text: "battery_full"; font.family: "Material Symbols Outlined"; font.pixelSize: 16
                             color: sysTrayContainer.shellTarget ? sysTrayContainer.shellTarget.colorText : "#ffffff"
