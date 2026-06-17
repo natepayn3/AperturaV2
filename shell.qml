@@ -396,10 +396,12 @@ Scope {
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
         anchors { left: true; right: true; top: true; bottom: true }
-        visible: innerPreviewCard.state !== "hidden" || globalWorkspacePreview.targetWorkspace !== -1
+        visible: innerPreviewCard.active || globalWorkspacePreview.targetWorkspace !== -1 || rootShell.previewProgress > 0.0
         color: "transparent"
 
-        mask: Region { item: (globalWorkspacePreview.targetWorkspace !== -1) ? innerPreviewCard : null }
+        mask: Region { 
+            item: innerPreviewCard.active ? innerPreviewCard : null 
+        }
         property int targetWorkspace: -1
 
         onTargetWorkspaceChanged: {
