@@ -271,7 +271,7 @@ Item {
                         visible: batteryHardwareCheck.hasBattery
 
                         Text {
-                            anchors.centerIn: parent; text: "battery_full"; font.family: "Material Symbols Outlined"; font.pixelSize: 16
+                            anchors.centerIn: parent; text: "battery_android_frame_full"; font.family: "Material Symbols Outlined"; font.pixelSize: 16
                             color: sysTrayContainer.shellTarget ? sysTrayContainer.shellTarget.colorText : "#ffffff"
                         }
                         MouseArea { id: batteryMouse; anchors.fill: parent; hoverEnabled: true }
