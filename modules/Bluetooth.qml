@@ -319,22 +319,21 @@ Item {
                 let rad = bluetoothRoot.radiusValue;
 
                 if (pos === "top") {
-                    // STRICT: Only bottom-left gets the radius, everything else is 0
-                    if (corner === "bottomLeft") return rad;
-                    return 0;
-                }
-
-                // Standard logic for other sides
-                if (pos === "left") {
-                    return (corner === "topRight" || corner === "bottomRight") ? rad : 0;
-                }
-                if (pos === "right") {
-                    return (corner === "topLeft" || corner === "bottomLeft") ? rad : 0;
+                    return (corner === "bottomLeft") ? rad : 0;
                 }
                 if (pos === "bottom") {
-                    return (corner === "topLeft" || corner === "topRight") ? rad : 0;
+                    return (corner === "topLeft") ? rad : 0;
+                }
+                if (pos === "left") {
+                    // Only right side rounded
+                    return (corner === "topRight") ? rad : 0;
+                }
+                if (pos === "right") {
+                    // Only left side rounded
+                    return (corner === "topLeft") ? rad : 0;
                 }
                 
+                // Default fallback
                 return rad;
             }
         }
