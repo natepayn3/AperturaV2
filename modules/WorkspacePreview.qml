@@ -54,8 +54,21 @@ Item {
     visible: true
     clip: false
 
-    x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
-    y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
+    x: {
+        if (rootShell.barPosition === "top") return hoverOriginX + 2;
+        if (rootShell.barPosition === "bottom") return hoverOriginX + 2;
+        if (rootShell.barPosition === "left") return hoverOriginX + 2;
+        if (rootShell.barPosition === "right") return hoverOriginX - 2;
+        return hoverOriginX;
+    }
+    
+    y: {
+        if (rootShell.barPosition === "top") return hoverOriginY + 2;
+        if (rootShell.barPosition === "bottom") return hoverOriginY - 2;
+        if (rootShell.barPosition === "left") return hoverOriginY + 2;
+        if (rootShell.barPosition === "right") return hoverOriginY + 2;
+        return hoverOriginY;
+    }
 
     onTargetWorkspaceChanged: {
         if (targetWorkspace !== -1) {
