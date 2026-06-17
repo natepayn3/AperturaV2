@@ -124,22 +124,51 @@ Item {
                     opacity: 0.3
                 }
 
-                // Mini active viewport bar indicator
-                Rectangle {
-                    id: miniActiveBar
-                    color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
-                    radius: 4
+                // Viewport layout container to manage position states without anchoring conflicts
+                Item {
+                    anchors.fill: parent
 
-                    x: settingsWindow && settingsWindow.currentPosition === "right" ? parent.width - width : 0
-                    y: settingsWindow && settingsWindow.currentPosition === "bottom" ? parent.height - height : 0
-                    
-                    width: (settingsWindow && (settingsWindow.currentPosition === "left" || settingsWindow.currentPosition === "right")) ? 8 : parent.width
-                    height: (settingsWindow && (settingsWindow.currentPosition === "top" || settingsWindow.currentPosition === "bottom")) ? 8 : parent.height
+                    Rectangle {
+                        id: miniActiveBar
+                        color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                        radius: 4
 
-                    Behavior on x { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                    Behavior on y { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                    Behavior on width { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                    Behavior on height { PropertyAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                        // Default dimensions (overridden by states)
+                        width: 8
+                        height: 8
+
+                        states: [
+                            State {
+                                name: "left"
+                                when: !settingsWindow || settingsWindow.currentPosition === "left"
+                                PropertyChanges { target: miniActiveBar; x: 0; y: 0; width: 8; height: parent.height }
+                            },
+                            State {
+                                name: "right"
+                                when: settingsWindow && settingsWindow.currentPosition === "right"
+                                PropertyChanges { target: miniActiveBar; x: parent.width - 8; y: 0; width: 8; height: parent.height }
+                            },
+                            State {
+                                name: "top"
+                                when: settingsWindow && settingsWindow.currentPosition === "top"
+                                PropertyChanges { target: miniActiveBar; x: 0; y: 0; width: parent.width; height: 8 }
+                            },
+                            State {
+                                name: "bottom"
+                                when: settingsWindow && settingsWindow.currentPosition === "bottom"
+                                PropertyChanges { target: miniActiveBar; x: 0; y: parent.height - 8; width: parent.width; height: 8 }
+                            }
+                        ]
+
+                        transitions: [
+                            Transition {
+                                from: "*"; to: "*"
+                                ParallelAnimation {
+                                    NumberAnimation { properties: "x,y,width,height"; duration: 150; easing.type: Easing.OutCubic }
+                                }
+                            }
+                        ]
+                    }
                 }
 
                 MouseArea {
