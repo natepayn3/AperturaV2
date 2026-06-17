@@ -34,8 +34,6 @@ Item {
     clip: false
 
     x: rootShell.barPosition === "right" 
-       // Bypass the broken SysTray coordinates and lock it to the screen's right edge
-       // (parent.width is the monitor edge, minus popup width, minus ~55px for the bar + gap)
        ? parent.width - width - 46
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
        
@@ -46,7 +44,12 @@ Item {
     // --- State Management ---
     property bool isPowered: false
     property bool isScanning: false
-    property string activeStatusText: "Bluetooth is ON"
+    property bool _lockoutPolling: false 
+    
+    // Pure reactive status binding eliminates manual string assignment races
+    property string activeStatusText: isScanning 
+        ? "Scanning..." 
+        : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
     
     ListModel {
         id: deviceModel
@@ -55,9 +58,16 @@ Item {
     // --- Unified Bluetooth Session ---
     Process {
         id: bluetoothSession
-        command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
+        command: ["/usr/bin/bluetoothctl"]
         running: bluetoothRoot.active
-        // stdout stripped: Process is strictly an interactive writer now to prevent stream lockups
+        
+        stdout: StdioCollector {
+            onTextChanged: {
+                if (this.text.includes("[CHG]")) {
+                    handleBluetoothEvent(this.text);
+                }
+            }
+        }
     }
 
     // --- Core Bluetooth Processes ---
@@ -74,8 +84,6 @@ Item {
                 let textLines = this.text.split("\n");
                 bluetoothRoot.isPowered = textLines.some(l => l.includes("Powered: yes"));
                 bluetoothRoot.isScanning = textLines.some(l => l.includes("Discovering: yes"));
-                
-                bluetoothRoot.activeStatusText = bluetoothRoot.isScanning ? "Scanning..." : (bluetoothRoot.isPowered ? "Bluetooth is ON" : "Bluetooth is OFF");
                 stateFetcher.running = false;
             }
         }
@@ -83,7 +91,6 @@ Item {
 
     Process {
         id: deviceFetcher
-        // Bash pipeline fetches exact connection and pairing states efficiently 
         command: [
             "/bin/bash", 
             "-c", 
@@ -137,6 +144,11 @@ Item {
                     }
                 }
                 deviceFetcher.running = false;
+                
+                // Safe non-blocking chain to process status updates without resource collisions
+                if (!bluetoothRoot._lockoutPolling) {
+                    stateFetcher.running = true;
+                }
             }
         }
     }
@@ -151,9 +163,13 @@ Item {
         repeat: false
         onTriggered: {
             bluetoothRoot.isScanning = false;
-            bluetoothRoot.activeStatusText = "Bluetooth is ON";
-            toggleScanProc.command = ["/usr/bin/bluetoothctl", "scan", "off"];
-            toggleScanProc.running = true;
+            bluetoothRoot._lockoutPolling = true; 
+            bluetoothSession.write("scan off\n");
+            
+            Qt.callLater(() => {
+                bluetoothRoot._lockoutPolling = false;
+                stateFetcher.running = true;
+            }, 1000);
         }
     }
 
@@ -164,8 +180,10 @@ Item {
         running: bluetoothRoot.active
         onTriggered: {
             if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
-                stateFetcher.running = true;
-                deviceFetcher.running = true;
+                // Serial chain driver kicks off here cleanly
+                if (!stateFetcher.running && !deviceFetcher.running) {
+                    deviceFetcher.running = true;
+                }
             }
         }
     }
@@ -177,9 +195,7 @@ Item {
         bluetoothSession.write("scan on\n");
 
         scanDurationTimer.restart();
-
         bluetoothRoot.isScanning = true;
-        bluetoothRoot.activeStatusText = "Scanning...";
     }
 
     function togglePower() {
@@ -198,6 +214,8 @@ Item {
         bluetoothSession.write("trust " + mac + "\n");
         bluetoothSession.write("pair " + mac + "\n");
     }
+
+    function handleBluetoothEvent(text) { }
 
     function removeDevice(mac) {
         bluetoothSession.write("remove " + mac + "\n");
@@ -280,8 +298,6 @@ Item {
             border.width: 0
             border.color: "transparent"
             
-            // The edge touching the bar is sharp (0)
-            // AND the bottom corner where the wing attaches is sharp (0)
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
             bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom" || rootShell.barPosition === "right") ? 0 : bluetoothRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : bluetoothRoot.radiusValue
@@ -293,12 +309,10 @@ Item {
             visible: bluetoothRoot.width > 30
             z: 2 
 
-            // --- LEFT BAR WINGS (Popup is on the right, wings merge up/down into the left bar) ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "left"
                 
-                // Top-Left Wing (Points UP)
                 Shape {
                     x: 0; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
@@ -311,12 +325,10 @@ Item {
                     }
                 }
                 
-                // Bottom-Left Wing (Points DOWN)
                 Shape {
                     rotation: -90
                     transformOrigin: Item.TopLeft
-                    x: parent.width
-                    y: parent.height
+                    x: parent.width; y: parent.height
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
@@ -328,12 +340,10 @@ Item {
                 }
             }
 
-            // --- RIGHT BAR WINGS (Popup is to the left of the bar) ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
 
-                // Top-Right Wing (Points UP)
                 Shape {
                     x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
@@ -346,12 +356,10 @@ Item {
                     }
                 }
 
-                // Bottom-Right Wing (Points DOWN)
                 Shape {
                     rotation: 90
                     transformOrigin: Item.TopRight
-                    x: 0 - bluetoothRoot.wingSize
-                    y: parent.height
+                    x: 0 - bluetoothRoot.wingSize; y: parent.height
                     width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
@@ -369,72 +377,29 @@ Item {
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
-            anchors.margins: 18
             z: 5
 
             HoverHandler { id: contentHoverHandler }
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 12
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-
-                    Text { 
-                        text: "Bluetooth"
-                        font.family: rootShell.shellFont; font.pixelSize: 16; font.weight: Font.Bold
-                        color: "#ffffff"
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Rectangle {
-                        width: 28; height: 28; radius: 6
-                        color: refreshMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
-                        Text { 
-                            anchors.centerIn: parent; text: "refresh"
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 18
-                            color: rootShell.colorAccent
-                        }
-                        MouseArea {
-                            id: refreshMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                stateFetcherTimer.running = false;
-                                bluetoothRoot.triggerScan();
-                                Qt.callLater(() => { stateFetcherTimer.running = true; }, 2000);
-                            }
-                        }
-                    }
-                }
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.topMargin: 16
+                anchors.bottomMargin: 8
+                spacing: 0
 
                 ListView {
+                    id: mainDeviceList
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     model: deviceModel
-                    spacing: 4
+                    spacing: 6
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                    header: Item {
-                        width: ListView.view ? ListView.view.width : 0
-                        height: !bluetoothRoot.isPowered ? 24 : 0
-                        visible: !bluetoothRoot.isPowered
-                        
-                        Text {
-                            text: "Adapter Powered Off"
-                            font.family: rootShell.shellFont
-                            font.pixelSize: 13
-                            color: rootShell.colorSubtext
-                        }
-                    }
-
                     delegate: Item {
-                        width: ListView.view.width
+                        width: mainDeviceList.width
                         height: 48
 
                         Rectangle {
@@ -480,9 +445,7 @@ Item {
                                     }
                                     
                                     MouseArea {
-                                        id: itemMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
+                                        id: itemMouse; anchors.fill: parent; hoverEnabled: true
                                     }
                                 }
                                 
@@ -493,16 +456,11 @@ Item {
                                     Text { 
                                         anchors.centerIn: parent
                                         text: !model.paired ? "link" : (model.connected ? "link_off" : "cable")
-                                        font.family: "Material Symbols Outlined"
-                                        font.pixelSize: 18
-                                        color: "#ffffff"
+                                        font.family: "Material Symbols Outlined"; font.pixelSize: 18; color: "#ffffff"
                                     }
                                     
                                     MouseArea {
-                                        id: actionMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
+                                        id: actionMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             if (!model.paired) {
                                                 bluetoothRoot.pairDevice(model.mac);
@@ -520,17 +478,12 @@ Item {
                                     
                                     Text { 
                                         anchors.centerIn: parent
-                                        text: "delete" 
-                                        font.family: "Material Symbols Outlined"
-                                        font.pixelSize: 18
+                                        text: "delete"; font.family: "Material Symbols Outlined"; font.pixelSize: 18
                                         color: rootShell.colorClose
                                     }
                                     
                                     MouseArea {
-                                        id: forgetMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
+                                        id: forgetMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: bluetoothRoot.removeDevice(model.mac)
                                     }
                                 }
@@ -542,25 +495,46 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true; height: 1
                     color: Qt.rgba(255,255,255,0.1)
+                    Layout.topMargin: 8
+                    Layout.bottomMargin: 8
                 }
 
                 Item {
-                    Layout.fillWidth: true; Layout.preferredHeight: 56
+                    Layout.fillWidth: true; Layout.preferredHeight: 48
 
                     RowLayout {
                         anchors.fill: parent
                         spacing: 12
 
-                        Text {
-                            text: bluetoothRoot.isPowered ? "bluetooth" : "bluetooth_disabled"
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 32
-                            color: bluetoothRoot.isPowered ? rootShell.colorAccent : rootShell.colorClose
-                            Layout.alignment: Qt.AlignVCenter
+                        // Permanent dedicated scan button
+                        Rectangle {
+                            width: 32; height: 32; radius: 6
+                            color: footerScanMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
+                            
+                            Text {
+                                anchors.centerIn: parent
+                                text: "radar"
+                                font.family: "Material Symbols Outlined"; font.pixelSize: 24
+                                color: bluetoothRoot.isScanning ? rootShell.colorAccent : "#ffffff"
+                            }
+                            
+                            MouseArea {
+                                id: footerScanMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                enabled: bluetoothRoot.isPowered
+                                onClicked: {
+                                    stateFetcherTimer.running = false;
+                                    bluetoothRoot.triggerScan();
+                                    Qt.callLater(() => { stateFetcherTimer.running = true; }, 2000);
+                                }
+                            }
                         }
 
                         Text {
                             text: bluetoothRoot.activeStatusText
-                            font.family: rootShell.shellFont; font.pixelSize: 13
+                            font.family: rootShell.shellFont; font.pixelSize: 14;
                             color: "#ffffff"; opacity: 0.8
                             elide: Text.ElideRight
                             Layout.fillWidth: true
@@ -570,16 +544,12 @@ Item {
                         Switch {
                             id: powerSwitch
                             checked: bluetoothRoot.isPowered
-                            implicitWidth: 42
-                            implicitHeight: 24
+                            implicitWidth: 42; implicitHeight: 24
                             Layout.alignment: Qt.AlignVCenter
-                            
                             onClicked: bluetoothRoot.togglePower()
                             
                             indicator: Rectangle {
-                                width: powerSwitch.implicitWidth
-                                height: powerSwitch.implicitHeight
-                                radius: 12
+                                width: powerSwitch.implicitWidth; height: powerSwitch.implicitHeight; radius: 12
                                 color: powerSwitch.checked ? rootShell.colorAccent : "transparent"
                                 border.color: powerSwitch.checked ? rootShell.colorAccent : rootShell.colorBorder
                                 border.width: 2
