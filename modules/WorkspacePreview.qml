@@ -36,8 +36,8 @@ Item {
     implicitHeight: viewportFrame.calculatedBounds.isVertical ? 500 : 270
 
     // Smooth frame interpolators for fluidly reshaping between vertical/horizontal aspect ratios
-    width: active ? implicitWidth : 0
-    height: active ? implicitHeight : 0
+    width: implicitWidth
+    height: implicitHeight
     
     Behavior on width { 
         id: widthMorphBehavior
