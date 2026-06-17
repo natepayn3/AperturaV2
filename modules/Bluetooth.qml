@@ -432,6 +432,39 @@ Item {
                     }
                 }
             }
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "bottom" // Flip visibility check to right side
+                
+                // Top wing (mirrored horizontally)
+                Shape {
+                    // Position at top-right corner, offset upwards by wingSize
+                    x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: bluetoothRoot.wingSize; startY: bluetoothRoot.wingSize
+                        PathLine { x: 0; y: bluetoothRoot.wingSize }
+                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
+                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
+                    }
+                }
+                
+                // Bottom wing (mirrored horizontally)
+                Shape {
+                    rotation: 180 // Rotates the shape to form the inverted curve
+                    transformOrigin: Item.TopLeft
+                    x: parent.width - maxCardWidth; y: parent.height // Anchored to bottom-right edge
+                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
+                        PathQuad { x: 0; y: bluetoothRoot.wingSize; controlX: 0; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
+                    }
+                }
+            }
         }
 
         MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
