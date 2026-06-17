@@ -143,6 +143,48 @@ Item {
                         }
                     }
 
+                    // Audio Status Node
+                    Rectangle {
+                        id: audioIconWrapper
+                        width: 24; height: 24; radius: 4
+                        color: audioMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            // Toggles the icon dynamically when the popup is open
+                            text: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef && sysTrayContainer.shellTarget.audioRef.audioActive) ? "volume_up" : "volume_down"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef && sysTrayContainer.shellTarget.audioRef.audioActive) ? sysTrayContainer.shellTarget.colorAccent : sysTrayContainer.shellTarget.colorText
+                        }
+
+                        MouseArea {
+                            id: audioMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef) {
+                                    let popupWindow = sysTrayContainer.shellTarget.audioRef;
+                                    
+                                    if (popupWindow.audioActive) {
+                                        popupWindow.forceDismiss();
+                                    } else {
+                                        // Capture our absolute icon screen-grid coordinate baseline
+                                        let globalPos = audioIconWrapper.mapToItem(null, 0, 0);
+                                        
+                                        // Route parameter mappings to the audio shell component
+                                        popupWindow.hoverOriginX = globalPos.x;
+                                        popupWindow.hoverOriginY = globalPos.y;
+                                        
+                                        popupWindow.showAudio();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Network Wi-Fi Component Node
                     Rectangle {
                         id: wifiIconWrapper
