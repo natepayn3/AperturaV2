@@ -31,7 +31,6 @@ Item {
     width: Math.round(maxCardWidth)
     height: implicitHeight
 
-    // Position anchoring
     x: rootShell.barPosition === "right" 
        ? parent.width - width - 46
        : (rootShell.barPosition === "left" ? hoverOriginX + 35 : hoverOriginX) 
@@ -43,73 +42,85 @@ Item {
     property real currentVolume: 0.0
     property bool isMuted: false
     property real lastSeenVolume: -1
+    property string targetSinkId: "@DEFAULT_AUDIO_SINK@"
 
-    ListModel {
-        id: sinkModel
+    // NEW: Decoupled State Tracking
+    property bool osdActive: false
+    property bool showUI: active || osdActive
+
+    ListModel { id: sinkModel }
+
+    // --- Active State Timers ---
+    Timer {
+        id: osdHideTimer
+        interval: 2500
+        onTriggered: {
+            if (!audioRoot.isHovered) audioRoot.osdActive = false;
+        }
     }
 
-    // --- Core Polling Loop ---
     Timer {
         interval: 400
-        running: true // Fix: Must run continuously to catch hardware knob changes
+        running: true 
         repeat: true
         onTriggered: {
             if (!mainSlider.pressed) {
                 fetchVolumeProc.running = false;
                 fetchVolumeProc.running = true;
             }
-            // Only poll the full sink list if the UI is actually visible
-            if (audioRoot.active) {
-                fetchSinksProc.running = false;
-                fetchSinksProc.running = true;
-            }
         }
     }
 
-    Timer {
-        id: osdHideTimer
-        interval: 2500
-        onTriggered: {
-            if (!audioRoot.isHovered) audioRoot.active = false
+    // Trigger graph rebuilds whenever the UI is visible (Menu OR OSD)
+    onShowUIChanged: {
+        if (showUI) {
+            fetchSinksProc.running = false;
+            fetchSinksProc.running = true;
         }
-    }
-
-    onCurrentVolumeChanged: {
-        if (!mainSlider.pressed && lastSeenVolume !== -1 && lastSeenVolume !== currentVolume) {
-            audioRoot.active = true;
-            osdHideTimer.restart();
-        }
-        lastSeenVolume = currentVolume;
     }
 
     // --- Core Audio Processes ---
     Process {
         id: fetchVolumeProc
         command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
-        running: false
-        
+        running: true
         stdout: StdioCollector {
             onStreamFinished: {
                 let cleaned = this.text.trim();
-                if (cleaned === "") return;
+                if (!cleaned.startsWith("Volume:")) return;
                 
                 audioRoot.isMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
+                
                 if (parts.length >= 2) {
                     let volVal = parseFloat(parts[1]);
                     if (!isNaN(volVal) && !mainSlider.pressed) {
-                        audioRoot.currentVolume = volVal;
+                        
+                        // Safely updates the bound property
+                        if (Math.abs(audioRoot.currentVolume - volVal) > 0.001) {
+                            audioRoot.currentVolume = volVal; 
+                            
+                            // Trigger OSD ONLY on background changes, and ONLY if menu is closed
+                            if (lastSeenVolume !== -1 && !audioRoot.active) {
+                                audioRoot.osdActive = true;
+                                osdHideTimer.restart();
+                            }
+                        }
+                        lastSeenVolume = volVal;
                     }
                 }
             }
         }
+    }
+
+    Process {
+        id: setVolumeProc
+        running: false
         
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (this.text.trim() !== "") {
-                    console.error("[Quickshell Audio Fetch Error]: " + this.text.trim());
-                }
-            }
+        function setVol(volVal) {
+            command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", volVal.toFixed(2)];
+            running = false; // Guarantees previous queue is cleared
+            running = true;
         }
     }
 
@@ -128,14 +139,8 @@ Item {
                 for (let i = 0; i < lines.length; i++) {
                     let line = lines[i];
 
-                    if (line.includes("Sinks:")) {
-                        parsingSinks = true;
-                        continue;
-                    }
-
-                    if (parsingSinks && (line.includes("Sources:") || line.includes("Filters:") || line.includes("Streams:"))) {
-                        parsingSinks = false;
-                    }
+                    if (line.includes("Sinks:")) { parsingSinks = true; continue; }
+                    if (parsingSinks && (line.includes("Sources:") || line.includes("Filters:") || line.includes("Streams:"))) { parsingSinks = false; }
 
                     if (parsingSinks) {
                         let match = line.match(/(\*\s*)?\s*(\d+)\.\s+(.*)/);
@@ -147,30 +152,12 @@ Item {
                             seenIds[id] = true;
 
                             let rawName = match[3].trim();
-                            let name = rawName.split("[")[0].trim();
-
-                            name = name.replace(/[├─└─│]/g, "").trim();
+                            let name = rawName.split("[")[0].trim().replace(/[├─└─│]/g, "");
                             if (name === "") continue;
 
-                            sinkModel.append({
-                                isDefault: isDef,
-                                sinkId: id,
-                                sinkName: name
-                            });
+                            sinkModel.append({ isDefault: isDef, sinkId: id, sinkName: name });
                         }
                     }
-                }
-            }
-        }
-    }
-
-    Process {
-        id: setVolumeProc
-        running: false
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (this.text.trim() !== "") {
-                    console.error("[Quickshell Audio Set Error]: " + this.text.trim());
                 }
             }
         }
@@ -182,6 +169,9 @@ Item {
         function switchSink(sinkId) {
             command = ["wpctl", "set-default", sinkId];
             running = true;
+            // Force an immediate refresh of the UI list after switching
+            fetchSinksProc.running = false;
+            fetchSinksProc.running = true;
         }
     }
 
@@ -198,47 +188,18 @@ Item {
             return Item.Center
         }
 
-        states: [
-            State {
-                name: "hidden"
-                when: !audioRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
-                PropertyChanges { 
-                    target: animatedGroup
-                    x: (rootShell.barPosition === "right") ? 40 : -40
-                    y: (rootShell.barPosition === "top") ? -40 : 40 
-                }
-            },
-            State {
-                name: "shown"
-                when: audioRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
-            }
-        ]
+        // --- Unbreakable Declarative Animations ---
+        opacity: audioRoot.showUI ? 1.0 : 0.0
+        scale: audioRoot.showUI ? 1.0 : 0.0
+        x: audioRoot.showUI ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
+        y: audioRoot.showUI ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
+        
+        visible: opacity > 0.01
 
-        transitions: [
-            Transition {
-                from: "hidden"; to: "shown"
-                ParallelAnimation {
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: 200 } 
-                        NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
-                    }
-                }
-            },
-            Transition {
-                from: "shown"; to: "hidden"
-                ParallelAnimation {
-                    NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                }
-            }
-        ]
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
+        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
 
         Rectangle {
             id: cardMainBody
@@ -252,7 +213,6 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom" || rootShell.barPosition === "left") ? 0 : audioRoot.radiusValue
         }
 
-        // --- Extruded Wayland Shell Wing Geometry ---
         Item {
             anchors.fill: parent
             visible: audioRoot.width > 30
@@ -353,14 +313,11 @@ Item {
                         value: audioRoot.currentVolume
                         
                         onMoved: {
-                            // Direct execution list format; much safer for QProcess
-                            let volString = mainSlider.value.toFixed(2);
-                            setVolumeProc.command = ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", volString];
+                            audioRoot.currentVolume = value;
+                            setVolumeProc.setVol(value);
                             
-                            setVolumeProc.running = false;
-                            setVolumeProc.running = true;
-                            
-                            if (audioRoot.active) {
+                            // Only extend the timer if we are in OSD mode
+                            if (audioRoot.osdActive) {
                                 osdHideTimer.restart();
                             }
                         }
@@ -423,11 +380,7 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    setDefaultSinkProc.switchSink(model.sinkId);
-                                    fetchSinksProc.running = false;
-                                    fetchSinksProc.running = true;
-                                }
+                                onClicked: setDefaultSinkProc.switchSink(model.sinkId)
                             }
                         }
                     }
