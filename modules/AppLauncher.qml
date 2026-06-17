@@ -12,8 +12,6 @@ Scope {
 
     property alias launcherWindowObject: launcherWindow
     
-    // Decouple the public active flag so it kicks off the exit states 
-    // instead of destroying the layout instance instantly
     property bool active: false
     onActiveChanged: {
         if (active) {
@@ -26,10 +24,10 @@ Scope {
 
     PanelWindow {
         id: launcherWindow
-        // Controlled dynamically by the end of the transition curve
         visible: false
         
-        WlrLayershell.layer: WlrLayer.Overlay
+        // Lowered layer plane to allow native desktop hovers and tooltips
+        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-launcher-preview"
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
@@ -117,7 +115,6 @@ Scope {
             launcherModuleRoot.closeRequested();
         }
 
-        // Changed target from visibility changes to the public activation state token
         onVisibleChanged: {
             if (visible) {
                 if (allApps.length === 0) appFetcher.running = true;
@@ -128,209 +125,216 @@ Scope {
             }
         }
 
+        // --- Pass-Through Outer Dismissal Tripwire ---
+        // Closes the launcher instantly on click out while forwarding the action down
         MouseArea {
             anchors.fill: parent
-            onClicked: launcherModuleRoot.closeRequested()
+            propagateComposedEvents: true
+            
+            onPressed: (mouse) => {
+                launcherModuleRoot.closeRequested();
+                mouse.accepted = false; // Passes press events straight through to windows/bars underneath
+            }
+        }
+
+        Item {
+            id: launcherCardFrame
+            width: 400
+            height: 400
+            anchors.centerIn: parent
+            transformOrigin: Item.Center
+
+            // Internal card click blocker to preserve content frame focus
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
+            }
+
+            // --- Animation States ---
+            states: [
+                State {
+                    name: "hidden"
+                    when: !launcherModuleRoot.active
+                    PropertyChanges { target: launcherCardFrame; opacity: 0.0; scale: 0.0 }
+                },
+                State {
+                    name: "shown"
+                    when: launcherModuleRoot.active
+                    PropertyChanges { target: launcherCardFrame; opacity: 1.0; scale: 1.0 }
+                }
+            ]
+
+            // --- Animation Transitions ---
+            transitions: [
+                Transition {
+                    from: "hidden"; to: "shown"
+                    ParallelAnimation {
+                        NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                        NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
+                    }
+                },
+                Transition {
+                    from: "shown"; to: "hidden"
+                    SequentialAnimation {
+                        ParallelAnimation {
+                            NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
+                            NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
+                        }
+                        ScriptAction {
+                            script: launcherWindow.visible = false
+                        }
+                    }
+                }
+            ]
+
+            Rectangle {
+                id: cardMainBody
+                anchors.fill: parent
+                color: rootShell.colorBackground
+                radius: 20
+                border.color: rootShell.colorText
+                border.width: 3
+                antialiasing: true
+            }
 
             Item {
-                id: launcherCardFrame
-                width: 400
-                height: 400
-                anchors.centerIn: parent
-                transformOrigin: Item.Center
+                id: layoutContentWrapper
+                anchors.fill: parent
+                anchors.margins: 20
 
-                // --- Animation States ---
-                states: [
-                    State {
-                        name: "hidden"
-                        // Tie tracking flags straight to the public module property state
-                        when: !launcherModuleRoot.active
-                        PropertyChanges { target: launcherCardFrame; opacity: 0.0; scale: 0.0 }
-                    },
-                    State {
-                        name: "shown"
-                        when: launcherModuleRoot.active
-                        PropertyChanges { target: launcherCardFrame; opacity: 1.0; scale: 1.0 }
-                    }
-                ]
-
-                // --- Animation Transitions ---
-                transitions: [
-                    Transition {
-                        from: "hidden"; to: "shown"
-                        ParallelAnimation {
-                            NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                            NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                        }
-                    },
-                    Transition {
-                        from: "shown"; to: "hidden"
-                        // SequentialAnimation ensures the window visibility toggle waits for the scale/opacity to finish
-                        SequentialAnimation {
-                            ParallelAnimation {
-                                NumberAnimation { target: launcherCardFrame; property: "scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                                NumberAnimation { target: launcherCardFrame; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                            }
-                            // Safe Exit: Turning off window visibility ONLY after the transition finishes animating
-                            ScriptAction {
-                                script: launcherWindow.visible = false
-                            }
-                        }
-                    }
-                ]
-
-                Rectangle {
-                    id: cardMainBody
+                ColumnLayout {
                     anchors.fill: parent
-                    color: rootShell.colorBackground
-                    radius: 20
-                    border.color: rootShell.colorText
-                    border.width: 3
-                    antialiasing: true
-                }
+                    spacing: 14
 
-                Item {
-                    id: layoutContentWrapper
-                    anchors.fill: parent
-                    anchors.margins: 20
+                    TextField {
+                        id: searchInput
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 44
+                        placeholderText: "Search applications..."
+                        font.family: rootShell.shellFont
+                        font.pixelSize: 15
+                        color: rootShell.colorText
+                        placeholderTextColor: rootShell.colorSubtext
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+                        
+                        background: Rectangle {
+                            color: Qt.rgba(0, 0, 0, 0.2)
+                            border.color: searchInput.activeFocus ? rootShell.colorAccent : rootShell.colorBorder
+                            border.width: 1
+                            radius: 8
+                        }
 
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 14
+                        onTextChanged: launcherWindow.updateModel()
 
-                        TextField {
-                            id: searchInput
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            placeholderText: "Search applications..."
-                            font.family: rootShell.shellFont
-                            font.pixelSize: 15
-                            color: rootShell.colorText
-                            placeholderTextColor: rootShell.colorSubtext
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Down) {
+                                appListView.incrementCurrentIndex();
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Up) {
+                                appListView.decrementCurrentIndex();
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                if (appListView.currentItem) {
+                                    launcherWindow.launchApp(appListView.currentItem.appExec);
+                                }
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Escape) {
+                                launcherModuleRoot.closeRequested();
+                                event.accepted = true;
+                            }
+                        }
+                    }
+
+                    // Divider segment utilizing standardized colorText properties
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: rootShell.colorText
+                    }
+
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+
+                        ListView {
+                            id: appListView
+                            spacing: 4
+                            keyNavigationEnabled: false
+                            model: launcherWindow.filteredApps
                             
-                            background: Rectangle {
-                                color: Qt.rgba(0, 0, 0, 0.2)
-                                border.color: searchInput.activeFocus ? rootShell.colorAccent : rootShell.colorBorder
-                                border.width: 1
-                                radius: 8
-                            }
-
-                            onTextChanged: launcherWindow.updateModel()
-
-                            Keys.onPressed: (event) => {
-                                if (event.key === Qt.Key_Down) {
-                                    appListView.incrementCurrentIndex();
-                                    event.accepted = true;
-                                } else if (event.key === Qt.Key_Up) {
-                                    appListView.decrementCurrentIndex();
-                                    event.accepted = true;
-                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                    if (appListView.currentItem) {
-                                        launcherWindow.launchApp(appListView.currentItem.appExec);
-                                    }
-                                    event.accepted = true;
-                                } else if (event.key === Qt.Key_Escape) {
-                                    launcherModuleRoot.closeRequested();
-                                    event.accepted = true;
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: rootShell.colorText
-                        }
-
-                        ScrollView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-
-                            ListView {
-                                id: appListView
-                                spacing: 4
-                                keyNavigationEnabled: false
-                                model: launcherWindow.filteredApps
+                            delegate: ItemDelegate {
+                                id: appDelegate
+                                width: appListView.width
+                                height: 46
+                                highlighted: appListView.currentIndex === index
                                 
-                                delegate: ItemDelegate {
-                                    id: appDelegate
-                                    width: appListView.width
-                                    height: 46
-                                    highlighted: appListView.currentIndex === index
-                                    
-                                    property string appExec: modelData.exec
-                                    property bool isPinned: launcherWindow.localPins.includes(modelData.path)
+                                property string appExec: modelData.exec
+                                property bool isPinned: launcherWindow.localPins.includes(modelData.path)
 
-                                    background: Rectangle {
-                                        color: appDelegate.highlighted
-                                            ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15)
-                                            : (appDelegate.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-                                        radius: 8
-                                        border.width: appDelegate.highlighted ? 1 : 0
-                                        border.color: rootShell.colorAccent
+                                background: Rectangle {
+                                    color: appDelegate.highlighted
+                                        ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15)
+                                        : (appDelegate.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
+                                    radius: 8
+                                    border.width: appDelegate.highlighted ? 1 : 0
+                                    border.color: rootShell.colorAccent
+                                }
+
+                                contentItem: RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 12
+
+                                    Image {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        source: Quickshell.iconPath(modelData.icon !== "" ? modelData.icon : "application-x-executable")
+                                        fillMode: Image.PreserveAspectFit
+                                        asynchronous: true
                                     }
 
-                                    contentItem: RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 8
-                                        spacing: 12
-
-                                        Image {
-                                            Layout.preferredWidth: 26
-                                            Layout.preferredHeight: 26
-                                            source: Quickshell.iconPath(modelData.icon !== "" ? modelData.icon : "application-x-executable")
-                                            fillMode: Image.PreserveAspectFit
-                                            asynchronous: true
-                                        }
-
-                                        Text {
-                                            text: modelData.name
-                                            font.family: rootShell.shellFont
-                                            font.pixelSize: 14
-                                            color: appDelegate.isPinned ? rootShell.colorAccent : rootShell.colorText
-                                            font.weight: appDelegate.isPinned ? Font.Bold : Font.Normal
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-
-                                        Text {
-                                            text: "keep"
-                                            visible: appDelegate.isPinned
-                                            font.family: "Material Symbols Outlined"
-                                            font.pixelSize: 16
-                                            color: rootShell.colorAccent
-                                        }
+                                    Text {
+                                        text: modelData.name
+                                        font.family: rootShell.shellFont
+                                        font.pixelSize: 14
+                                        color: appDelegate.isPinned ? rootShell.colorAccent : rootShell.colorText
+                                        font.weight: appDelegate.isPinned ? Font.Bold : Font.Normal
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        verticalAlignment: Text.AlignVCenter
                                     }
 
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                        cursorShape: Qt.PointingHandCursor
-                                        hoverEnabled: true
+                                    Text {
+                                        text: "keep"
+                                        visible: appDelegate.isPinned
+                                        font.family: "Material Symbols Outlined"
+                                        font.pixelSize: 16
+                                        color: rootShell.colorAccent
+                                    }
+                                }
 
-                                        onEntered: appListView.currentIndex = index
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    cursorShape: Qt.PointingHandCursor
+                                    hoverEnabled: true
 
-                                        onClicked: (mouse) => {
-                                            if (mouse.button === Qt.RightButton) {
-                                                launcherWindow.togglePin(modelData.path);
-                                            } else {
-                                                launcherWindow.launchApp(modelData.exec);
-                                            }
+                                    onEntered: appListView.currentIndex = index
+
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            launcherWindow.togglePin(modelData.path);
+                                        } else {
+                                            launcherWindow.launchApp(modelData.exec);
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: (mouse) => { mouse.accepted = true; }
                 }
             }
         }
