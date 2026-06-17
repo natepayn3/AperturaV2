@@ -262,7 +262,7 @@ Item {
                 visible: isSpecialNode
                 
                 // Expand bounding box to match the exact 32x32 of the MouseArea
-                anchors.fill: aparent 
+                anchors.fill: parent 
                 
                 // Force internal text alignment to absolute dead center
                 horizontalAlignment: Text.AlignHCenter
