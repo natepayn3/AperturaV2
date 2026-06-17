@@ -61,6 +61,33 @@ Item {
         id: deviceModel
     }
 
+    // --- Core Model Sorting Engine ---
+    function sortDeviceModel() {
+        if (deviceModel.count <= 1) return;
+
+        let items = [];
+        for (let i = 0; i < deviceModel.count; i++) {
+            let item = deviceModel.get(i);
+            items.push({
+                mac: item.mac,
+                name: item.name,
+                connected: item.connected,
+                paired: item.paired
+            });
+        }
+
+        items.sort((a, b) => {
+            if (a.connected !== b.connected) return a.connected ? -1 : 1;
+            if (a.paired !== b.paired) return a.paired ? -1 : 1;
+            return 0;
+        });
+
+        deviceModel.clear();
+        for (let k = 0; k < items.length; k++) {
+            deviceModel.append(items[k]);
+        }
+    }
+
     // --- Unified Bluetooth Session ---
     Process {
         id: bluetoothSession
@@ -69,8 +96,9 @@ Item {
         
         stdout: StdioCollector {
             onTextChanged: {
-                if (this.text.includes("[CHG]")) {
-                    handleBluetoothEvent(this.text);
+                let cleaned = this.text.trim();
+                if (cleaned.includes("[CHG]") || cleaned.includes("Device")) {
+                    handleBluetoothEvent(cleaned);
                 }
             }
         }
@@ -95,12 +123,25 @@ Item {
         }
     }
 
+    // The clean initial frame-1 bootstrapper you liked
+    Process {
+        id: bootstrapPairedFetcher
+        command: ["/usr/bin/bluetoothctl", "paired-devices"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                handleBluetoothEvent(this.text);
+                deviceFetcher.running = true;
+            }
+        }
+    }
+
     Process {
         id: deviceFetcher
         command: [
             "/bin/bash", 
             "-c", 
-            "bluetoothctl devices | grep '^Device ' | while read -r _ mac name; do info=$(bluetoothctl info \"$mac\"); [[ \"$info\" == *\"Paired: yes\"* ]] && paired='true' || paired='false'; [[ \"$info\" == *\"Connected: yes\"* ]] && conn='true' || conn='false'; echo \"$mac|$name|$paired|$conn\"; done"
+            "bluetoothctl devices | grep '^Device ' | while read -r _ mac name; do info=$(bluetoothctl info \"$mac\"); [[ \"$info\" == *\"Paired: yes\"* ]] && paired='true' || paired='false'; [[ \"$info\" == *\"Connected: yes\"* ]] && conn='true' || conn='false'; echo \"$mac|$name|$conn|$paired\"; done"
         ]
         running: false
 
@@ -116,9 +157,11 @@ Item {
 
                     let mac = parts[0];
                     let name = parts[1].trim();
-                    let isPaired = parts[2] === "true";
-                    let isConnected = parts[3] === "true";
+                    let isConnected = parts[2] === "true";
+                    let isPaired = parts[3] === "true";
                     
+                    if (name.includes("RSSI:") || name.includes("TxPower:")) continue;
+
                     let found = false;
 
                     for (let j = 0; j < deviceModel.count; j++) {
@@ -135,23 +178,20 @@ Item {
                     }
 
                     if (!found) {
-                        let deviceData = {
+                        deviceModel.append({
                             mac: mac,
                             name: name,
                             connected: isConnected,
                             paired: isPaired
-                        };
-
-                        if (isPaired || isConnected) {
-                            deviceModel.insert(0, deviceData);
-                        } else {
-                            deviceModel.append(deviceData);
-                        }
+                        });
                     }
                 }
-                deviceFetcher.running = false;
                 
+                sortDeviceModel();
+                
+                deviceFetcher.running = false;
                 if (!bluetoothRoot._lockoutPolling) {
+                    stateFetcher.running = false;
                     stateFetcher.running = true;
                 }
             }
@@ -185,7 +225,7 @@ Item {
         running: bluetoothRoot.active
         onTriggered: {
             if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
-                if (!stateFetcher.running && !deviceFetcher.running) {
+                if (!stateFetcher.running && !deviceFetcher.running && !bootstrapPairedFetcher.running) {
                     deviceFetcher.running = true;
                 }
             }
@@ -219,7 +259,43 @@ Item {
         bluetoothSession.write("pair " + mac + "\n");
     }
 
-    function handleBluetoothEvent(text) { }
+    // Your Exact Preferred Logic Block
+    function handleBluetoothEvent(text) { 
+        let lines = text.split("\n");
+        let modelChanged = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            let match = line.match(/Device\s+([0-9A-Fa-f:]{17})\s+(.*)/);
+            if (match) {
+                let mac = match[1];
+                let desc = match[2].trim();
+                let found = false;
+
+                for (let j = 0; j < deviceModel.count; j++) {
+                    if (deviceModel.get(j).mac === mac) {
+                        found = true;
+                        if (desc !== "" && !desc.startsWith("RSSI") && deviceModel.get(j).name !== desc) {
+                            deviceModel.setProperty(j, "name", desc);
+                            modelChanged = true;
+                        }
+                        if (line.includes("[CHG]") && line.includes("Connected: yes")) { deviceModel.setProperty(j, "connected", true); modelChanged = true; }
+                        if (line.includes("[CHG]") && line.includes("Connected: no")) { deviceModel.setProperty(j, "connected", false); modelChanged = true; }
+                        if (line.includes("[CHG]") && line.includes("Paired: yes")) { deviceModel.setProperty(j, "paired", true); modelChanged = true; }
+                        break;
+                    }
+                }
+
+                if (!found && desc !== "" && !desc.startsWith("RSSI")) {
+                    deviceModel.append({ mac: mac, name: desc, connected: false, paired: false });
+                    modelChanged = true;
+                }
+            }
+        }
+        if (modelChanged) {
+            sortDeviceModel();
+        }
+    }
 
     function removeDevice(mac) {
         bluetoothSession.write("remove " + mac + "\n");
@@ -232,10 +308,10 @@ Item {
     }
 
     onActiveChanged: {
+        // 🎯 FIX: Removed deviceModel.clear() from here so the cached frame stays visible instantly
         if (active) {
-            deviceModel.clear();
             stateFetcher.running = true;
-            deviceFetcher.running = true;
+            bootstrapPairedFetcher.running = true; 
         }
     }
 
@@ -252,7 +328,6 @@ Item {
             return Item.Center
         }
 
-        // --- Streamlined Fluid Behavior Hooks ---
         opacity: bluetoothRoot.active ? 1.0 : 0.0
         scale: bluetoothRoot.active ? 1.0 : 0.0
         x: bluetoothRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
@@ -281,18 +356,10 @@ Item {
                 let pos = rootShell.barPosition;
                 let rad = bluetoothRoot.radiusValue;
 
-                if (pos === "top") {
-                    return (corner === "bottomLeft") ? rad : 0;
-                }
-                if (pos === "bottom") {
-                    return (corner === "topLeft") ? rad : 0;
-                }
-                if (pos === "left") {
-                    return (corner === "topRight") ? rad : 0;
-                }
-                if (pos === "right") {
-                    return (corner === "topLeft") ? rad : 0;
-                }
+                if (pos === "top") return (corner === "bottomLeft") ? rad : 0;
+                if (pos === "bottom") return (corner === "topLeft") ? rad : 0;
+                if (pos === "left") return (corner === "topRight") ? rad : 0;
+                if (pos === "right") return (corner === "topLeft") ? rad : 0;
                 return rad;
             }
         }
@@ -374,7 +441,7 @@ Item {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: bluetoothRoot.wingSize; startY: 0
                         PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        PathQuad { x: 0; y: 0; controlX: 0; controlY: 0 }
                         PathLine { x: bluetoothRoot.wingSize; y: 0 }
                     }
                 }
@@ -386,7 +453,7 @@ Item {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: bluetoothRoot.wingSize; startY: 0
                         PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: bluetoothRoot.wingSize; controlY: 0 }
+                        PathQuad { x: 0; y: 0; controlX: 0; controlY: 0 }
                         PathLine { x: 0; y: 0 }
                     }
                 }
