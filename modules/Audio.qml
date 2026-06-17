@@ -1,4 +1,3 @@
-// modules/Audio.qml
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
@@ -43,20 +42,16 @@ Item {
     property bool isMuted: false
     property real lastSeenVolume: -1
     property string targetSinkId: "@DEFAULT_AUDIO_SINK@"
-
-    // NEW: Decoupled State Tracking
-    property bool osdActive: false
-    property bool showUI: active || osdActive
+    property bool forceShow: false
 
     ListModel { id: sinkModel }
 
     // --- Active State Timers ---
+    
+    // Dedicated timer for the bottom-center hardware overlay
     Timer {
-        id: osdHideTimer
-        interval: 2500
-        onTriggered: {
-            if (!audioRoot.isHovered) audioRoot.osdActive = false;
-        }
+        id: hardwareOsdTimer
+        interval: 1000 
     }
 
     Timer {
@@ -71,9 +66,9 @@ Item {
         }
     }
 
-    // Trigger graph rebuilds whenever the UI is visible (Menu OR OSD)
-    onShowUIChanged: {
-        if (showUI) {
+    // Trigger graph rebuilds whenever the interactive menu is opened
+    onActiveChanged: {
+        if (active) {
             fetchSinksProc.running = false;
             fetchSinksProc.running = true;
         }
@@ -94,19 +89,12 @@ Item {
                 
                 if (parts.length >= 2) {
                     let volVal = parseFloat(parts[1]);
+                    // ADD THIS: Ignore system updates if the user is currently holding the slider
                     if (!isNaN(volVal) && !mainSlider.pressed) {
-                        
-                        // Safely updates the bound property
                         if (Math.abs(audioRoot.currentVolume - volVal) > 0.001) {
-                            audioRoot.currentVolume = volVal; 
-                            
-                            // Trigger OSD ONLY on background changes, and ONLY if menu is closed
-                            if (lastSeenVolume !== -1 && !audioRoot.active) {
-                                audioRoot.osdActive = true;
-                                osdHideTimer.restart();
-                            }
+                            audioRoot.currentVolume = volVal;
+                            hardwareOsdTimer.restart();
                         }
-                        lastSeenVolume = volVal;
                     }
                 }
             }
@@ -119,9 +107,15 @@ Item {
         
         function setVol(volVal) {
             command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", volVal.toFixed(2)];
-            running = false; // Guarantees previous queue is cleared
+            running = false; 
             running = true;
         }
+    }
+
+    Process {
+        id: toggleMuteProc
+        command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+        running: false
     }
 
     Process {
@@ -169,7 +163,6 @@ Item {
         function switchSink(sinkId) {
             command = ["wpctl", "set-default", sinkId];
             running = true;
-            // Force an immediate refresh of the UI list after switching
             fetchSinksProc.running = false;
             fetchSinksProc.running = true;
         }
@@ -189,10 +182,10 @@ Item {
         }
 
         // --- Unbreakable Declarative Animations ---
-        opacity: audioRoot.showUI ? 1.0 : 0.0
-        scale: audioRoot.showUI ? 1.0 : 0.0
-        x: audioRoot.showUI ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
-        y: audioRoot.showUI ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
+        opacity: audioRoot.active ? 1.0 : 0.0
+        scale: audioRoot.active ? 1.0 : 0.0
+        x: audioRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
+        y: audioRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
         
         visible: opacity > 0.01
 
@@ -299,10 +292,36 @@ Item {
                     Layout.fillWidth: true
                     spacing: 16
                     
-                    Text {
-                        text: audioRoot.isMuted ? "volume_off" : "volume_up"
-                        font.family: "Material Symbols Outlined"; font.pixelSize: 24
-                        color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
+                    Rectangle {
+                        width: 32
+                        height: 32
+                        radius: 8
+                        Layout.alignment: Qt.AlignVCenter
+                        color: muteMouseArea.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: audioRoot.isMuted ? "volume_off" : (audioRoot.currentVolume < 0.33 ? "volume_mute" : (audioRoot.currentVolume < 0.50 ? "volume_down" : "volume_up"))
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 24
+                            color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
+                        }
+
+                        MouseArea {
+                            id: muteMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true 
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                toggleMuteProc.running = false;
+                                toggleMuteProc.running = true;
+                                audioRoot.isMuted = !audioRoot.isMuted; 
+                                
+                                // FORCE the timer reset explicitly
+                                hardwareOsdTimer.stop();
+                                hardwareOsdTimer.restart();
+                            }
+                        }
                     }
                     
                     Slider {
@@ -310,17 +329,50 @@ Item {
                         Layout.fillWidth: true
                         from: 0.0
                         to: 1.0
+                        stepSize: 0.01 
                         value: audioRoot.currentVolume
                         
                         onMoved: {
                             audioRoot.currentVolume = value;
                             setVolumeProc.setVol(value);
-                            
-                            // Only extend the timer if we are in OSD mode
-                            if (audioRoot.osdActive) {
-                                osdHideTimer.restart();
+                        }
+
+                        background: Rectangle {
+                            x: mainSlider.leftPadding
+                            y: mainSlider.topPadding + mainSlider.availableHeight / 2 - height / 2
+                            implicitWidth: 200
+                            implicitHeight: 4
+                            width: mainSlider.availableWidth
+                            height: implicitHeight
+                            radius: 2
+                            color: Qt.rgba(255, 255, 255, 0.1)
+
+                            Rectangle {
+                                width: mainSlider.visualPosition * parent.width
+                                height: parent.height
+                                color: audioRoot.isMuted ? "#666666" : rootShell.colorAccent
+                                radius: 2
                             }
                         }
+
+                        handle: Rectangle {
+                            x: mainSlider.leftPadding + mainSlider.visualPosition * (mainSlider.availableWidth - width)
+                            y: mainSlider.topPadding + mainSlider.availableHeight / 2 - height / 2
+                            implicitWidth: 16
+                            implicitHeight: 16
+                            radius: 8 
+                            color: mainSlider.pressed ? Qt.lighter(rootShell.colorAccent, 1.2) : (audioRoot.isMuted ? "#999999" : rootShell.colorAccent)
+                        }
+                    }
+
+                    Text {
+                        text: Math.round(audioRoot.currentVolume * 100) + "%"
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: audioRoot.isMuted ? "#999999" : "#ffffff"
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.minimumWidth: 36 
+                        horizontalAlignment: Text.AlignRight
                     }
                 }
 
@@ -384,6 +436,73 @@ Item {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // --- Floating Hardware Volume OSD ---
+    PanelWindow {
+        id: volumePillWindow
+        exclusiveZone: 0 
+        implicitWidth: 260
+        implicitHeight: 48
+        color: "transparent"
+        
+        visible: true
+
+        anchors { bottom: true }
+        margins { bottom: 120 }
+
+        Rectangle {
+            id: pillBackground
+            anchors.fill: parent
+            radius: 24 
+            
+            opacity: hardwareOsdTimer.running ? 1.0 : 0.0
+            Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+
+            // Matching the module background logic (rootShell.colorBackground + 0.8 opacity)
+            color: Qt.rgba(rootShell.colorBackground.r, rootShell.colorBackground.g, rootShell.colorBackground.b, 0.8)
+            border.width: 1
+            border.color: Qt.rgba(255, 255, 255, 0.1)
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 12
+
+                Text {
+                    text: audioRoot.isMuted ? "volume_off" : (audioRoot.currentVolume < 0.33 ? "volume_mute" : (audioRoot.currentVolume < 0.50 ? "volume_down" : "volume_up"))
+                    font.family: "Material Symbols Outlined"
+                    font.pixelSize: 20
+                    color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 4
+                    radius: 2
+                    color: Qt.rgba(255, 255, 255, 0.1)
+
+                    Rectangle {
+                        width: parent.width * audioRoot.currentVolume
+                        height: parent.height
+                        radius: 2
+                        color: audioRoot.isMuted ? "#666666" : rootShell.colorAccent
+                        
+                        Behavior on width { NumberAnimation { duration: 75; easing.type: Easing.OutQuad } }
+                    }
+                }
+
+                Text {
+                    text: Math.round(audioRoot.currentVolume * 100) + "%"
+                    font.pixelSize: 13
+                    font.weight: Font.Bold
+                    color: audioRoot.isMuted ? "#999999" : "#ffffff"
+                    Layout.minimumWidth: 36 
+                    horizontalAlignment: Text.AlignRight
                 }
             }
         }
