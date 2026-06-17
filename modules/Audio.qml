@@ -34,15 +34,15 @@ Item {
         if (rootShell.barPosition === "top") return Screen.width - width - 10;
         if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
         if (rootShell.barPosition === "right") return Screen.width - width - 46;
-        if (rootShell.barPosition === "left") return 46; // Fixed offset from left
-        return hoverOriginX; // Keep X centered on icon or override as needed
+        if (rootShell.barPosition === "left") return 46; 
+        return hoverOriginX; 
     }
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46; // 46px from bottom
-            case "top":    return 46;                             // 46px from top
-            case "left":   return Screen.height - height - 10        // Fixed start of bar
+            case "bottom": return Screen.height - height - 46; 
+            case "top":    return 46;                             
+            case "left":   return Screen.height - height - 10        
             case "right":  return Screen.height - height - 10;
             default:       return hoverOriginY;
         }
@@ -64,18 +64,6 @@ Item {
         interval: 1000 
     }
 
-    Timer {
-        interval: 400
-        running: true 
-        repeat: true
-        onTriggered: {
-            if (!mainSlider.pressed) {
-                fetchVolumeProc.running = false;
-                fetchVolumeProc.running = true;
-            }
-        }
-    }
-
     // Trigger graph rebuilds whenever the interactive menu is opened
     onActiveChanged: {
         if (active) {
@@ -84,27 +72,31 @@ Item {
         }
     }
 
-    // --- Core Audio Processes ---
+    // --- Core Audio Processes (Event-Driven Streams) ---
+    
     Process {
-        id: fetchVolumeProc
-        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let cleaned = this.text.trim();
+        id: audioEventStream
+        // Listens to volume/mute changes and sink adjustments synchronously
+        command: [
+            "sh", "-c",
+            "pactl subscribe | stdbuf -oL grep --line-buffered -E \"'change' on sink|'new' on sink|'remove' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
+        ]
+        running: audioRoot.active || volumePillWindow.visible
+
+        stdout: SplitParser {
+            onRead: data => {
+                let cleaned = data.trim();
                 if (!cleaned.startsWith("Volume:")) return;
-                
+
                 let isNowMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
                 let volVal = parseFloat(parts[1]);
-                
-                // ADDED: Simple lock to ignore system state for 300ms after a manual click
+
                 if (!isNaN(volVal) && !mainSlider.pressed && !toggleMuteProc.running) {
-                    
                     if (Math.abs(audioRoot.currentVolume - volVal) > 0.001 || audioRoot.isMuted !== isNowMuted) {
                         audioRoot.currentVolume = volVal;
                         audioRoot.isMuted = isNowMuted;
-                        
+
                         if (lastSeenVolume !== -1 && !mainSlider.pressed && !audioRoot.active) {
                             hardwareOsdTimer.restart();
                         }
@@ -116,24 +108,24 @@ Item {
     }
 
     Process {
+        id: unmuteProc
+        command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"]
+        running: false
+    }
+
+    Process {
         id: setVolumeProc
         running: false
         
-        // Use a variable to track if a command is pending
         property real pendingVolume: 0.0
 
         function setVol(volVal) {
             pendingVolume = volVal;
             
-            // 1. If currently muted, we must toggle it first
             if (audioRoot.isMuted) {
-                // Execute just the mute toggle
-                Quickshell.exec(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"]);
-                
-                // Update local state immediately
+                unmuteProc.running = true;
                 audioRoot.isMuted = false;
                 
-                // Wait a tiny bit for the pipewire server to update the node's mute flag
                 Qt.callLater(() => {
                     executeVolumeSet(pendingVolume);
                 });
@@ -157,7 +149,7 @@ Item {
 
     Process {
         id: fetchSinksProc
-        command: ["/bin/bash", "-c", "wpctl status | awk '/Audio/,/Video/'"]
+        command: ["wpctl", "status"]
         running: false
         
         stdout: StdioCollector {
@@ -199,23 +191,41 @@ Item {
         running: false 
         
         function switchSink(sinkId) {
-            // 1. Optimistic UI Update: Immediately toggle the local model
             for (let i = 0; i < sinkModel.count; i++) {
                 let item = sinkModel.get(i);
                 item.isDefault = (item.sinkId === sinkId);
                 sinkModel.set(i, item);
             }
             
-            // 2. Execute the backend change
             command = ["wpctl", "set-default", sinkId];
             running = true;
             
-            // 3. Trigger a background refresh to stay in sync with the real system
             Qt.callLater(() => {
                 fetchSinksProc.running = false;
                 fetchSinksProc.running = true;
             });
         }
+    }
+
+    Process {
+        id: bootstrapVolume
+        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let cleaned = this.text.trim();
+                if (!cleaned.startsWith("Volume:")) return;
+                audioRoot.isMuted = cleaned.includes("[MUTED]");
+                let parts = cleaned.split(" ");
+                let volVal = parseFloat(parts[1]);
+                if (!isNaN(volVal)) audioRoot.currentVolume = volVal;
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        fetchSinksProc.running = true;
+        bootstrapVolume.running = true;
     }
 
     // --- Visual Control Panel Component Layout ---
@@ -231,7 +241,6 @@ Item {
             return Item.Center
         }
 
-        // --- Unbreakable Declarative Animations ---
         opacity: audioRoot.active ? 1.0 : 0.0
         scale: audioRoot.active ? 1.0 : 0.0
         x: audioRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
@@ -251,7 +260,6 @@ Item {
             z: 2
             border.width: 0
 
-            // Define the radii using a helper function
             topLeftRadius:     getCornerRadius("topLeft")
             topRightRadius:    getCornerRadius("topRight")
             bottomLeftRadius:  getCornerRadius("bottomLeft")
@@ -261,22 +269,10 @@ Item {
                 let pos = rootShell.barPosition;
                 let rad = audioRoot.radiusValue;
 
-                if (pos === "top") {
-                    return (corner === "bottomLeft") ? rad : 0;
-                }
-                if (pos === "bottom") {
-                    return (corner === "topLeft") ? rad : 0;
-                }
-                if (pos === "left") {
-                    // Only right side rounded
-                    return (corner === "topRight") ? rad : 0;
-                }
-                if (pos === "right") {
-                    // Only left side rounded
-                    return (corner === "topLeft") ? rad : 0;
-                }
-                
-                // Default fallback
+                if (pos === "top") return (corner === "bottomLeft") ? rad : 0;
+                if (pos === "bottom") return (corner === "topLeft") ? rad : 0;
+                if (pos === "left") return (corner === "topRight") ? rad : 0;
+                if (pos === "right") return (corner === "topLeft") ? rad : 0;
                 return rad;
             }
         }
@@ -377,11 +373,9 @@ Item {
             }
             Item {
                 anchors.fill: parent
-                visible: rootShell.barPosition === "bottom" // Flip visibility check to right side
+                visible: rootShell.barPosition === "bottom" 
                 
-                // Top wing (mirrored horizontally)
                 Shape {
-                    // Position at top-right corner, offset upwards by wingSize
                     x: parent.width - audioRoot.wingSize; y: -audioRoot.wingSize
                     width: audioRoot.wingSize; height: audioRoot.wingSize
                     ShapePath {
@@ -393,11 +387,10 @@ Item {
                     }
                 }
                 
-                // Bottom wing (mirrored horizontally)
                 Shape {
-                    rotation: 180 // Rotates the shape to form the inverted curve
+                    rotation: 180 
                     transformOrigin: Item.TopLeft
-                    x: parent.width - maxCardWidth; y: parent.height // Anchored to bottom-right edge
+                    x: parent.width - maxCardWidth; y: parent.height 
                     width: audioRoot.wingSize; height: audioRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
@@ -437,7 +430,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: audioRoot.isMuted ? "volume_off" : (audioRoot.currentVolume < 0.33 ? "volume_mute" : (audioRoot.currentVolume < 0.50 ? "volume_down" : "volume_up"))
+                            text: audioRoot.isMuted ? "volume_off" : "volume_up"
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 24
                             color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
@@ -453,7 +446,6 @@ Item {
                                 toggleMuteProc.running = true;
                                 audioRoot.isMuted = !audioRoot.isMuted; 
                                 
-                                // CallLater ensures the timer fires after the UI state settles
                                 Qt.callLater(() => {
                                     hardwareOsdTimer.stop();
                                     hardwareOsdTimer.restart();
@@ -472,9 +464,7 @@ Item {
                         
                         onMoved: {
                             audioRoot.currentVolume = value;
-                            // Force the mute state to false locally immediately
                             if (audioRoot.isMuted) audioRoot.isMuted = false;
-                            
                             setVolumeProc.setVol(value);
                         }
 
@@ -603,7 +593,6 @@ Item {
             opacity: hardwareOsdTimer.running ? 1.0 : 0.0
             Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
-            // Refined color: Using 0.6 opacity for a "glassier" feel
             color: rootShell.colorBackground
             radius: 12
 
@@ -614,7 +603,7 @@ Item {
                 spacing: 12
 
                 Text {
-                    text: audioRoot.isMuted ? "volume_off" : (audioRoot.currentVolume < 0.33 ? "volume_mute" : (audioRoot.currentVolume < 0.50 ? "volume_down" : "volume_up"))
+                    text: audioRoot.isMuted ? "volume_off" : "volume_up"
                     font.family: "Material Symbols Outlined"
                     font.pixelSize: 20
                     color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
