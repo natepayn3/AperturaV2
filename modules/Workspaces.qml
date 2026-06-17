@@ -260,9 +260,15 @@ Item {
             Text {
                 id: specialIconLayer
                 visible: isSpecialNode
-                anchors.centerIn: parent
-                text: "star"
                 
+                // Expand bounding box to match the exact 32x32 of the MouseArea
+                anchors.fill: aparent 
+                
+                // Force internal text alignment to absolute dead center
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                
+                text: "star"
                 font.family: "Material Symbols Outlined"
                 font.pixelSize: workspaceButton.isActive ? 18 : 14
                 font.bold: true
