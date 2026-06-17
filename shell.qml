@@ -97,6 +97,10 @@ Scope {
     function closeAllPopups() {
         if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
         if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+        if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+        
+        // Explicitly clear both application windows simultaneously
+        if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
         if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
     }
 
@@ -251,14 +255,39 @@ Scope {
         stdout: StdioCollector { onTextChanged: { readMatugenProc.output = text; parseMatugen(text); } }
     }
 
+    // --- Core Engine Window State Cross-Trackers ---
+    Connections {
+        target: settingsAppInstance
+        ignoreUnknownSignals: true
+        function onWindowVisibleChanged() {
+            if (settingsAppInstance.windowVisible) {
+                if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
+                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
+                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+            }
+        }
+    }
+
+    Connections {
+        target: globalAppLauncherPreview
+        ignoreUnknownSignals: true
+        function onActiveChanged() {
+            if (globalAppLauncherPreview.active) {
+                if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
+                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
+                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
+                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+            }
+        }
+    }
+
+    // --- Input Processing Interfaces ---
     IpcHandler {
         target: "settings"
         function toggle(): void {
             if (settingsAppInstance) {
                 settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible;
-                if (settingsAppInstance.windowVisible) {
-                    settingsAppInstance.updateDisplaysFromShell();
-                }
             }
         }
     }
@@ -274,7 +303,6 @@ Scope {
 
     IpcHandler {
         target: "audio"
-        // Called by: shell-ipc-command --target audio --action updateVolume
         function updateVolume(): void {
             if (globalAudioPreview && globalAudioPreview.cardRef) {
                 globalAudioPreview.cardRef.showOsd();
@@ -425,8 +453,8 @@ Scope {
         id: globalCalendarPreview
         property bool calendarActive: false
         
+        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-calendar-preview"
-        WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: calendarActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
 
@@ -436,25 +464,22 @@ Scope {
 
         MouseArea {
             anchors.fill: parent
+            propagateComposedEvents: true
             enabled: globalCalendarPreview.calendarActive
             
             onPressed: (mouse) => {
-                // Map the click to the coordinate space of the popup card
-                let localPoint = innerCalendarCard.mapFromItem(null, mouse.x, mouse.y);
-                
-                // If the click is INSIDE the card, we do NOT dismiss. 
-                // We also set accepted = false so the event bubbles to the card's internal MouseAreas.
-                if (innerCalendarCard.contains(localPoint)) {
-                    mouse.accepted = false; 
-                } else {
-                    // Click is in the "void", so dismiss.
-                    globalCalendarPreview.forceDismiss();
-                    mouse.accepted = true;
-                }
+                globalCalendarPreview.forceDismiss();
+                mouse.accepted = false; 
             }
         }
 
-        function showCalendar() { calendarActive = true; showCalendarAnim.restart(); }
+        function showCalendar() { 
+            if (!calendarActive) {
+                closeAllPopups();
+                calendarActive = true; 
+                showCalendarAnim.restart(); 
+            }
+        }
         function forceDismiss() { calendarActive = false; hideCalendarAnim.restart(); }
 
         Shortcut {
@@ -463,11 +488,15 @@ Scope {
             onActivated: globalCalendarPreview.forceDismiss()
         }
 
-        // 2. The actual content
         CalendarPopup {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
-            z: 1 // Ensure it sits above the shield
+
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
+            }
 
             hoverOriginX: {
                 if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
@@ -487,13 +516,10 @@ Scope {
 
         screen: Quickshell.screens[0] 
         
-        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-audio-preview"
-        
         WlrLayershell.keyboardFocus: globalAudioPreview.audioActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        mask: Region { item: globalAudioPreview.audioActive ? clickAreaAudio : null }
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: audioActive || rootShell.audioProgress > 0.0
@@ -502,11 +528,25 @@ Scope {
         property int hoverOriginX: 0
         property int hoverOriginY: 0
 
+        MouseArea {
+            anchors.fill: parent
+            propagateComposedEvents: true
+            enabled: globalAudioPreview.audioActive
+            
+            onPressed: (mouse) => {
+                globalAudioPreview.forceDismiss();
+                mouse.accepted = false;
+            }
+        }
+
         function showAudio() { 
-            audioDismissTimer.stop(); 
-            audioActive = true; 
-            showAudioAnim.restart();
-            innerAudioCard.forceActiveFocus();
+            if (!audioActive) {
+                closeAllPopups();
+                audioDismissTimer.stop(); 
+                audioActive = true; 
+                showAudioAnim.restart();
+                innerAudioCard.forceActiveFocus();
+            }
         }
         
         function requestDismiss() { }
@@ -522,28 +562,16 @@ Scope {
             onActivated: globalAudioPreview.forceDismiss()
         }
 
-        Item {
-            id: clickAreaAudio
-            anchors.fill: parent
-            
-            TapHandler {
-                enabled: globalAudioPreview.audioActive
-                onTapped: function(eventPoint, button) {
-                    let p = eventPoint.position;
-                    let c = innerAudioCard;
-                    
-                    if (p.x < c.x || p.x > c.x + c.width || p.y < c.y || p.y > c.y + c.height) {
-                        globalAudioPreview.forceDismiss();
-                    }
-                }
-            }
-        }
-
         Audio {
             id: innerAudioCard
             active: globalAudioPreview.audioActive
-            z: 2
             
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
+            }
+
             hoverOriginX: globalAudioPreview.hoverOriginX
             hoverOriginY: globalAudioPreview.hoverOriginY
         }
@@ -556,15 +584,10 @@ Scope {
 
         screen: Quickshell.screens[0]
         
-        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-bluetooth-preview"
-        
-        // Explicit ID prefix ensures the engine always finds the property
         WlrLayershell.keyboardFocus: globalBluetoothPreview.bluetoothActive ? WlrLayershell.OnDemand : WlrLayershell.None
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        // Explicit ID prefix for the Region item binding
-        mask: Region { item: globalBluetoothPreview.bluetoothActive ? clickArea : null }
 
         anchors { left: true; right: true; top: true; bottom: true }
         visible: bluetoothActive || rootShell.bluetoothProgress > 0.0
@@ -573,11 +596,25 @@ Scope {
         property int hoverOriginX: 0
         property int hoverOriginY: 0
 
+        MouseArea {
+            anchors.fill: parent
+            propagateComposedEvents: true
+            enabled: globalBluetoothPreview.bluetoothActive
+            
+            onPressed: (mouse) => {
+                globalBluetoothPreview.forceDismiss();
+                mouse.accepted = false;
+            }
+        }
+
         function showBluetooth() { 
-            bluetoothDismissTimer.stop(); 
-            bluetoothActive = true; 
-            showBluetoothAnim.restart();
-            innerBluetoothCard.forceActiveFocus();
+            if (!bluetoothActive) {
+                closeAllPopups();
+                bluetoothDismissTimer.stop(); 
+                bluetoothActive = true; 
+                showBluetoothAnim.restart();
+                innerBluetoothCard.forceActiveFocus();
+            }
         }
         
         function requestDismiss() { }
@@ -593,28 +630,16 @@ Scope {
             onActivated: globalBluetoothPreview.forceDismiss()
         }
 
-        Item {
-            id: clickArea
-            anchors.fill: parent
-            
-            TapHandler {
-                enabled: globalBluetoothPreview.bluetoothActive
-                onTapped: function(eventPoint, button) {
-                    let p = eventPoint.position;
-                    let c = innerBluetoothCard;
-                    
-                    if (p.x < c.x || p.x > c.x + c.width || p.y < c.y || p.y > c.y + c.height) {
-                        globalBluetoothPreview.forceDismiss();
-                    }
-                }
-            }
-        }
-
         Bluetooth {
             id: innerBluetoothCard
             active: globalBluetoothPreview.bluetoothActive
-            z: 2
             
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (event) => event.accepted = true
+                onClicked: (event) => event.accepted = true
+            }
+
             hoverOriginX: globalBluetoothPreview.hoverOriginX
             hoverOriginY: globalBluetoothPreview.hoverOriginY
         }
