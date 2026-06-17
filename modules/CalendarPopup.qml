@@ -27,9 +27,6 @@ Item {
     implicitHeight: Math.round(maxCardHeight)
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
-    opacity: 1.0
-    visible: true
-    clip: false
 
     x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width) : hoverOriginX
     y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
@@ -114,7 +111,6 @@ Item {
         id: animatedGroup
         anchors.fill: parent
 
-        // Multi-axis anchors to pinpoint the actual screen corners for a diagonal expansion pivot
         transformOrigin: {
             if (rootShell.barPosition === "left") return Item.TopLeft
             if (rootShell.barPosition === "right") return Item.TopRight
@@ -123,66 +119,18 @@ Item {
             return Item.Center
         }
 
-        states: [
-            State {
-                name: "hidden"
-                when: !calendarRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
-                PropertyChanges { 
-                    target: animatedGroup
-                    // Horizontal dimensional shift tracking the specific corner intersection
-                    x: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return -40; // Slide left to top-left
-                            case "bottom": return -40; // Slide left to bottom-left
-                            case "right":  return 40;  // Slide right to top-right
-                            case "top":    return -40; // Slide left to top-left
-                            default:       return 0;
-                        }
-                    }
-                    // Vertical dimensional shift tracking the specific corner intersection
-                    y: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return -40; // Slide up to top-left
-                            case "bottom": return 40;  // Slide down to bottom-left
-                            case "right":  return -40; // Slide up to top-right
-                            case "top":    return -40; // Slide up to top-left
-                            default:       return 0;
-                        }
-                    }
-                }
-            },
-            State {
-                name: "shown"
-                when: calendarRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
-            }
-        ]
+        // --- Streamlined Fluid Behavior Hooks ---
+        opacity: calendarRoot.active ? 1.0 : 0.0
+        scale: calendarRoot.active ? 1.0 : 0.0
+        x: calendarRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
+        y: calendarRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
+        
+        visible: opacity > 0.01
 
-        transitions: [
-            Transition {
-                from: "hidden"; to: "shown"
-                ParallelAnimation {
-                    // Restored full Spring Bounce values from WorkspacePreview
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: 200 } 
-                        NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
-                    }
-                }
-            },
-            Transition {
-                from: "shown"; to: "hidden"
-                ParallelAnimation {
-                    NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                }
-            }
-        ]
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
+        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
 
         Rectangle {
             id: cardMainBody
