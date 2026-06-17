@@ -84,18 +84,22 @@ Item {
                 let cleaned = this.text.trim();
                 if (!cleaned.startsWith("Volume:")) return;
                 
-                audioRoot.isMuted = cleaned.includes("[MUTED]");
+                let isNowMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
+                let volVal = parseFloat(parts[1]);
                 
-                if (parts.length >= 2) {
-                    let volVal = parseFloat(parts[1]);
-                    // ADD THIS: Ignore system updates if the user is currently holding the slider
-                    if (!isNaN(volVal) && !mainSlider.pressed) {
-                        if (Math.abs(audioRoot.currentVolume - volVal) > 0.001) {
-                            audioRoot.currentVolume = volVal;
+                // ADDED: Simple lock to ignore system state for 300ms after a manual click
+                if (!isNaN(volVal) && !mainSlider.pressed && !toggleMuteProc.running) {
+                    
+                    if (Math.abs(audioRoot.currentVolume - volVal) > 0.001 || audioRoot.isMuted !== isNowMuted) {
+                        audioRoot.currentVolume = volVal;
+                        audioRoot.isMuted = isNowMuted;
+                        
+                        if (lastSeenVolume !== -1 && !mainSlider.pressed && !audioRoot.active) {
                             hardwareOsdTimer.restart();
                         }
                     }
+                    lastSeenVolume = volVal;
                 }
             }
         }
@@ -317,9 +321,11 @@ Item {
                                 toggleMuteProc.running = true;
                                 audioRoot.isMuted = !audioRoot.isMuted; 
                                 
-                                // FORCE the timer reset explicitly
-                                hardwareOsdTimer.stop();
-                                hardwareOsdTimer.restart();
+                                // CallLater ensures the timer fires after the UI state settles
+                                Qt.callLater(() => {
+                                    hardwareOsdTimer.stop();
+                                    hardwareOsdTimer.restart();
+                                });
                             }
                         }
                     }
