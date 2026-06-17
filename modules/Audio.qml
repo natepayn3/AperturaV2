@@ -42,6 +42,7 @@ Item {
 
     property real currentVolume: 0.0
     property bool isMuted: false
+    property real lastSeenVolume: -1
 
     ListModel {
         id: sinkModel
@@ -50,23 +51,43 @@ Item {
     // --- Core Polling Loop ---
     Timer {
         interval: 400
-        running: audioRoot.active
+        running: true // Fix: Must run continuously to catch hardware knob changes
         repeat: true
         onTriggered: {
             if (!mainSlider.pressed) {
                 fetchVolumeProc.running = false;
                 fetchVolumeProc.running = true;
             }
-            fetchSinksProc.running = false;
-            fetchSinksProc.running = true;
+            // Only poll the full sink list if the UI is actually visible
+            if (audioRoot.active) {
+                fetchSinksProc.running = false;
+                fetchSinksProc.running = true;
+            }
         }
+    }
+
+    Timer {
+        id: osdHideTimer
+        interval: 2500
+        onTriggered: {
+            if (!audioRoot.isHovered) audioRoot.active = false
+        }
+    }
+
+    onCurrentVolumeChanged: {
+        if (!mainSlider.pressed && lastSeenVolume !== -1 && lastSeenVolume !== currentVolume) {
+            audioRoot.active = true;
+            osdHideTimer.restart();
+        }
+        lastSeenVolume = currentVolume;
     }
 
     // --- Core Audio Processes ---
     Process {
         id: fetchVolumeProc
-        command: ["/bin/bash", "-c", "TARGET=$(wpctl status | awk '/Audio/,/Video/' | grep '*' | awk '{print $2}' | tr -d '.') && if [ -n \"$TARGET\" ]; then wpctl get-volume $TARGET; else wpctl get-volume @DEFAULT_AUDIO_SINK@; fi"]
+        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
         running: false
+        
         stdout: StdioCollector {
             onStreamFinished: {
                 let cleaned = this.text.trim();
@@ -82,12 +103,21 @@ Item {
                 }
             }
         }
+        
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") {
+                    console.error("[Quickshell Audio Fetch Error]: " + this.text.trim());
+                }
+            }
+        }
     }
 
     Process {
         id: fetchSinksProc
         command: ["/bin/bash", "-c", "wpctl status | awk '/Audio/,/Video/'"]
         running: false
+        
         stdout: StdioCollector {
             onStreamFinished: {
                 let lines = this.text.split("\n");
@@ -137,6 +167,13 @@ Item {
     Process {
         id: setVolumeProc
         running: false
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() !== "") {
+                    console.error("[Quickshell Audio Set Error]: " + this.text.trim());
+                }
+            }
+        }
     }
     
     Process { 
@@ -145,13 +182,6 @@ Item {
         function switchSink(sinkId) {
             command = ["wpctl", "set-default", sinkId];
             running = true;
-        }
-    }
-
-    onActiveChanged: {
-        if (active) {
-            fetchVolumeProc.running = true;
-            fetchSinksProc.running = true;
         }
     }
 
@@ -323,13 +353,16 @@ Item {
                         value: audioRoot.currentVolume
                         
                         onMoved: {
-                            let cmd = "TARGET=$(wpctl status | awk '/Audio/,/Video/' | grep '*' | awk '{print $2}' | tr -d '.') && " +
-                                      "if [ -n \"$TARGET\" ]; then wpctl set-volume $TARGET " + mainSlider.value.toFixed(2) + "; " +
-                                      "else wpctl set-volume @DEFAULT_AUDIO_SINK@ " + mainSlider.value.toFixed(2) + "; fi";
+                            // Direct execution list format; much safer for QProcess
+                            let volString = mainSlider.value.toFixed(2);
+                            setVolumeProc.command = ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", volString];
                             
-                            setVolumeProc.command = ["/bin/bash", "-c", cmd];
                             setVolumeProc.running = false;
                             setVolumeProc.running = true;
+                            
+                            if (audioRoot.active) {
+                                osdHideTimer.restart();
+                            }
                         }
                     }
                 }
