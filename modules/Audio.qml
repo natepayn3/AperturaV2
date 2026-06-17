@@ -450,6 +450,7 @@ Item {
     // --- Floating Hardware Volume OSD ---
     PanelWindow {
         id: volumePillWindow
+        WlrLayershell.namespace: audioRoot.namespace
         exclusiveZone: 0 
         implicitWidth: 260
         implicitHeight: 48
@@ -463,15 +464,13 @@ Item {
         Rectangle {
             id: pillBackground
             anchors.fill: parent
-            radius: 24 
             
             opacity: hardwareOsdTimer.running ? 1.0 : 0.0
             Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
-            // Matching the module background logic (rootShell.colorBackground + 0.8 opacity)
-            color: Qt.rgba(rootShell.colorBackground.r, rootShell.colorBackground.g, rootShell.colorBackground.b, 0.8)
-            border.width: 1
-            border.color: Qt.rgba(255, 255, 255, 0.1)
+            // Refined color: Using 0.6 opacity for a "glassier" feel
+            color: rootShell.colorBackground
+            radius: 12
 
             RowLayout {
                 anchors.fill: parent
