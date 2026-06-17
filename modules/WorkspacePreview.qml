@@ -150,64 +150,18 @@ Item {
             return Item.Center
         }
 
-        states: [
-            State {
-                name: "hidden"
-                when: !previewRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 0.0; scale: 0.0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 0.0 }
-                PropertyChanges { 
-                    target: animatedGroup
-                    x: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return -40;
-                            case "bottom": return -40;
-                            case "right":  return 40;
-                            case "top":    return -40;
-                            default:       return 0;
-                        }
-                    }
-                    y: {
-                        switch (rootShell.barPosition) {
-                            case "left":   return -40;
-                            case "bottom": return 40;
-                            case "right":  return -40;
-                            case "top":    return -40;
-                            default:       return 0;
-                        }
-                    }
-                }
-            },
-            State {
-                name: "shown"
-                when: previewRoot.active
-                PropertyChanges { target: animatedGroup; opacity: 1.0; scale: 1.0; x: 0; y: 0 }
-                PropertyChanges { target: layoutContentWrapper; opacity: 1.0 }
-            }
-        ]
+        // --- Streamlined Fluid Behavior Hooks matching Audio/Bluetooth Modules ---
+        opacity: previewRoot.active ? 1.0 : 0.0
+        scale: previewRoot.active ? 1.0 : 0.0
+        x: previewRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
+        y: previewRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
+        
+        visible: opacity > 0.01
 
-        transitions: [
-            Transition {
-                from: "hidden"; to: "shown"
-                ParallelAnimation {
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 450; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.OutQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: 200 } 
-                        NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 200; easing.type: Easing.InQuad }
-                    }
-                }
-            },
-            Transition {
-                from: "shown"; to: "hidden"
-                ParallelAnimation {
-                    // This will now execute perfectly because content data stays pinned to memory while running
-                    NumberAnimation { target: layoutContentWrapper; property: "opacity"; duration: 100 }
-                    NumberAnimation { target: animatedGroup; properties: "x,y,scale"; duration: 350; easing.type: Easing.InBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: animatedGroup; property: "opacity"; duration: 250; easing.type: Easing.InQuad }
-                }
-            }
-        ]
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
+        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
 
         Rectangle {
             id: cardMainBody
@@ -313,14 +267,15 @@ Item {
                 visible: rootShell.barPosition === "bottom"
 
                 Shape {
+                    rotation: -90
                     x: 0; y: -previewRoot.wingSize
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: previewRoot.wingSize
-                        PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: previewRoot.wingSize }
-                        PathLine { x: 0; y: previewRoot.wingSize }
+                        startX: 0; startY: 0
+                        PathLine { x: previewRoot.wingSize; y: 0 }
+                        PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
                     }
                 }
                 Shape {
@@ -387,8 +342,11 @@ Item {
             height: Math.round(previewRoot.maxCardHeight)
             x: Math.round((parent.width - width) / 2)
             y: Math.round((parent.height - height) / 2)
-            opacity: 1.0 
+            opacity: previewRoot.active ? 1.0 : 0.0 
             z: 5
+
+            // Unified Content Data Smooth Fade In/Out Reflow Behavior
+            Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
             HoverHandler {
                 id: contentHoverHandler
@@ -507,19 +465,15 @@ Item {
                             property var wlToplevel: {
                                 if (!modelData || !modelData.address) return null;
                                 
-                                // QML Hack: Forces re-evaluation whenever a new hyprctl query runs
                                 let tracker = clientQueryProcess.running;
-                                
                                 let targetAddr = modelData.address.trim().toLowerCase();
 
-                                // Primary search through global toplevels
                                 let match = Hyprland.toplevels.values.find(t => {
                                     if (!t.lastIpcObject || !t.lastIpcObject.address) return false;
                                     return t.lastIpcObject.address.trim().toLowerCase() === targetAddr;
                                 });
                                 if (match && match.wayland) return match.wayland;
                                 
-                                // Fallback search through active workspace toplevels (from your working file)
                                 if (Hyprland.activeWorkspace) {
                                     let localMatch = Hyprland.activeWorkspace.toplevels.values.find(t => {
                                         if (!t.lastIpcObject || !t.lastIpcObject.address) return false;
@@ -533,9 +487,8 @@ Item {
                             Loader {
                                 anchors.fill: parent
                                 active: windowDelegate.wlToplevel !== null && !viewportFrame.isTargetActiveWorkspace
-                                asynchronous: true // Essential for Wayland buffer handoff
+                                asynchronous: true 
                                 
-                                // Fade-in matches your working shell
                                 opacity: status === Loader.Ready ? 1.0 : 0.0
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
