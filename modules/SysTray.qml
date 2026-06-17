@@ -46,8 +46,10 @@ Item {
         Grid {
             id: trayLayout
             anchors.centerIn: parent
-            columns: isVertical ? 1 : -1
-            rows: isVertical ? -1 : 1
+            
+            // Automatically creates a 1D line based on active items
+            columns: isVertical ? 1 : visibleChildren.length
+            rows: isVertical ? visibleChildren.length : 1
             spacing: 8
 
             // --- Drawer Toggle Button Module ---
@@ -94,8 +96,10 @@ Item {
 
                 Grid {
                     id: inlineHardwareLayout
-                    columns: sysTrayContainer.isVertical ? 1 : -1
-                    rows: sysTrayContainer.isVertical ? -1 : 1
+                    
+                    // Add as many modules as you want; this will scale perfectly
+                    columns: sysTrayContainer.isVertical ? 1 : visibleChildren.length
+                    rows: sysTrayContainer.isVertical ? visibleChildren.length : 1
                     spacing: 8
 
                     // Bluetooth Status Node
