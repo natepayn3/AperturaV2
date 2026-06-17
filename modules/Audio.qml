@@ -187,25 +187,30 @@ Item {
     }
     
     Process { 
-        id: setDefaultSinkProc
-        running: false 
-        
-        function switchSink(sinkId) {
-            for (let i = 0; i < sinkModel.count; i++) {
-                let item = sinkModel.get(i);
-                item.isDefault = (item.sinkId === sinkId);
-                sinkModel.set(i, item);
-            }
-            
-            command = ["wpctl", "set-default", sinkId];
-            running = true;
-            
-            Qt.callLater(() => {
-                fetchSinksProc.running = false;
-                fetchSinksProc.running = true;
-            });
+    id: setDefaultSinkProc
+    running: false 
+    
+    function switchSink(sinkId) {
+        // 1. Optimistically update the UI for instant visual feedback
+        for (let i = 0; i < sinkModel.count; i++) {
+            let item = sinkModel.get(i);
+            item.isDefault = (item.sinkId === sinkId);
+            sinkModel.set(i, item);
         }
+        
+        // 2. Send the actual command to WirePlumber
+        command = ["wpctl", "set-default", sinkId];
+        running = true;
+        
+        // 3. Dropped the fetchSinksProc call to kill the race condition.
+        // Instead, explicitly trigger a volume check so the main slider 
+        // instantly snaps to reflect the newly selected sink's volume level.
+        Qt.callLater(() => {
+            bootstrapVolume.running = false;
+            bootstrapVolume.running = true;
+        });
     }
+}
 
     Process {
         id: bootstrapVolume
