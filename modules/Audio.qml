@@ -76,10 +76,10 @@ Item {
     
     Process {
         id: audioEventStream
-        // Listens to volume/mute changes and sink adjustments synchronously
+        // Taps directly into native pipewire monitoring events, bypassing pactl entirely
         command: [
             "sh", "-c",
-            "pactl subscribe | stdbuf -oL grep --line-buffered -E \"'change' on sink|'new' on sink|'remove' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
+            "pw-mon | stdbuf -oL grep --line-buffered -E \"changed|sinks\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
         ]
         running: audioRoot.active || volumePillWindow.visible
 
