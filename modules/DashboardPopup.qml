@@ -6,6 +6,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Services.Notifications
+// Explicitly import your components directory if it's not implicitly in the search path
+import "components" 
 
 Item {
     id: dashboardRoot
@@ -128,7 +130,6 @@ Item {
         onTriggered: weatherFetcher.running = true
     }
 
-    // High-frequency polling timer for unified updates
     Timer {
         id: sysStatsTimer
         interval: 1500; running: false; repeat: true
@@ -276,7 +277,7 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 let parts = this.text.trim().split(" ");
-                if (parts.length >= 2 && !volSlider.pressed) {
+                if (parts.length >= 2 && !volSlider.isPressed) {
                     dashboardRoot.currentVolume = parseFloat(parts[1]);
                 }
                 volFetcher.running = false;
@@ -299,7 +300,7 @@ Item {
                         let parsedPct = parseFloat(pct);
                         if (!isNaN(parsedPct)) {
                             dashboardRoot.hasBrightness = true;
-                            if (!brightSlider.pressed) dashboardRoot.currentBrightness = parsedPct / 100.0;
+                            if (!brightSlider.isPressed) dashboardRoot.currentBrightness = parsedPct / 100.0;
                             found = true;
                             break;
                         }
@@ -325,7 +326,7 @@ Item {
             id: rootHover
             onHoveredChanged: {
                 if (hovered) rootShell.dashboardRef.cancelDismiss()
-                else if (!volSlider.pressed && !brightSlider.pressed) rootShell.dashboardRef.requestDismiss()
+                else if (!volSlider.isPressed && !brightSlider.isPressed) rootShell.dashboardRef.requestDismiss()
             }
         }
     }
@@ -370,7 +371,6 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
         }
 
-        // Corner Wings (Placed inside animatedGroup so they animate perfectly in sync with the window)
         Item {
             anchors.fill: parent
             z: 3
@@ -415,7 +415,7 @@ Item {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: dashboardRoot.wingSize
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        PathLine { x: parent.width; y: dashboardRoot.wingSize } // Fixed path constraint mapping bug
+                        PathLine { x: parent.width; y: dashboardRoot.wingSize }
                         PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize }
                     }
                 }
@@ -469,240 +469,74 @@ Item {
                     }
                 }
 
-                // Systems Rings Area (68x68, Distributed across layout)
+                // Systems Rings Area
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
 
-                    Repeater {
-                        model: [
-                            { label: "CPU", val: dashboardRoot.sysCpu, color: "#89b4fa" }, 
-                            { label: "GPU", val: dashboardRoot.sysGpu, color: "#cba6f7" }, 
-                            { label: "RAM", val: dashboardRoot.sysRam, color: "#a6e3a1" },
-                            { label: "DISK", val: dashboardRoot.sysDisk, color: "#f38ba8" }
-                        ]
-                        delegate: Item {
-                            id: ringDelegate
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 68
-                            
-                            readonly property real cleanVal: (!isFinite(modelData.val) || isNaN(modelData.val)) ? 0.0 : Math.max(0.0, Math.min(1.0, modelData.val))
-                            property real animatedSweep: cleanVal * 360
-                            Behavior on animatedSweep { NumberAnimation { duration: 300; easing.type: Easing.OutQuad } }
-
-                            Shape {
-                                width: 68; height: 68
-                                anchors.centerIn: parent
-                                layer.enabled: true
-                                layer.samples: 4
-                                
-                                ShapePath { 
-                                    fillColor: "transparent"; strokeColor: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); strokeWidth: 5; capStyle: ShapePath.RoundCap
-                                    PathAngleArc { centerX: 34; centerY: 34; radiusX: 29; radiusY: 29; startAngle: 0; sweepAngle: 360 } 
-                                }
-                                ShapePath { 
-                                    fillColor: "transparent"; strokeColor: modelData.color; strokeWidth: 5; capStyle: ShapePath.RoundCap
-                                    PathAngleArc { centerX: 34; centerY: 34; radiusX: 29; radiusY: 29; startAngle: -90; sweepAngle: ringDelegate.animatedSweep } 
-                                }
-                                ColumnLayout {
-                                    anchors.centerIn: parent; spacing: -2
-                                    Text { text: Math.round(ringDelegate.cleanVal * 100) + "%"; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 13; Layout.alignment: Qt.AlignHCenter }
-                                    Text { text: modelData.label; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
-                                }
-                            }
-                        }
-                    }
+                    SysRing { label: "CPU"; value: dashboardRoot.sysCpu; ringColor: "#89b4fa" }
+                    SysRing { label: "GPU"; value: dashboardRoot.sysGpu; ringColor: "#cba6f7" }
+                    SysRing { label: "RAM"; value: dashboardRoot.sysRam; ringColor: "#a6e3a1" }
+                    SysRing { label: "DISK"; value: dashboardRoot.sysDisk; ringColor: "#f38ba8" }
                 }
 
-                // --- 2x2 Clean Toggle Grid with Corrected Text Accents ---
+                // Toggle Grid
                 GridLayout {
                     columns: 2
                     rowSpacing: 12
                     columnSpacing: 12
                     Layout.alignment: Qt.AlignHCenter
 
-                    // Wifi Toggle
-                    Rectangle {
-                        width: 156; height: 56; radius: 28
-                        color: dashboardRoot.wifiActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                        opacity: dashboardRoot.wifiAvailable ? 1.0 : 0.5
-
-                        Text {
-                            text: "Wi-Fi"
-                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
-                            color: dashboardRoot.wifiActive ? rootShell.colorBackground : rootShell.colorText
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.wifiActive ? 18 : 62
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-                        }
-
-                        Rectangle {
-                            id: wifiKnob
-                            width: 48; height: 48; radius: 24
-                            color: dashboardRoot.wifiActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.wifiActive ? parent.width - width - 4 : 4
-
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: !dashboardRoot.wifiAvailable ? "wifi_off" : "wifi"
-                                font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.wifiActive ? rootShell.colorText : rootShell.colorSubtext
-                                font.pixelSize: 22
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: dashboardRoot.wifiAvailable ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: {
-                                if (dashboardRoot.wifiAvailable) {
-                                    dashboardRoot.wifiActive = !dashboardRoot.wifiActive
-                                    wifiToggleProc.command = ["sh", "-c", "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"]
-                                    wifiToggleProc.running = true
-                                }
-                            }
+                    ToggleSwitch {
+                        label: "Wi-Fi"
+                        iconName: !dashboardRoot.wifiAvailable ? "wifi_off" : "wifi"
+                        checked: dashboardRoot.wifiActive
+                        isAvailable: dashboardRoot.wifiAvailable
+                        onToggled: {
+                            dashboardRoot.wifiActive = !dashboardRoot.wifiActive
+                            wifiToggleProc.command = ["sh", "-c", "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"]
+                            wifiToggleProc.running = true
                         }
                     }
 
-                    // Bluetooth Toggle
-                    Rectangle {
-                        width: 156; height: 56; radius: 28
-                        color: dashboardRoot.btActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-
-                        Text {
-                            text: "Bluetooth"
-                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
-                            color: dashboardRoot.btActive ? rootShell.colorBackground : rootShell.colorText
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.btActive ? 18 : 62
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-                        }
-
-                        Rectangle {
-                            id: btKnob
-                            width: 48; height: 48; radius: 24
-                            color: dashboardRoot.btActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.btActive ? parent.width - width - 4 : 4
-
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "bluetooth"
-                                font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.btActive ? rootShell.colorText : rootShell.colorSubtext
-                                font.pixelSize: 22
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                dashboardRoot.btActive = !dashboardRoot.btActive
-                                btToggleProc.command = ["sh", "-c", "bluetoothctl show | grep -q 'Powered: yes' && bluetoothctl power off || bluetoothctl power on"]
-                                btToggleProc.running = true
-                            }
+                    ToggleSwitch {
+                        label: "Bluetooth"
+                        iconName: "bluetooth"
+                        checked: dashboardRoot.btActive
+                        onToggled: {
+                            dashboardRoot.btActive = !dashboardRoot.btActive
+                            btToggleProc.command = ["sh", "-c", "bluetoothctl show | grep -q 'Powered: yes' && bluetoothctl power off || bluetoothctl power on"]
+                            btToggleProc.running = true
                         }
                     }
 
-                    // DND Toggle
-                    Rectangle {
-                        width: 156; height: 56; radius: 28
-                        color: dashboardRoot.dndActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-
-                        Text {
-                            text: "DND"
-                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
-                            color: dashboardRoot.dndActive ? rootShell.colorBackground : rootShell.colorText
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.dndActive ? 18 : 62
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-                        }
-
-                        Rectangle {
-                            id: dndKnob
-                            width: 48; height: 48; radius: 24
-                            color: dashboardRoot.dndActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.dndActive ? parent.width - width - 4 : 4
-
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "do_not_disturb_on"
-                                font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.dndActive ? rootShell.colorText : rootShell.colorSubtext
-                                font.pixelSize: 22
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                dashboardRoot.dndActive = !dashboardRoot.dndActive
-                                if (dashboardRoot.dndActive) {
-                                    let arr = notifServer.trackedNotifications.values;
-                                    if (arr && arr.length > 0) {
-                                        for (let i = arr.length - 1; i >= 0; i--) {
-                                            if (arr[i]) arr[i].dismiss();
-                                        }
+                    ToggleSwitch {
+                        label: "DND"
+                        iconName: "do_not_disturb_on"
+                        checked: dashboardRoot.dndActive
+                        onToggled: {
+                            dashboardRoot.dndActive = !dashboardRoot.dndActive
+                            if (dashboardRoot.dndActive) {
+                                let arr = notifServer.trackedNotifications.values;
+                                if (arr && arr.length > 0) {
+                                    for (let i = arr.length - 1; i >= 0; i--) {
+                                        if (arr[i]) arr[i].dismiss();
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Caffeine Toggle
-                    Rectangle {
-                        width: 156; height: 56; radius: 28
-                        color: dashboardRoot.caffeineActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-
-                        Text {
-                            text: "Caffeine"
-                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
-                            color: dashboardRoot.caffeineActive ? rootShell.colorBackground : rootShell.colorText
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.caffeineActive ? 18 : 62
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-                        }
-
-                        Rectangle {
-                            id: caffeineKnob
-                            width: 48; height: 48; radius: 24
-                            color: dashboardRoot.caffeineActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: dashboardRoot.caffeineActive ? parent.width - width - 4 : 4
-
-                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "local_cafe"
-                                font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.caffeineActive ? rootShell.colorText : rootShell.colorSubtext
-                                font.pixelSize: 22
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
-                                if (dashboardRoot.caffeineActive) {
-                                    caffeineToggleProc.command = ["systemctl", "--user", "stop", "hypridle.service"]
-                                } else {
-                                    caffeineToggleProc.command = ["systemctl", "--user", "start", "hypridle.service"]
-                                }
-                                caffeineToggleProc.running = true
-                            }
+                    ToggleSwitch {
+                        label: "Caffeine"
+                        iconName: "local_cafe"
+                        checked: dashboardRoot.caffeineActive
+                        onToggled: {
+                            dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
+                            caffeineToggleProc.command = dashboardRoot.caffeineActive 
+                                ? ["systemctl", "--user", "stop", "hypridle.service"]
+                                : ["systemctl", "--user", "start", "hypridle.service"];
+                            caffeineToggleProc.running = true
                         }
                     }
                 }
@@ -726,132 +560,58 @@ Item {
                     
                     Item {
                         Layout.fillWidth: true; Layout.preferredHeight: dashboardRoot.hasBrightness ? 64 : 48
-                        Slider {
-                            id: volSlider; anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; height: 48; value: dashboardRoot.currentVolume
-                            onMoved: {
-                                dashboardRoot.currentVolume = value;
-                                setVolProc.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", value.toFixed(2)]
+                        DashboardSlider {
+                            id: volSlider
+                            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                            height: 48
+                            iconLow: "volume_down"
+                            iconHigh: "volume_up"
+                            value: dashboardRoot.currentVolume
+                            onMoved: (newValue) => {
+                                dashboardRoot.currentVolume = newValue;
+                                setVolProc.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", newValue.toFixed(2)]
                                 setVolProc.running = true
                             }
-                            background: Rectangle {
-                                color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); radius: 24
-                                Rectangle { width: volSlider.visualPosition * parent.width; height: parent.height; color: rootShell.colorText; radius: 24 }
-                                RowLayout {
-                                    anchors.fill: parent; anchors.margins: 16
-                                    Text { text: "volume_down"; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
-                                    Item { Layout.fillWidth: true }
-                                    Text { text: "volume_up"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
-                                }
-                                Text { text: Math.round(volSlider.value * 100) + "%"; color: rootShell.colorBackground; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 14; anchors.centerIn: parent; opacity: volSlider.pressed ? 1.0 : 0.0; Behavior on opacity { NumberAnimation { duration: 200 } } }
-                            }
-                            handle: Item {} 
                         }
                     }
 
                     Item {
-                        Layout.fillWidth: true; Layout.preferredHeight: dashboardRoot.hasBrightness ? 48 : 0; visible: dashboardRoot.hasBrightness
-                        Slider {
-                            id: brightSlider; anchors.fill: parent; value: dashboardRoot.currentBrightness
-                            onMoved: {
-                                dashboardRoot.currentBrightness = value;
-                                let rawVal = Math.round(value * 100) + "%"
+                        Layout.fillWidth: true; Layout.preferredHeight: dashboardRoot.hasBrightness ? 48 : 0
+                        visible: dashboardRoot.hasBrightness
+                        DashboardSlider {
+                            id: brightSlider
+                            anchors.fill: parent
+                            iconLow: "light_mode"
+                            iconHigh: "" // Passing empty triggers the right-aligned percentage readout block 
+                            value: dashboardRoot.currentBrightness
+                            onMoved: (newValue) => {
+                                dashboardRoot.currentBrightness = newValue;
+                                let rawVal = Math.round(newValue * 100) + "%"
                                 setBrightProc.command = ["brightnessctl", "set", rawVal]
                                 setBrightProc.running = true
                             }
-                            background: Rectangle {
-                                color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); radius: 24
-                                Rectangle { width: brightSlider.visualPosition * parent.width; height: parent.height; color: rootShell.colorText; radius: 24 }
-                                RowLayout {
-                                    anchors.fill: parent; anchors.margins: 16
-                                    Text { text: "light_mode"; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
-                                    Item { Layout.fillWidth: true }
-                                    Text { text: Math.round(brightSlider.value * 100) + "%"; color: rootShell.colorBackground; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 12; Layout.alignment: Qt.AlignVCenter }
-                                }
-                            }
-                            handle: Item {}
                         }
                     }
                 }
 
                 // Media Player Area
-                Rectangle {
-                    Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 16; color: "transparent"
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 0; spacing: 16
-                        Rectangle { width: 48; height: 48; radius: 8; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2); Text { anchors.centerIn: parent; text: "music_note"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 24 } }
-                        ColumnLayout {
-                            spacing: 2; Layout.fillWidth: true
-                            Text { text: dashboardRoot.mediaTitle; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Text { text: dashboardRoot.mediaArtist; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
-                        }
-                        RowLayout {
-                            spacing: 8
-                            MouseArea { width: 24; height: 24; cursorShape: Qt.PointingHandCursor; onClicked: { mediaControlProc.command = ["playerctl", "previous"]; mediaControlProc.running = true }
-                                Text { anchors.centerIn: parent; text: "skip_previous"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 20 }
-                            }
-                            Rectangle { width: 36; height: 36; radius: 18; color: rootShell.colorText
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { mediaControlProc.command = ["playerctl", "play-pause"]; mediaControlProc.running = true } }
-                                Text { anchors.centerIn: parent; text: dashboardRoot.mediaStatus === "Playing" ? "pause" : "play_arrow"; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20 } 
-                            }
-                            MouseArea { width: 24; height: 24; cursorShape: Qt.PointingHandCursor; onClicked: { mediaControlProc.command = ["playerctl", "next"]; mediaControlProc.running = true }
-                                Text { anchors.centerIn: parent; text: "skip_next"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 20 }
-                            }
-                        }
+                MediaControl {
+                    onPlayPauseClicked: {
+                        mediaControlProc.command = ["playerctl", "play-pause"]
+                        mediaControlProc.running = true
+                    }
+                    onPrevClicked: {
+                        mediaControlProc.command = ["playerctl", "previous"]
+                        mediaControlProc.running = true
+                    }
+                    onNextClicked: {
+                        mediaControlProc.command = ["playerctl", "next"]
+                        mediaControlProc.running = true
                     }
                 }
 
                 // Notifications Area
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: notifList.count <= 0 ? 104 : (notifList.count === 1 ? 104 : 176)
-                    Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
-                    spacing: 12
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text { text: "Notifications"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText }
-                        Item { Layout.fillWidth: true } 
-                        Item {
-                            implicitWidth: clearText.width + 10; implicitHeight: 20; visible: notifList.count > 0
-                            Text { id: clearText; text: "Clear all"; font.family: rootShell.shellFont; font.pixelSize: 11; anchors.centerIn: parent; color: clearMouse.containsMouse ? rootShell.colorText : rootShell.colorAccent }
-                            MouseArea { id: clearMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { if (notifServer.trackedNotifications.clear) notifServer.trackedNotifications.clear(); else notifServer.postReload(); } }
-                        }
-                    }
-                    
-                    Rectangle {
-                        Layout.fillWidth: true; Layout.preferredHeight: 64; radius: 16; visible: notifList.count === 0; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
-                        Text { text: "No notifications"; anchors.centerIn: parent; font.family: rootShell.shellFont; color: rootShell.colorSubtext; font.pixelSize: 12 }
-                    }
-
-                    ListView {
-                        id: notifList; Layout.fillWidth: true; clip: true; spacing: 8; model: notifServer.trackedNotifications
-                        Layout.preferredHeight: notifList.count <= 0 ? 0 : (notifList.count === 1 ? 64 : 136)
-                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
-
-                        remove: Transition { ParallelAnimation { NumberAnimation { property: "opacity"; to: 0; duration: 200 } } }
-                        displaced: Transition { NumberAnimation { properties: "y"; duration: 250; easing.type: Easing.OutCubic } }
-
-                        delegate: Rectangle {
-                            required property var modelData; width: notifList.width; height: 64; radius: 12; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 12; spacing: 12
-                                Rectangle {
-                                    width: 40; height: 40; radius: 8; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.1)
-                                    Text { anchors.centerIn: parent; text: "notifications"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 20; visible: notifImg.status !== Image.Ready }
-                                    Image { id: notifImg; anchors.fill: parent; anchors.margins: 4; source: (modelData.image && modelData.image.startsWith("/")) ? modelData.image : ""; visible: source !== ""; fillMode: Image.PreserveAspectFit }
-                                }
-                                ColumnLayout {
-                                    spacing: 2; Layout.fillWidth: true
-                                    Text { text: modelData.summary; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true }
-                                    Text { text: modelData.body; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 11; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true }
-                                }
-                                MouseArea { width: 24; height: 24; cursorShape: Qt.PointingHandCursor; onClicked: modelData.dismiss()
-                                    Text { anchors.centerIn: parent; text: "close"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 16 }
-                                }
-                            }
-                        }
-                    }
-                }
+                NotificationCenter {}
             }
         }
     }
