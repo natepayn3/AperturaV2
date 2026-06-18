@@ -370,6 +370,69 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
         }
 
+        // Corner Wings (Placed inside animatedGroup so they animate perfectly in sync with the window)
+        Item {
+            anchors.fill: parent
+            z: 3
+            visible: dashboardRoot.width > 30
+
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "left"
+
+                Shape {
+                    x: 0; y: -dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: dashboardRoot.wingSize
+                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: 0; controlY: dashboardRoot.wingSize }
+                        PathLine { x: 0; y: dashboardRoot.wingSize }
+                    }
+                }
+                Shape {
+                    x: 0; y: parent.height
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: dashboardRoot.wingSize; y: 0 }
+                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 }
+                        PathLine { x: 0; y: 0 }
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "right"
+
+                Shape {
+                    x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: dashboardRoot.wingSize
+                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
+                        PathLine { x: parent.width; y: dashboardRoot.wingSize } // Fixed path constraint mapping bug
+                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize }
+                    }
+                }
+                Shape {
+                    x: parent.width - dashboardRoot.wingSize; y: parent.height
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: dashboardRoot.wingSize; y: 0 }
+                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
+                        PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 }
+                    }
+                }
+            }
+        }
+
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
@@ -406,7 +469,7 @@ Item {
                     }
                 }
 
-                // Systems Rings Area (Upsized to 68x68, Horizontally Distributed to Fill Space)
+                // Systems Rings Area (68x68, Distributed across layout)
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
@@ -451,36 +514,49 @@ Item {
                     }
                 }
 
-                // Inline Row Pill Toggles (Upsized to 80x48, Expanded to Fill Layout Width, Text Matching Color)
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
+                // --- 2x2 Clean Toggle Grid with Corrected Text Accents ---
+                GridLayout {
+                    columns: 2
+                    rowSpacing: 12
+                    columnSpacing: 12
+                    Layout.alignment: Qt.AlignHCenter
 
                     // Wifi Toggle
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 48
-                        radius: 24
-                        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.12)
+                        width: 156; height: 56; radius: 28
+                        color: dashboardRoot.wifiActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                         opacity: dashboardRoot.wifiAvailable ? 1.0 : 0.5
 
+                        Text {
+                            text: "Wi-Fi"
+                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
+                            color: dashboardRoot.wifiActive ? rootShell.colorBackground : rootShell.colorText
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: dashboardRoot.wifiActive ? 18 : 62
+                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+                        }
+
                         Rectangle {
-                            width: 40; height: 40; radius: 20
-                            color: dashboardRoot.wifiActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
+                            id: wifiKnob
+                            width: 48; height: 48; radius: 24
+                            color: dashboardRoot.wifiActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
                             anchors.verticalCenter: parent.verticalCenter
                             x: dashboardRoot.wifiActive ? parent.width - width - 4 : 4
+
                             Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: !dashboardRoot.wifiAvailable ? "wifi_off" : "wifi"
                                 font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.wifiActive ? rootShell.colorBackground : rootShell.colorText
-                                font.pixelSize: 20
+                                color: dashboardRoot.wifiActive ? rootShell.colorText : rootShell.colorSubtext
+                                font.pixelSize: 22
                             }
                         }
+
                         MouseArea {
-                            anchors.fill: parent; cursorShape: dashboardRoot.wifiAvailable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            anchors.fill: parent
+                            cursorShape: dashboardRoot.wifiAvailable ? Qt.PointingHandCursor : Qt.ArrowCursor
                             onClicked: {
                                 if (dashboardRoot.wifiAvailable) {
                                     dashboardRoot.wifiActive = !dashboardRoot.wifiActive
@@ -493,28 +569,39 @@ Item {
 
                     // Bluetooth Toggle
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 48
-                        radius: 24
-                        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.12)
+                        width: 156; height: 56; radius: 28
+                        color: dashboardRoot.btActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+
+                        Text {
+                            text: "Bluetooth"
+                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
+                            color: dashboardRoot.btActive ? rootShell.colorBackground : rootShell.colorText
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: dashboardRoot.btActive ? 18 : 62
+                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+                        }
 
                         Rectangle {
-                            width: 40; height: 40; radius: 20
-                            color: dashboardRoot.btActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
+                            id: btKnob
+                            width: 48; height: 48; radius: 24
+                            color: dashboardRoot.btActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
                             anchors.verticalCenter: parent.verticalCenter
                             x: dashboardRoot.btActive ? parent.width - width - 4 : 4
+
                             Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: "bluetooth"
                                 font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.btActive ? rootShell.colorBackground : rootShell.colorText
-                                font.pixelSize: 20
+                                color: dashboardRoot.btActive ? rootShell.colorText : rootShell.colorSubtext
+                                font.pixelSize: 22
                             }
                         }
+
                         MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 dashboardRoot.btActive = !dashboardRoot.btActive
                                 btToggleProc.command = ["sh", "-c", "bluetoothctl show | grep -q 'Powered: yes' && bluetoothctl power off || bluetoothctl power on"]
@@ -525,28 +612,39 @@ Item {
 
                     // DND Toggle
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 48
-                        radius: 24
-                        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.12)
+                        width: 156; height: 56; radius: 28
+                        color: dashboardRoot.dndActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+
+                        Text {
+                            text: "DND"
+                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
+                            color: dashboardRoot.dndActive ? rootShell.colorBackground : rootShell.colorText
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: dashboardRoot.dndActive ? 18 : 62
+                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+                        }
 
                         Rectangle {
-                            width: 40; height: 40; radius: 20
-                            color: dashboardRoot.dndActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
+                            id: dndKnob
+                            width: 48; height: 48; radius: 24
+                            color: dashboardRoot.dndActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
                             anchors.verticalCenter: parent.verticalCenter
                             x: dashboardRoot.dndActive ? parent.width - width - 4 : 4
+
                             Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: "do_not_disturb_on"
                                 font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.dndActive ? rootShell.colorBackground : rootShell.colorText
-                                font.pixelSize: 20
+                                color: dashboardRoot.dndActive ? rootShell.colorText : rootShell.colorSubtext
+                                font.pixelSize: 22
                             }
                         }
+
                         MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 dashboardRoot.dndActive = !dashboardRoot.dndActive
                                 if (dashboardRoot.dndActive) {
@@ -563,28 +661,39 @@ Item {
 
                     // Caffeine Toggle
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 48
-                        radius: 24
-                        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.12)
+                        width: 156; height: 56; radius: 28
+                        color: dashboardRoot.caffeineActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+
+                        Text {
+                            text: "Caffeine"
+                            font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
+                            color: dashboardRoot.caffeineActive ? rootShell.colorBackground : rootShell.colorText
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: dashboardRoot.caffeineActive ? 18 : 62
+                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+                        }
 
                         Rectangle {
-                            width: 40; height: 40; radius: 20
-                            color: dashboardRoot.caffeineActive ? rootShell.colorText : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
+                            id: caffeineKnob
+                            width: 48; height: 48; radius: 24
+                            color: dashboardRoot.caffeineActive ? rootShell.colorBackground : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
                             anchors.verticalCenter: parent.verticalCenter
                             x: dashboardRoot.caffeineActive ? parent.width - width - 4 : 4
+
                             Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: "local_cafe"
                                 font.family: "Material Symbols Outlined"
-                                color: dashboardRoot.caffeineActive ? rootShell.colorBackground : rootShell.colorText
-                                font.pixelSize: 20
+                                color: dashboardRoot.caffeineActive ? rootShell.colorText : rootShell.colorSubtext
+                                font.pixelSize: 22
                             }
                         }
+
                         MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
                                 if (dashboardRoot.caffeineActive) {
