@@ -11,7 +11,10 @@ QtObject {
     property int animationsDuration: 300
 
     readonly property bool isVertical: position === "left" || position === "right"
-    readonly property string configFilePath: Quickshell.env("HOME") + "/.config/quickshell/Test/shell_settings.json"
+    
+    // Dynamically resolve the directory this file is running from
+    readonly property string basePath: Qt.resolvedUrl(".").replace("file://", "").trim()
+    readonly property string configFilePath: basePath + "shell_settings.json"
 
     function loadSettings() {
         if (readProcess.output.trim() === "") {
@@ -35,7 +38,9 @@ QtObject {
             "floating": configEngine.floating,
             "animationsDuration": configEngine.animationsDuration
         };
-        writeProcess.command = ["bash", "-c", "mkdir -p " + Quickshell.env("HOME") + "/.config/quickshell/Test && echo '" + JSON.stringify(updatePayload) + "' > " + configFilePath];
+        
+        // Write directly to the dynamic path; parent directory is guaranteed to exist
+        writeProcess.command = ["bash", "-c", "echo '" + JSON.stringify(updatePayload) + "' > " + configFilePath];
         writeProcess.running = true;
     }
 
@@ -46,7 +51,8 @@ QtObject {
     }
 
     property Process initProcess: Process {
-        command: ["bash", "-c", "mkdir -p " + Quickshell.env("HOME") + "/.config/quickshell/Test && [ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300}' > " + configEngine.configFilePath + " || true"]
+        // Check for file existence in the dynamic path and generate defaults if missing
+        command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300}' > " + configEngine.configFilePath + " || true"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
