@@ -544,12 +544,115 @@ Item {
                 // Quick Action Utilities
                 RowLayout {
                     Layout.fillWidth: true; spacing: 12
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); Text { anchors.centerIn: parent; text: "settings"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 22 } }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); Text { anchors.centerIn: parent; text: "menu"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 22 } }
                     Rectangle { 
-                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { screenshotProc.command = ["sh", "-c", "grim -g \"$(slurp)\" ~/Pictures/Screenshots/$(date +'%s_grim.png')"]; screenshotProc.running = true; rootShell.dashboardRef.forceDismiss() } }
-                        Text { anchors.centerIn: parent; text: "screenshot_region"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 22 }
+                        id: settingsButton
+                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
+                        
+                        // Dynamic color selection based on hover state
+                        color: actionHover.hovered 
+                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) // Brighter tint on hover
+                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15) // Default state
+                            
+                        // Smooth transition between state colors
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        
+                        HoverHandler {
+                            id: actionHover
+                        }
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                rootShell.dashboardRef.requestDismiss();
+                                rootShell.settingsAppRef.windowVisible = true;
+                            }
+                        }
+                        
+                        Text { 
+                            anchors.centerIn: parent 
+                            text: "settings" 
+                            font.family: "Material Symbols Outlined" 
+                            color: rootShell.colorText 
+                            font.pixelSize: 22 
+                        } 
+                    }
+                    
+                    Rectangle { 
+                        id: launcherButton
+                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
+                        
+                        // Toggles layout color mapping based on live hover state
+                        color: launcherHover.hovered 
+                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
+                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        
+                        HoverHandler {
+                            id: launcherHover
+                        }
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                // Dismiss the active dashboard tracking container
+                                rootShell.dashboardRef.requestDismiss();
+                                
+                                // Toggle the app launcher state property exposed by shell.qml
+                                rootShell.launcherRef.active = !rootShell.launcherRef.active;
+                            }
+                        }
+                        
+                        Text { 
+                            anchors.centerIn: parent 
+                            text: "apps" // Swapped glyph target to match your launcher layout
+                            font.family: "Material Symbols Outlined" 
+                            color: rootShell.colorText 
+                            font.pixelSize: 22 
+                        } 
+                    }
+                    
+                    Rectangle { 
+                        id: screenshotButton
+                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
+                        
+                        // Smooth color change on hover
+                        color: snipHover.hovered
+                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
+                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        
+                        HoverHandler {
+                            id: snipHover
+                        }
+                        
+                        MouseArea { 
+                            id: snipMouseArea
+                            anchors.fill: parent 
+                            cursorShape: Qt.PointingHandCursor 
+                            
+                            onClicked: { 
+                                // Hide panel first to keep it pristine
+                                rootShell.dashboardRef.forceDismiss() 
+                                
+                                // Invoke the screenshot pipeline detached
+                                Quickshell.execDetached([
+                                    "bash", "-c", 
+                                    "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"
+                                ]);
+                            } 
+                        }
+                        
+                        Text { 
+                            anchors.centerIn: parent 
+                            text: "screenshot_region" 
+                            font.family: "Material Symbols Outlined" 
+                            color: rootShell.colorText 
+                            font.pixelSize: 22 
+                        }
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24; color: Qt.rgba(rootShell.colorClose.r, rootShell.colorClose.g, rootShell.colorClose.b, 0.2); Text { anchors.centerIn: parent; text: "power_settings_new"; font.family: "Material Symbols Outlined"; color: rootShell.colorClose; font.pixelSize: 22 } }
                 }
