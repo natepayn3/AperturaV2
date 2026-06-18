@@ -7,6 +7,7 @@ import Quickshell.Wayland
 import Quickshell.Io
 import "modules"
 import "modules/bars"
+import "modules/windows"
 
 Scope {
     id: rootShell
@@ -182,6 +183,7 @@ Scope {
         if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
         if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
         if (globalWifiPreview.wifiActive) globalWifiPreview.forceDismiss();
+        if (globalDashboardPreview.dashboardActive) globalDashboardPreview.forceDismiss();
         
         if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
         if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
@@ -290,9 +292,7 @@ Scope {
         function onWindowVisibleChanged() {
             if (settingsAppInstance.windowVisible) {
                 if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
-                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
-                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
-                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+                rootShell.closeAllPopups();
             }
         }
     }
@@ -303,9 +303,7 @@ Scope {
         function onActiveChanged() {
             if (globalAppLauncherPreview.active) {
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
-                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
-                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
-                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+                rootShell.closeAllPopups();
             }
         }
     }
@@ -317,9 +315,7 @@ Scope {
             if (globalWifiPreview.wifiActive) {
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
                 if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
-                if (globalCalendarPreview.calendarActive) globalCalendarPreview.forceDismiss();
-                if (globalBluetoothPreview.bluetoothActive) globalBluetoothPreview.forceDismiss();
-                if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
+                rootShell.closeAllPopups();
             }
         }
     }
@@ -369,7 +365,7 @@ Scope {
         running: false
         repeat: false
         onTriggered: {
-            if (!innerCalendarCard.isHovered) {
+            if (globalCalendarPreview.cardRef && !globalCalendarPreview.cardRef.isHovered) {
                 hideCalendarAnim.restart();
             }
         }
@@ -381,7 +377,7 @@ Scope {
         running: false
         repeat: false
         onTriggered: {
-            if (!innerBluetoothCard.isHovered) {
+            if (globalBluetoothPreview.cardRef && !globalBluetoothPreview.cardRef.isHovered) {
                 hideBluetoothAnim.restart();
             }
         }
@@ -393,7 +389,7 @@ Scope {
         running: false
         repeat: false
         onTriggered: {
-            if (!innerAudioCard.isHovered) {
+            if (globalAudioPreview.cardRef && !globalAudioPreview.cardRef.isHovered) {
                 hideAudioAnim.restart();
             }
         }
@@ -408,8 +404,8 @@ Scope {
         repeat: false
         property int pendingWorkspace: -1
         onTriggered: {
-            if (pendingWorkspace !== -1) {
-                innerPreviewCard.targetWorkspace = pendingWorkspace;
+            if (pendingWorkspace !== -1 && globalWorkspacePreview.cardRef) {
+                globalWorkspacePreview.cardRef.targetWorkspace = pendingWorkspace;
             }
         }
     }
@@ -421,17 +417,18 @@ Scope {
         repeat: false
         onTriggered: {
             hoveredIndicatorWorkspace = -1;
-            innerPreviewCard.targetWorkspace = -1;
+            // 🎯 FIX: Reset the parent property to maintain the binding flow sequence
+            globalWorkspacePreview.targetWorkspace = -1;
         }
     }
 
     Timer {
         id: dashboardDismissTimer
-        interval: 200 // Slightly increased to swallow Hyprland surface handoff latency
+        interval: 200
         running: false
         repeat: false
         onTriggered: {
-            if (!innerDashboardCard.isHovered) {
+            if (globalDashboardPreview.cardRef && !globalDashboardPreview.cardRef.isHovered) {
                 globalDashboardPreview.forceDismiss();
             }
         }
@@ -441,349 +438,104 @@ Scope {
         dashboardDismissTimer.restart();
     }
 
-    // --- Global Popup Instances ---
-    PanelWindow {
-        id: globalWorkspacePreview
-
-        screen: targetScreen
-        property var targetScreen: null
-        
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "quickshell-workspace-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: innerPreviewCard.active || globalWorkspacePreview.targetWorkspace !== -1 || rootShell.previewProgress > 0.0
-        color: "transparent"
-
-        mask: Region { 
-            item: innerPreviewCard.active ? innerPreviewCard : null 
-        }
-        property int targetWorkspace: -1
-
-        onTargetWorkspaceChanged: {
-            if (targetWorkspace !== -1) {
-                if (targetWorkspace === innerPreviewCard.targetWorkspace) {
-                    previewDebounceTimer.stop();
-                    return; 
-                }
-                previewDebounceTimer.pendingWorkspace = targetWorkspace;
-                previewDebounceTimer.restart();
-            } else {
-                previewDebounceTimer.stop();
-                innerPreviewCard.targetWorkspace = -1;
-            }
-        }
-
-        function commitWorkspaceChange(ws, monitorScreen) {
+    // --- Window Module Trigger Handlers mapped via Connections ---
+    Connections {
+        target: globalWorkspacePreview; ignoreUnknownSignals: true
+        function onWorkspaceTargetChanged(ws, screenObj) {
             dismissTimer.stop();
-            if (monitorScreen) globalWorkspacePreview.targetScreen = monitorScreen;
+            if (screenObj) globalWorkspacePreview.targetScreen = screenObj;
             hoveredIndicatorWorkspace = ws;
-            globalWorkspacePreview.targetWorkspace = ws;
+            
+            // 🎯 FIX: Changed innerPreviewCard to globalWorkspacePreview.cardRef
+            if (globalWorkspacePreview.cardRef && ws !== globalWorkspacePreview.cardRef.targetWorkspace) {
+                previewDebounceTimer.stop();
+                previewDebounceTimer.pendingWorkspace = ws;
+                previewDebounceTimer.restart();
+            }
             showPreviewAnim.restart();
         }
-
-        function cancelDismiss() { dismissTimer.stop(); previewDebounceTimer.stop(); }
-        function requestDismiss() { dismissTimer.restart(); }
-
-        WorkspacePreview {
-            id: innerPreviewCard
-            targetWorkspace: globalWorkspacePreview.targetWorkspace
-
-            onCloseRequested: {
-                globalWorkspacePreview.targetWorkspace = -1;
-                hidePreviewAnim.restart();
-            }
-            
-            hoverOriginX: {
-                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
-                return rootShell.barPosition === "left" ? 44 : 8; 
-            }
-            hoverOriginY: {
-                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
-                return rootShell.barPosition === "top" ? 44 : 8; 
-            }
-        }
+        function onDismissRequested() { dismissTimer.restart(); }
+        function onCancelDismissRequested() { dismissTimer.stop(); previewDebounceTimer.stop(); }
+        function onCloseRequested() { hidePreviewAnim.restart(); } 
     }
 
-    AppLauncher { id: globalAppLauncherPreview }
-
-    PanelWindow {
-        id: globalCalendarPreview
-        property bool calendarActive: false
-        
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-calendar-preview"
-        WlrLayershell.keyboardFocus: calendarActive ? WlrLayershell.OnDemand : WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: calendarActive || rootShell.calendarProgress > 0.0
-        color: "transparent"
-
-        MouseArea {
-            anchors.fill: parent
-            propagateComposedEvents: true
-            enabled: globalCalendarPreview.calendarActive
-            
-            onPressed: (mouse) => {
-                globalCalendarPreview.forceDismiss();
-                mouse.accepted = false; 
+    Connections {
+        target: globalCalendarPreview; ignoreUnknownSignals: true
+        function onCalendarShowRequested() {
+            if (!globalCalendarPreview.calendarActive) {
+                rootShell.closeAllPopups();
+                globalCalendarPreview.calendarActive = true;
+                showCalendarAnim.restart();
             }
         }
-
-        function showCalendar() { 
-            if (!calendarActive) {
-                closeAllPopups();
-                calendarActive = true; 
-                showCalendarAnim.restart(); 
-            }
-        }
-        function forceDismiss() { calendarActive = false; hideCalendarAnim.restart(); }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: globalCalendarPreview.calendarActive
-            onActivated: globalCalendarPreview.forceDismiss()
-        }
-
-        Calendar {
-            id: innerCalendarCard
-            active: globalCalendarPreview.calendarActive
-
-            hoverOriginX: {
-                if (rootShell.barPosition === "right") return parent.width - 44 - maxCardWidth;
-                return rootShell.barPosition === "left" ? 46 : 10; 
-            }
-            hoverOriginY: {
-                if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
-                return rootShell.barPosition === "top" ? 46 : 10; 
-            }
-        }
+        function onDismissRequested() { calendarDismissTimer.restart(); }
+        function onCancelDismissRequested() { calendarDismissTimer.stop(); }
     }
 
-    PanelWindow {
-        id: globalDashboardPreview
-        property bool dashboardActive: false
-
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-dashboard-preview"
-        WlrLayershell.keyboardFocus: WlrLayershell.None 
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: dashboardActive || rootShell.dashboardProgress > 0.0
-        color: "transparent"
-
-        mask: Region { 
-            item: innerDashboardCard.active ? innerDashboardCard : null 
-        }
-
-        function cancelDismiss() { dashboardDismissTimer.stop(); }
-        function requestDismiss() { dashboardDismissTimer.restart(); }
-
-        function showDashboard() { 
-            if (!dashboardActive) {
-                closeAllPopups();
-                cancelDismiss();
-                dashboardActive = true; 
-                showDashboardAnim.restart(); 
+    Connections {
+        target: globalDashboardPreview; ignoreUnknownSignals: true
+        function onDashboardShowRequested() {
+            if (!globalDashboardPreview.dashboardActive) {
+                rootShell.closeAllPopups();
+                dashboardDismissTimer.stop();
+                globalDashboardPreview.dashboardActive = true;
+                showDashboardAnim.restart();
             }
         }
-        function forceDismiss() { 
-            dashboardActive = false; 
-            hideDashboardAnim.restart(); 
-        }
-
-        // 🎯 FIX: Let the module handle its own geometry!
-        Dashboard {
-            id: innerDashboardCard
-            active: globalDashboardPreview.dashboardActive
-        }
+        function onDismissRequested() { dashboardDismissTimer.restart(); }
+        function onCancelDismissRequested() { dashboardDismissTimer.stop(); }
     }
 
-    PanelWindow {
-        id: globalAudioPreview
-        property bool audioActive: false
-        property alias cardRef: innerAudioCard
-
-        screen: Quickshell.screens[0] 
-        
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-audio-preview"
-        WlrLayershell.keyboardFocus: globalAudioPreview.audioActive ? WlrLayershell.OnDemand : WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: audioActive || rootShell.audioProgress > 0.0
-        color: "transparent"
-
-        property int hoverOriginX: 0
-        property int hoverOriginY: 0
-
-        MouseArea {
-            anchors.fill: parent
-            propagateComposedEvents: true
-            enabled: globalAudioPreview.audioActive
-            
-            onPressed: (mouse) => {
-                globalAudioPreview.forceDismiss();
-                mouse.accepted = false;
-            }
-        }
-
-        function showAudio() { 
-            if (!audioActive) {
-                closeAllPopups();
-                audioDismissTimer.stop(); 
-                audioActive = true; 
+    Connections {
+        target: globalAudioPreview; ignoreUnknownSignals: true
+        function onAudioShowRequested() {
+            if (!globalAudioPreview.audioActive) {
+                rootShell.closeAllPopups();
+                audioDismissTimer.stop();
+                globalAudioPreview.audioActive = true;
                 showAudioAnim.restart();
-                innerAudioCard.forceActiveFocus();
+                if (globalAudioPreview.cardRef) globalAudioPreview.cardRef.forceActiveFocus();
             }
         }
-        
-        function requestDismiss() { }
-        
-        function forceDismiss() {
-            audioActive = false;
-            hideAudioAnim.restart();
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: globalAudioPreview.audioActive
-            onActivated: globalAudioPreview.forceDismiss()
-        }
-
-        Audio {
-            id: innerAudioCard
-            active: globalAudioPreview.audioActive
-            hoverOriginX: globalAudioPreview.hoverOriginX
-            hoverOriginY: globalAudioPreview.hoverOriginY
-        }
+        function onDismissRequested() { audioDismissTimer.restart(); }
+        function onCancelDismissRequested() { audioDismissTimer.stop(); }
     }
 
-    PanelWindow {
-        id: globalBluetoothPreview
-        property bool bluetoothActive: false
-        property alias cardRef: innerBluetoothCard
-
-        screen: Quickshell.screens[0]
-        
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-bluetooth-preview"
-        WlrLayershell.keyboardFocus: globalBluetoothPreview.bluetoothActive ? WlrLayershell.OnDemand : WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: bluetoothActive || rootShell.bluetoothProgress > 0.0
-        color: "transparent"
-
-        property int hoverOriginX: 0
-        property int hoverOriginY: 0
-
-        MouseArea {
-            anchors.fill: parent
-            propagateComposedEvents: true
-            enabled: globalBluetoothPreview.bluetoothActive
-            
-            onPressed: (mouse) => {
-                globalBluetoothPreview.forceDismiss();
-                mouse.accepted = false;
-            }
-        }
-
-        function showBluetooth() { 
-            if (!bluetoothActive) {
-                closeAllPopups();
-                bluetoothDismissTimer.stop(); 
-                bluetoothActive = true; 
+    Connections {
+        target: globalBluetoothPreview; ignoreUnknownSignals: true
+        function onBluetoothShowRequested() {
+            if (!globalBluetoothPreview.bluetoothActive) {
+                rootShell.closeAllPopups();
+                bluetoothDismissTimer.stop();
+                globalBluetoothPreview.bluetoothActive = true;
                 showBluetoothAnim.restart();
-                innerBluetoothCard.forceActiveFocus();
+                if (globalBluetoothPreview.cardRef) globalBluetoothPreview.cardRef.forceActiveFocus();
             }
         }
-        
-        function requestDismiss() { }
-        
-        function forceDismiss() {
-            bluetoothActive = false;
-            hideBluetoothAnim.restart();
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: globalBluetoothPreview.bluetoothActive
-            onActivated: globalBluetoothPreview.forceDismiss()
-        }
-
-        Bluetooth {
-            id: innerBluetoothCard
-            active: globalBluetoothPreview.bluetoothActive
-            hoverOriginX: globalBluetoothPreview.hoverOriginX
-            hoverOriginY: globalBluetoothPreview.hoverOriginY
-        }
+        function onDismissRequested() { bluetoothDismissTimer.restart(); }
+        function onCancelDismissRequested() { bluetoothDismissTimer.stop(); }
     }
 
-    PanelWindow {
-        id: globalWifiPreview
-        property bool wifiActive: false
-        property alias cardRef: innerWifiCard
-
-        screen: Quickshell.screens[0]
-        
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "quickshell-wifi-preview"
-        WlrLayershell.keyboardFocus: globalWifiPreview.wifiActive ? WlrLayershell.OnDemand : WlrLayershell.None
-        WlrLayershell.exclusionMode: WlrLayershell.Ignore
-
-
-
-        anchors { left: true; right: true; top: true; bottom: true }
-        visible: wifiActive || rootShell.wifiProgress > 0.0
-        color: "transparent"
-
-        property int hoverOriginX: 0
-        property int hoverOriginY: 0
-
-        MouseArea {
-            anchors.fill: parent
-            propagateComposedEvents: true
-            enabled: globalWifiPreview.wifiActive
-            
-            onPressed: (mouse) => {
-                globalWifiPreview.forceDismiss();
-                mouse.accepted = false;
-            }
-        }
-
-        function showWifi() { 
-            if (!wifiActive) {
-                closeAllPopups();
-                wifiActive = true; 
+    Connections {
+        target: globalWifiPreview; ignoreUnknownSignals: true
+        function onWifiShowRequested() {
+            if (!globalWifiPreview.wifiActive) {
+                rootShell.closeAllPopups();
+                globalWifiPreview.wifiActive = true;
                 showWifiAnim.restart();
-                innerWifiCard.forceActiveFocus();
+                if (globalWifiPreview.cardRef) globalWifiPreview.cardRef.forceActiveFocus();
             }
         }
-        
-        function forceDismiss() {
-            wifiActive = false;
-            hideWifiAnim.restart();
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: globalWifiPreview.wifiActive
-            onActivated: globalWifiPreview.forceDismiss()
-        }
-
-        Wifi {
-            id: innerWifiCard
-            active: globalWifiPreview.wifiActive
-            hoverOriginX: globalWifiPreview.hoverOriginX
-            hoverOriginY: globalWifiPreview.hoverOriginY
-        }
     }
+
+    // --- Modular Window Instantiations ---
+    WorkspaceWindow { id: globalWorkspacePreview; rootShell: rootShell }
+    AppLauncher     { id: globalAppLauncherPreview }
+    CalendarWindow  { id: globalCalendarPreview; rootShell: rootShell }
+    DashboardWindow { id: globalDashboardPreview; rootShell: rootShell }
+    AudioWindow     { id: globalAudioPreview; rootShell: rootShell }
+    BluetoothWindow { id: globalBluetoothPreview; rootShell: rootShell }
+    WifiWindow      { id: globalWifiPreview; rootShell: rootShell }
 
     // --- Dynamic Instantiators using Unified Modules ---
     Item {
