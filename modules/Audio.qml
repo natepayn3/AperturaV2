@@ -81,7 +81,7 @@ Item {
             "sh", "-c",
             "pw-mon | stdbuf -oL grep --line-buffered -E \"changed|sinks\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
         ]
-        running: audioRoot.active || volumePillWindow.visible
+        running: true
 
         stdout: SplitParser {
             onRead: data => {
@@ -97,7 +97,9 @@ Item {
                         audioRoot.currentVolume = volVal;
                         audioRoot.isMuted = isNowMuted;
 
-                        if (lastSeenVolume !== -1 && !mainSlider.pressed && !audioRoot.active) {
+                        // FIX: If it's the first time seeing the volume, initialize lastSeenVolume 
+                        // and still fire the OSD timer so it pops up immediately.
+                        if (!audioRoot.active) {
                             hardwareOsdTimer.restart();
                         }
                     }
