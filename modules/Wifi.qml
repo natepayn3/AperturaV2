@@ -60,9 +60,9 @@ Item {
     y: {
         let targetHeight = Quickshell.screen ? Quickshell.screen.height : Screen.height;
         switch (rootShell.barPosition) {
-            case "bottom": return targetHeight - height - 46; 
+            case "bottom": return targetHeight - height - 46;
             case "top":    return 46;                             
-            case "left":   return targetHeight - height - 10;       
+            case "left":   return targetHeight - height - 10;
             case "right":  return targetHeight - height - 10;
             default:       return hoverOriginY;
         }
@@ -194,10 +194,11 @@ Item {
                     let signal = parseInt(parts[2].trim()) || 0;
                     
                     let securityStr = parts[3].trim();
-                    let secureNode = (securityStr !== "" && securityStr !== "--");
+                    let securityDisplay = (securityStr === "--" || securityStr === "") ? "Open" : securityStr;
                     
-                    let ssid = parts.slice(4).join(":").trim(); 
+                    let secureNode = (securityDisplay !== "Open");
 
+                    let ssid = parts.slice(4).join(":").trim();
                     if (ssid === "") continue;
                     if (ssid === wifiRoot.activeSsid) isActive = true;
 
@@ -215,7 +216,8 @@ Item {
                             signalStrength: signal,
                             barsString: bars,
                             connected: isActive,
-                            isSecure: secureNode
+                            isSecure: secureNode,
+                            securityType: securityDisplay
                         });
                     } else {
                         if (isActive) uniqueList[existingIndex].connected = true;
@@ -292,16 +294,23 @@ Item {
     }
 
     Process {
+        id: cleanupFailedProc
+        running: false
+    }
+
+    Process {
         id: connectNetworkProc
         running: false
+        
+        property string attemptingSsid: ""
 
         function connectTo(ssidTarget, password, isKnown) {
             wifiRoot.failedSsid = "";
             wifiRoot.connectingSsid = ssidTarget;
+            attemptingSsid = ssidTarget; 
             running = false; 
             
             let cleanPass = password.trim();
-            
             if (isKnown) {
                 command = ["nmcli", "connection", "up", "id", ssidTarget];
             } else if (cleanPass === "") {
@@ -316,10 +325,18 @@ Item {
             if (wifiRoot.connectingSsid !== "") { 
                 if (exitCode !== 0) {
                     wifiRoot.failedSsid = wifiRoot.connectingSsid;
+                    
+                    // Safe, native execution without dynamic string compilation
+                    if (attemptingSsid !== "" && !wifiRoot.knownNetworks[attemptingSsid]) {
+                        cleanupFailedProc.command = ["nmcli", "connection", "delete", "id", attemptingSsid];
+                        cleanupFailedProc.running = false;
+                        cleanupFailedProc.running = true;
+                    }
                 } else {
-                    wifiRoot.expandedSsid = ""; 
+                    wifiRoot.expandedSsid = "";
                 }
                 wifiRoot.connectingSsid = "";
+                attemptingSsid = "";
                 fetchStatusProc.running = true; 
             } 
         }
@@ -358,7 +375,15 @@ Item {
     }
 
     onActiveChanged: {
-        if (active) fetchStatusProc.running = true;
+        if (active) {
+            fetchStatusProc.running = true;
+        } else {
+            if (connectNetworkProc.running) {
+                connectNetworkProc.running = false;
+            }
+            wifiRoot.connectingSsid = "";
+            wifiRoot.failedSsid = "";
+        }
     }
 
     Component.onCompleted: {
@@ -569,8 +594,8 @@ Item {
                             clip: true
                             
                             color: model.connected 
-                                   ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
-                                   : (itemMouse.containsMouse || isExpanded ? Qt.rgba(255,255,255,0.05) : "transparent")
+                                ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
+                                : (itemMouse.containsMouse || isExpanded ? Qt.rgba(255,255,255,0.05) : "transparent")
 
                             border.width: model.connected ? 1 : 0
                             border.color: rootShell.colorAccent
@@ -579,15 +604,15 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
 
-                                // Top Row: Standard Network Info
+                                // Top Row: Standard Network Info + Inline Security Details
                                 Item {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 48
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 12; anchors.rightMargin: 24 // Added scrollbar gutter
-                                        spacing: 12
+                                        anchors.leftMargin: 12; anchors.rightMargin: 24
+                                        spacing: 8
 
                                         Text {
                                             text: model.ssid
@@ -597,6 +622,16 @@ Item {
                                             font.weight: model.connected ? Font.Bold : Font.Normal
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
+                                        }
+
+                                        // Inline Security Badge: Displayed directly to the right of the text when expanded
+                                        Text {
+                                            text: model.securityType
+                                            color: rootShell.colorSubtext
+                                            font.family: rootShell.shellFont
+                                            font.pixelSize: 11
+                                            visible: isExpanded
+                                            Layout.alignment: Qt.AlignVCenter
                                         }
 
                                         Text {
@@ -640,7 +675,7 @@ Item {
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 12; anchors.rightMargin: 24 // Added scrollbar gutter
+                                        anchors.leftMargin: 12; anchors.rightMargin: 24
                                         anchors.bottomMargin: 8
                                         spacing: 8
 
