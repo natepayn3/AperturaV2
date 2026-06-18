@@ -43,12 +43,32 @@ Item {
     property string mediaArtist: "---"
     property string mediaStatus: "Stopped"
 
+    HoverHandler {
+        id: dashHover
+        // Use a simple check: is the mouse inside the dashboard root?
+        onHoveredChanged: {
+            if (hovered) {
+                rootShell.dashboardRef.cancelDismiss();
+            } else {
+                // Add a slight delay before requesting dismissal
+                // to allow moving back to the trigger area if needed
+                rootShell.dashboardRef.requestDismiss();
+            }
+        }
+    }
+
     // --- Native Notification Server ---
     NotificationServer {
         id: notifServer
         bodySupported: true
         actionsSupported: true
         imageSupported: true
+        persistenceSupported: true // Tell apps we can hold notifications indefinitely
+        
+        // Force Quickshell to track every incoming broadcast
+        onNotification: (notif) => {
+            notif.tracked = true; 
+        }
     }
 
     // --- Data Fetching Engine ---
@@ -119,14 +139,20 @@ Item {
     }
 
     Process {
-        id: brightFetcher
-        command: ["brightnessctl", "-m"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let rawText = this.text.trim();
-                let parts = rawText.split(",");
-                if (parts.length >= 4) {
+    id: brightFetcher
+    // Use -d to target your specific backlight device if you know the name (e.g., intel_backlight)
+    // Otherwise, filter by class in the logic
+    command: ["brightnessctl", "-m"]
+    running: false
+    stdout: StdioCollector {
+        onStreamFinished: {
+            let lines = this.text.trim().split("\n");
+            let found = false;
+            
+            for (let i = 0; i < lines.length; i++) {
+                let parts = lines[i].split(",");
+                // Only act if the device class (parts[1]) is 'backlight'
+                if (parts.length >= 4 && parts[1] === "backlight") {
                     let pct = parts[3].replace("%", "");
                     let parsedPct = parseFloat(pct);
                     if (!isNaN(parsedPct)) {
@@ -134,12 +160,16 @@ Item {
                         if (!brightSlider.pressed) {
                             dashboardRoot.currentBrightness = parsedPct / 100.0;
                         }
+                        found = true;
+                        break; // Stop after finding the first valid backlight
                     }
                 }
-                brightFetcher.running = false;
             }
+            if (!found) dashboardRoot.hasBrightness = false;
+            brightFetcher.running = false;
         }
     }
+}
 
     Process { id: setVolProc; running: false }
     Process { id: setBrightProc; running: false }
@@ -149,10 +179,17 @@ Item {
     Item {
         anchors.fill: parent
         HoverHandler {
-            id: dashHover
+            id: rootHover
+            // The hover state is true as long as you are anywhere within the Popup's rect
             onHoveredChanged: {
-                if (hovered) rootShell.dashboardRef.cancelDismiss()
-                else rootShell.dashboardRef.requestDismiss()
+                if (hovered) {
+                    rootShell.dashboardRef.cancelDismiss()
+                } else {
+                    // ONLY dismiss if you aren't clicking a slider or the button
+                    if (!volSlider.pressed && !brightSlider.pressed) {
+                        rootShell.dashboardRef.requestDismiss()
+                    }
+                }
             }
         }
     }
@@ -294,7 +331,7 @@ Item {
                     ColumnLayout {
                         spacing: -4
                         Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "dddd"); font.family: rootShell.shellFont; font.pixelSize: 26; font.bold: true; color: rootShell.colorText; Layout.alignment: Qt.AlignRight }
-                        Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "MMMM d"); font.family: rootShell.shellFont; font.pixelSize: 14; color: rootShell.colorSubtext; Layout.alignment: Qt.AlignRight }
+                        Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "MMMM d"); font.family: rootShell.shellFont; font.pixelSize: 20; color: rootShell.colorSubtext; Layout.alignment: Qt.AlignRight }
                     }
                 }
 
@@ -428,37 +465,77 @@ Item {
                 // 5. Sliders
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 16
+                    spacing: 0
+                    
+                    Item {
+                        Layout.fillWidth: true
+                        // If brightness exists, 48 (vol) + 16 (gap) = 64. If not, just 48.
+                        Layout.preferredHeight: dashboardRoot.hasBrightness ? 64 : 48
 
-                    Slider {
-                        id: volSlider
-                        Layout.fillWidth: true; Layout.preferredHeight: 48
-                        value: dashboardRoot.currentVolume
-                        
-                        onMoved: {
-                            dashboardRoot.currentVolume = value;
-                            setVolProc.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", value.toFixed(2)]
-                            setVolProc.running = true
-                        }
-
-                        background: Rectangle {
-                            color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
-                            radius: 24
-                            Rectangle { width: volSlider.visualPosition * parent.width; height: parent.height; color: rootShell.colorText; radius: 24 }
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 16
-                                Text { text: "volume_down"; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
-                                Item { Layout.fillWidth: true }
-                                Text { text: Math.round(volSlider.value * 100) + "%"; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 12; Layout.alignment: Qt.AlignVCenter }
-                                Text { text: "volume_up"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
+                        Slider {
+                            id: volSlider
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: 48
+                            
+                            value: dashboardRoot.currentVolume
+                            
+                            // Add this to prevent event bubbling
+                            MouseArea {
+                                anchors.fill: parent
+                                propagateComposedEvents: false
+                                hoverEnabled: true
+                                // This stops the click from "falling through" to your dismiss logic
+                                onClicked: (mouse) => {
+                                    mouse.accepted = true;
+                                    // Ensure the volume change logic is triggered here
+                                }
                             }
+
+                            onMoved: {
+                                dashboardRoot.currentVolume = value;
+                                setVolProc.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", value.toFixed(2)]
+                                setVolProc.running = true
+                            }
+
+                            background: Rectangle {
+                                color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
+                                radius: 24
+                                
+                                // Progress fill
+                                Rectangle { 
+                                    width: volSlider.visualPosition * parent.width; height: parent.height
+                                    color: rootShell.colorText; radius: 24 
+                                }
+                                
+                                // Icons (Static Layout)
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: 16
+                                    Text { text: "volume_down"; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
+                                    Item { Layout.fillWidth: true }
+                                    Text { text: "volume_up"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
+                                }
+                                
+                                // Percentage Overlay (Appears centered during drag)
+                                Text {
+                                    text: Math.round(volSlider.value * 100) + "%"
+                                    color: rootShell.colorBackground
+                                    font.family: rootShell.shellFont
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    anchors.centerIn: parent
+                                    opacity: volSlider.pressed ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                }
+                            }
+                            handle: Item {} 
                         }
-                        handle: Item {} 
                     }
 
                     Item {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 48
+                        Layout.preferredHeight: dashboardRoot.hasBrightness ? 48 : 0
                         visible: dashboardRoot.hasBrightness
 
                         Slider {
@@ -489,11 +566,9 @@ Item {
                     }
                 }
 
-                Item { Layout.fillHeight: true } 
-
                 // 6. Media Player
                 Rectangle {
-                    Layout.fillWidth: true; Layout.preferredHeight: 72; radius: 16; color: "transparent" 
+                    Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 16; color: "transparent"
                     RowLayout {
                         anchors.fill: parent; anchors.margins: 0; spacing: 16
                         Rectangle { width: 48; height: 48; radius: 8; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.1); Text { anchors.centerIn: parent; text: "music_note"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 24 } }
@@ -528,67 +603,190 @@ Item {
 
                 // 7. Notifications Area (Native Service Integration)
                 ColumnLayout {
-                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
-                    Text { text: "Notifications"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText }
+                    id: notifAreaLayout
+                    Layout.fillWidth: true
+
+                    property real targetHeight: {
+                        let count = notifList.count;
+                        if (count <= 1) return 64 + 40;  
+                        return 136 + 40;
+                    }
+
+                    // Height logic: 0/1 count = 64px, 2+ count = 128px. 
+                    // We add 40px for the Header text + spacing.
+                    Layout.preferredHeight: {
+                        let count = notifList.count;
+                        if (count <= 1) return 64 + 40;  
+                        return 136 + 40; // Updated from 128 to 136 to include the 8px spacing
+                    }
+
+                    Behavior on Layout.preferredHeight {
+                        NumberAnimation {
+                            duration: 250
+                            easing.type: Easing.InOutQuad
+                        }
+                    }
                     
-                    ListView {
-                        id: notifList
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        clip: true
-                        spacing: 8
-                        model: notifServer.trackedNotifications
+                    spacing: 12
 
-                        delegate: Rectangle {
-                            width: notifList.width
-                            height: 64
-                            radius: 12
-                            color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
+                    // Header Row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        // FORCE vertical alignment to the center, overriding baseline
+                        Layout.alignment: Qt.AlignVCenter 
 
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 12; spacing: 12
-                                
-                                Rectangle {
-                                    width: 40; height: 40; radius: 8; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.1)
+                        Text { 
+                            text: "Notifications"
+                            font.family: rootShell.shellFont
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: rootShell.colorText 
+                            Layout.alignment: Qt.AlignVCenter // Ensure this specific text is centered
+                        }
+                        
+                        Item { Layout.fillWidth: true } // Flex spacer
+
+                        Item {
+                            id: clearBtn
+                            implicitWidth: clearText.width + 10
+                            implicitHeight: 20
+                            Layout.alignment: Qt.AlignVCenter // Force the button container to center
+                            visible: notifList.count > 0
+
+                            Text {
+                                id: clearText
+                                text: "Clear all"
+                                font.family: rootShell.shellFont
+                                font.pixelSize: 11
+                                anchors.centerIn: parent // Centers text inside the button container
+                                color: clearMouse.containsMouse ? rootShell.colorText : rootShell.colorAccent
+                            }
+
+                            MouseArea {
+                                id: clearMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+
+                                onClicked: (mouse) => {
+                                    mouse.accepted = true;
                                     
-                                    // Fallback icon if no image is provided by the notification
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "notifications"
-                                        font.family: "Material Symbols Outlined"
-                                        color: rootShell.colorText
-                                        font.pixelSize: 20
-                                        visible: notifImg.status !== Image.Ready
-                                    }
+                                    // Safely pull the underlying array from the ObjectModel
+                                    let notificationsArray = notifServer.trackedNotifications.values;
                                     
-                                    // Native Quickshell image handling
-                                    Image {
-                                        id: notifImg
-                                        anchors.fill: parent; anchors.margins: 4
-                                        source: model.notification.image || ""
-                                        fillMode: Image.PreserveAspectFit
-                                        visible: status === Image.Ready
+                                    if (notificationsArray && notificationsArray.length > 0) {
+                                        // Loop backwards through the JavaScript array
+                                        for (let i = notificationsArray.length - 1; i >= 0; i--) {
+                                            let notif = notificationsArray[i];
+                                            if (notif && typeof notif.dismiss === "function") {
+                                                notif.dismiss();
+                                            }
+                                        }
                                     }
-                                }
-
-                                ColumnLayout {
-                                    spacing: 2; Layout.fillWidth: true
-                                    Text { text: model.notification.summary; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true }
-                                    Text { text: model.notification.body; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 11; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true }
-                                }
-                                
-                                MouseArea {
-                                    width: 24; height: 24; cursorShape: Qt.PointingHandCursor
-                                    onClicked: model.notification.dismiss()
-                                    Text { anchors.centerIn: parent; text: "close"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 16 }
                                 }
                             }
                         }
                     }
-
+                    
+                    // Placeholder - Only visible when empty
                     Rectangle {
-                        Layout.fillWidth: true; Layout.fillHeight: true; radius: 16; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.02)
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 64
+                        radius: 16
                         visible: notifList.count === 0
-                        Text { text: "No new notifications"; anchors.centerIn: parent; font.family: rootShell.shellFont; color: rootShell.colorSubtext; font.pixelSize: 12 }
+                        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
+                        
+                        Text { 
+                            text: "No notifications"
+                            anchors.centerIn: parent
+                            font.family: rootShell.shellFont
+                            color: rootShell.colorSubtext
+                            font.pixelSize: 12 
+                        }
+                    }
+
+                    // The List - Only visible when count > 0
+                    ListView {
+                        id: notifList
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: {
+                            let count = notifList.count;
+                            // Base 30 covers header and internal spacing.
+                            if (count <= 1) return 64 + 30;
+                            return 136 + 30;
+                        }
+                        visible: notifList.count > 0
+                        clip: true
+                        spacing: 8
+                        model: notifServer.trackedNotifications
+
+                        // --- 1. ADD DISAPPEARING TRANSITIONS HERE ---
+                        remove: Transition {
+                            ParallelAnimation {
+                                NumberAnimation { property: "opacity"; to: 0; duration: 200; easing.type: Easing.InOutQuad }
+                                NumberAnimation { property: "scale"; to: 0.8; duration: 200; easing.type: Easing.InOutQuad }
+                                NumberAnimation { property: "height"; to: 0; duration: 250; easing.type: Easing.InOutQuad }
+                            }
+                        }
+
+                        displaced: Transition {
+                            NumberAnimation { properties: "x,y"; duration: 250; easing.type: Easing.OutCubic }
+                        }
+
+                        // --- 2. UPDATED WRAPPER DELEGATE ---
+                        delegate: Item {
+                            required property var modelData 
+                            width: notifList.width
+                            // Tracks the height of your actual card container so it can collapse down to 0
+                            height: cardBody.height
+
+                            Rectangle {
+                                id: cardBody
+                                width: parent.width
+                                height: 64
+                                radius: 12
+                                color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.05)
+                                transformOrigin: Item.Center
+
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: 12; spacing: 12
+                                    
+                                    Rectangle {
+                                        width: 40; height: 40; radius: 8; color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.1)
+                                        
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "notifications"
+                                            font.family: "Material Symbols Outlined"
+                                            color: rootShell.colorText
+                                            font.pixelSize: 20
+                                            visible: notifImg.status !== Image.Ready
+                                        }
+                                        
+                                        Image {
+                                            id: notifImg
+                                            anchors.fill: parent; anchors.margins: 4
+                                            source: (modelData.image && modelData.image.startsWith("/")) ? modelData.image : ""
+                                            visible: source !== ""
+                                            fillMode: Image.PreserveAspectFit
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        spacing: 2; Layout.fillWidth: true
+                                        Text { text: modelData.summary; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true }
+                                        Text { text: modelData.body; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 11; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true }
+                                    }
+                                    
+                                    MouseArea {
+                                        width: 24; height: 24; cursorShape: Qt.PointingHandCursor
+                                        onClicked: modelData.dismiss()
+                                        Text { anchors.centerIn: parent; text: "close"; font.family: "Material Symbols Outlined"; color: rootShell.colorSubtext; font.pixelSize: 16 }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
