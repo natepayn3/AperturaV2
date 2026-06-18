@@ -541,138 +541,132 @@ Item {
                     }
                 }
 
-                // Quick Action Utilities - Large Icon-Only Horizontal Row
-                RowLayout {
+                // Quick Action Utilities - Symmetrical Dual Sliding Layout
+                Item {
+                    id: utilitiesWrapper
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 56 // Boosted row height for larger presence
-                    spacing: 12
+                    Layout.preferredHeight: 56
+                    clip: true 
 
-                    // 1. Settings App
-                    Rectangle { 
-                        id: settingsButton
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: parent.height
-                        radius: 30
-                        color: actionHover.hovered 
-                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
-                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                            
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        HoverHandler { id: actionHover }
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                rootShell.dashboardRef.requestDismiss();
-                                rootShell.settingsAppRef.windowVisible = true;
-                            }
+                    property bool menuExpanded: false
+                    onVisibleChanged: { if (!visible) menuExpanded = false; }
+
+                    // Layer 1: Static Baseline Buttons (Slides out to the left when expanded)
+                    RowLayout {
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        spacing: 12
+
+                        // Move left by the full width of the container (plus spacing) when expanded
+                        x: utilitiesWrapper.menuExpanded ? -parent.width - 16 : 0
+                        Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
+                        // 1. Settings App
+                        Rectangle { 
+                            Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                            color: actionHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            HoverHandler { id: actionHover }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.requestDismiss(); rootShell.settingsAppRef.windowVisible = true; } }
+                            Text { anchors.centerIn: parent; text: "settings"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
-                        
-                        Text { 
-                            anchors.centerIn: parent 
-                            text: "settings" 
-                            font.family: "Material Symbols Outlined" 
-                            color: rootShell.colorText 
-                            font.pixelSize: 26 // Enlarged icon size
-                        } 
+
+                        // 2. Application Launcher
+                        Rectangle { 
+                            Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                            color: launcherHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            HoverHandler { id: launcherHover }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.requestDismiss(); rootShell.launcherRef.active = !rootShell.launcherRef.active; } }
+                            Text { anchors.centerIn: parent; text: "apps"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
+                        }
+
+                        // 3. Screenshot Region (Satty)
+                        Rectangle { 
+                            Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                            color: snipHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            HoverHandler { id: snipHover }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["bash", "-c", "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"]); } }
+                            Text { anchors.centerIn: parent; text: "screenshot_region"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
+                        }
+
+                        // 4. Power Activation Shell
+                        Rectangle { 
+                            Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                            color: powerHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            HoverHandler { id: powerHover }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: utilitiesWrapper.menuExpanded = true }
+                            Text { anchors.centerIn: parent; text: "power_settings_new"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
+                        }
                     }
 
-                    // 2. Application Launcher
-                    Rectangle { 
-                        id: launcherButton
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: parent.height
-                        radius: 30
-                        color: launcherHover.hovered 
-                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
-                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                            
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        HoverHandler { id: launcherHover }
+                    // Layer 2: Absolute-Positioned Slide Tray Overlay (Slides in from the right)
+                    Item {
+                        id: slideOverlay
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: parent.width
                         
-                        MouseArea {
+                        x: utilitiesWrapper.menuExpanded ? 0 : parent.width + 16
+                        Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
+                        RowLayout {
                             anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                rootShell.dashboardRef.requestDismiss();
-                                rootShell.launcherRef.active = !rootShell.launcherRef.active;
+                            spacing: 12
+
+                            // Back Toggle Action Button
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                                color: backHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                HoverHandler { id: backHover }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: utilitiesWrapper.menuExpanded = false }
+                                Text { anchors.centerIn: parent; text: "arrow_back"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
+                            }
+
+                            // Suspend
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                                color: suspHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                HoverHandler { id: suspHover }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["systemctl", "suspend"]); } }
+                                Text { anchors.centerIn: parent; text: "bedtime"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
+                            }
+
+                            // Log Out
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                                color: logoutHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                HoverHandler { id: logoutHover }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["hyprctl", "dispatch", "exit"]); } }
+                                Text { anchors.centerIn: parent; text: "logout"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
+                            }
+
+                            // Reboot
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                                color: rebootHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                HoverHandler { id: rebootHover }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["systemctl", "reboot"]); } }
+                                Text { anchors.centerIn: parent; text: "restart_alt"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
+                            }
+
+                            // Shut Down
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                                color: powerOffHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                HoverHandler { id: powerOffHover }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["systemctl", "poweroff"]); } }
+                                Text { anchors.centerIn: parent; text: "power_settings_new"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
                         }
-                        
-                        Text { 
-                            anchors.centerIn: parent 
-                            text: "apps" 
-                            font.family: "Material Symbols Outlined" 
-                            color: rootShell.colorText 
-                            font.pixelSize: 26 
-                        } 
-                    }
-
-                    // 3. Screenshot Region (Satty)
-                    Rectangle { 
-                        id: screenshotButton
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: parent.height
-                        radius: 30
-                        color: snipHover.hovered
-                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
-                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                            
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        HoverHandler { id: snipHover }
-                        
-                        MouseArea { 
-                            id: snipMouseArea
-                            anchors.fill: parent 
-                            cursorShape: Qt.PointingHandCursor 
-                            onClicked: { 
-                                rootShell.dashboardRef.forceDismiss() 
-                                Quickshell.execDetached([
-                                    "bash", "-c", 
-                                    "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"
-                                ]);
-                            } 
-                        }
-                        
-                        Text { 
-                            anchors.centerIn: parent 
-                            text: "screenshot_region" 
-                            font.family: "Material Symbols Outlined" 
-                            color: rootShell.colorText 
-                            font.pixelSize: 26 
-                        } 
-                    }
-
-                    // 4. Power Menu
-                    Rectangle { 
-                        id: powerMenuButton
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: parent.height
-                        radius: 30
-                        color: powerHover.hovered 
-                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
-                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
-                            
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        HoverHandler { id: powerHover }
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                rootShell.dashboardRef.forceDismiss();
-                                Quickshell.execDetached(["wlogout"]);
-                            }
-                        }
-                        
-                        Text { 
-                            anchors.centerIn: parent 
-                            text: "power_settings_new" 
-                            font.family: "Material Symbols Outlined" 
-                            color: rootShell.colorText 
-                            font.pixelSize: 26 
-                        } 
                     }
                 }
 
