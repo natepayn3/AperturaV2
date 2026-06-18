@@ -23,15 +23,29 @@ Item {
     property real maxCardWidth: 340
     property real maxCardHeight: 440
 
-    implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.round(maxCardHeight)
-    width: Math.round(maxCardWidth)
-    height: Math.round(maxCardHeight)
+    // --- State Management & Dynamic Height ---
+    property bool isPowered: false
+    property bool isScanning: false
+    property string activeSsid: ""
+    property string activeStatusText: isScanning 
+        ? "Scanning networks..." 
+        : (isPowered ? (activeSsid !== "" ? "Connected to " + activeSsid : "Wi-Fi is ON") : "Wi-Fi is OFF")
 
-    // --- Dynamic Multi-Monitor Geometry Mapping ---
+    property string expandedSsid: ""
+    property var knownNetworks: ({}) 
+    
+    property real baseLayoutHeight: 90
+    property real calculatedHeight: baseLayoutHeight + (wifiModel.count * 48) + (Math.max(0, wifiModel.count - 1) * 6) + (expandedSsid !== "" ? 48 : 0)
+
+    implicitWidth: Math.round(maxCardWidth)
+    implicitHeight: Math.min(Math.round(calculatedHeight), Math.round(maxCardHeight))
+    width: Math.round(maxCardWidth)
+    height: implicitHeight
+    
+    Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
     x: {
         let targetWidth = Quickshell.screen ? Quickshell.screen.width : Screen.width;
-        
         if (rootShell.barPosition === "top") return targetWidth - width - 10;
         if (rootShell.barPosition === "bottom") return targetWidth - width - 10;
         if (rootShell.barPosition === "right") return targetWidth - width - 46;
@@ -41,7 +55,6 @@ Item {
 
     y: {
         let targetHeight = Quickshell.screen ? Quickshell.screen.height : Screen.height;
-        
         switch (rootShell.barPosition) {
             case "bottom": return targetHeight - height - 46; 
             case "top":    return 46;                             
@@ -51,17 +64,19 @@ Item {
         }
     }
 
-    // --- State Management ---
-    property bool isPowered: false
-    property bool isScanning: false
-    property string activeSsid: ""
-    property string activeStatusText: isScanning 
-        ? "Scanning networks..." 
-        : (isPowered ? (activeSsid !== "" ? "Connected to " + activeSsid : "Wi-Fi is ON") : "Wi-Fi is OFF")
-
     ListModel { id: wifiModel }
 
     // --- Core Network Drivers ---
+    
+    Timer {
+        id: hardwareScanDelay
+        interval: 4000 
+        onTriggered: {
+            wifiRoot.isScanning = false;
+            fetchStatusProc.running = true;
+        }
+    }
+
     Timer {
         id: statePollerTimer
         interval: 3000
@@ -69,7 +84,8 @@ Item {
         running: wifiRoot.active
         triggeredOnStart: true
         onTriggered: {
-            if (!togglePowerProc.running && !connectNetworkProc.running && !scanNetworksProc.running) {
+            // Freeze the background updates if the user is typing/interacting with an expanded row
+            if (!togglePowerProc.running && !connectNetworkProc.running && !wifiRoot.isScanning && !disconnectProc.running && wifiRoot.expandedSsid === "") {
                 fetchStatusProc.running = false;
                 fetchStatusProc.running = true;
             }
@@ -86,12 +102,40 @@ Item {
                 wifiRoot.isPowered = (cleaned.includes("enabled") || cleaned.includes("有効"));
                 
                 if (wifiRoot.isPowered) {
-                    fetchCurrentSsidProc.running = false;
-                    fetchCurrentSsidProc.running = true;
+                    fetchKnownProc.running = false;
+                    fetchKnownProc.running = true;
                 } else {
                     wifiRoot.activeSsid = "";
+                    wifiRoot.expandedSsid = "";
+                    wifiRoot.knownNetworks = {};
                     wifiModel.clear();
                 }
+            }
+        }
+    }
+
+    Process {
+        id: fetchKnownProc
+        command: ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let lines = this.text.trim().split("\n");
+                let dict = {};
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].trim() === "") continue;
+                    let parts = lines[i].split(":");
+                    if (parts.length >= 2) {
+                        // Added strict trimming to ensure precise SSID matching
+                        let type = parts.pop().trim();
+                        let name = parts.join(":").trim();
+                        if (type === "802-11-wireless") dict[name] = true;
+                    }
+                }
+                wifiRoot.knownNetworks = dict;
+                
+                fetchCurrentSsidProc.running = false;
+                fetchCurrentSsidProc.running = true;
             }
         }
     }
@@ -112,7 +156,6 @@ Item {
                 }
                 wifiRoot.activeSsid = foundActive;
                 
-                // Chain directly into updating the access point grid list
                 fetchNetworksProc.running = false;
                 fetchNetworksProc.running = true;
             }
@@ -157,14 +200,32 @@ Item {
                 }
 
                 tempNormalList.sort((a, b) => b.signalStrength - a.signalStrength);
+                let allNewItems = tempActiveList.concat(tempNormalList);
 
-                wifiModel.clear();
-                // 🎯 FIXED: Corrected iteration scopes to prevent engine crashes
-                for (let j = 0; j < tempActiveList.length; j++) {
-                    wifiModel.append(tempActiveList[j]);
+                for (let j = 0; j < allNewItems.length; j++) {
+                    let newItem = allNewItems[j];
+                    let foundIndex = -1;
+
+                    for (let m = 0; m < wifiModel.count; m++) {
+                        if (wifiModel.get(m).ssid === newItem.ssid) {
+                            foundIndex = m;
+                            break;
+                        }
+                    }
+
+                    if (foundIndex !== -1) {
+                        let existing = wifiModel.get(foundIndex);
+                        if (existing.signalStrength !== newItem.signalStrength) wifiModel.setProperty(foundIndex, "signalStrength", newItem.signalStrength);
+                        if (existing.connected !== newItem.connected) wifiModel.setProperty(foundIndex, "connected", newItem.connected);
+                        
+                        if (foundIndex !== j) wifiModel.move(foundIndex, j, 1);
+                    } else {
+                        wifiModel.insert(j, newItem);
+                    }
                 }
-                for (let k = 0; k < tempNormalList.length; k++) {
-                    wifiModel.append(tempNormalList[k]);
+                
+                while (wifiModel.count > allNewItems.length) {
+                    wifiModel.remove(wifiModel.count - 1, 1);
                 }
             }
         }
@@ -175,9 +236,8 @@ Item {
         command: ["nmcli", "dev", "wifi", "rescan"]
         running: false
         onRunningChanged: {
-            if (!running) {
-                wifiRoot.isScanning = false;
-                fetchStatusProc.running = true;
+            if (!running && wifiRoot.isScanning) {
+                hardwareScanDelay.restart();
             }
         }
     }
@@ -187,6 +247,7 @@ Item {
         running: false
         function setPower(turnOn) {
             command = ["nmcli", "radio", "wifi", turnOn ? "on" : "off"];
+            running = false; 
             running = true;
         }
         onRunningChanged: { if (!running) fetchStatusProc.running = true; }
@@ -195,11 +256,41 @@ Item {
     Process {
         id: connectNetworkProc
         running: false
-        function connectTo(ssidTarget) {
-            command = ["nmcli", "dev", "wifi", "connect", ssidTarget];
+        function connectTo(ssidTarget, password, isKnown) {
+            running = false; 
+            
+            if (isKnown) {
+                command = ["nmcli", "connection", "up", "id", ssidTarget];
+            } else if (password === "") {
+                command = ["nmcli", "dev", "wifi", "connect", ssidTarget, "timeout", "15"];
+            } else {
+                command = ["nmcli", "dev", "wifi", "connect", ssidTarget, "password", password, "timeout", "15"];
+            }
             running = true;
         }
-        onRunningChanged: { if (!running) fetchStatusProc.running = true; }
+        onRunningChanged: { if (!running) { fetchStatusProc.running = true; wifiRoot.expandedSsid = ""; } }
+    }
+
+    Process {
+        id: disconnectProc
+        running: false
+        function disconnect(ssidTarget) {
+            command = ["nmcli", "connection", "down", "id", ssidTarget];
+            running = false;
+            running = true;
+        }
+        onRunningChanged: { if (!running) { fetchStatusProc.running = true; wifiRoot.expandedSsid = ""; } }
+    }
+
+    Process {
+        id: forgetProc
+        running: false
+        function forget(ssidTarget) {
+            command = ["nmcli", "connection", "delete", "id", ssidTarget];
+            running = false;
+            running = true;
+        }
+        onRunningChanged: { if (!running) { fetchStatusProc.running = true; wifiRoot.expandedSsid = ""; } }
     }
 
     function triggerRescan() {
@@ -213,9 +304,7 @@ Item {
     }
 
     onActiveChanged: {
-        if (active) {
-            fetchStatusProc.running = true;
-        }
+        if (active) fetchStatusProc.running = true;
     }
 
     // --- Visual Layout and Dynamic Springs ---
@@ -377,7 +466,13 @@ Item {
             }
         }
 
-        MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
+        MouseArea { 
+            id: popupHoverArea
+            anchors.fill: parent
+            hoverEnabled: true
+            z: 1 
+            onPressed: (mouse) => mouse.accepted = true 
+        }
 
         Item {
             id: layoutContentWrapper
@@ -401,58 +496,154 @@ Item {
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                     delegate: Item {
+                        property bool isExpanded: wifiRoot.expandedSsid === model.ssid
+                        property bool isKnown: wifiRoot.knownNetworks[model.ssid] === true
+                        
                         width: networkListView.width
-                        height: 48
+                        height: isExpanded ? 96 : 48
+                        Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
                         Rectangle {
                             anchors.fill: parent
                             radius: 8
+                            clip: true
+                            
                             color: model.connected 
                                    ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
-                                   : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
+                                   : (itemMouse.containsMouse || isExpanded ? Qt.rgba(255,255,255,0.05) : "transparent")
 
                             border.width: model.connected ? 1 : 0
                             border.color: rootShell.colorAccent
 
-                            RowLayout {
+                            ColumnLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 12
-                                spacing: 12
+                                spacing: 0
 
-                                Text {
-                                    text: model.ssid
-                                    color: "#ffffff"
-                                    font.family: rootShell.shellFont
-                                    font.pixelSize: 13
-                                    font.weight: model.connected ? Font.Bold : Font.Normal
-                                    elide: Text.ElideRight
+                                // Top Row: Standard Network Info
+                                Item {
                                     Layout.fillWidth: true
+                                    Layout.preferredHeight: 48
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12; anchors.rightMargin: 12
+                                        spacing: 12
+
+                                        Text {
+                                            text: model.ssid
+                                            color: "#ffffff"
+                                            font.family: rootShell.shellFont
+                                            font.pixelSize: 13
+                                            font.weight: model.connected ? Font.Bold : Font.Normal
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+
+                                        Text {
+                                            text: model.connected 
+                                                ? "signal_wifi_4_bar" 
+                                                : (model.signalStrength > 75 ? "network_wifi" : (model.signalStrength > 45 ? "network_wifi_2_bar" : (model.signalStrength > 20 ? "network_wifi_1_bar" : "signal_wifi_off")))
+                                            font.family: "Material Symbols Outlined"
+                                            font.pixelSize: 18
+                                            color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: itemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (wifiRoot.expandedSsid === model.ssid) wifiRoot.expandedSsid = "";
+                                            else wifiRoot.expandedSsid = model.ssid;
+                                        }
+                                    }
                                 }
 
-                                Text {
-                                    // 🎯 FIXED: Simplified to use standard signal_wifi glyphs uniformly
-                                    text: model.connected 
-                                        ? "signal_wifi_4_bar" 
-                                        : (model.signalStrength > 75 
-                                            ? "network_wifi" 
-                                            : (model.signalStrength > 45 
-                                                ? "network_wifi_2_bar" 
-                                                : (model.signalStrength > 20 
-                                                    ? "network_wifi_1_bar" 
-                                                    : "signal_wifi_off")))
-                                    font.family: "Material Symbols Outlined"
-                                    font.pixelSize: 18
-                                    color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
-                                }
-                            }
+                                // Bottom Row: Interactive Controls (Expanded State)
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 48
+                                    visible: isExpanded
+                                    opacity: isExpanded ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
 
-                            MouseArea {
-                                id: itemMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: !model.connected && !connectNetworkProc.running
-                                onClicked: connectNetworkProc.connectTo(model.ssid)
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.bottomMargin: 8
+                                        spacing: 8
+
+                                        // -> Connected Controls
+                                        Rectangle {
+                                            visible: model.connected
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            radius: 6; color: Qt.rgba(255, 255, 255, 0.1)
+                                            Text { anchors.centerIn: parent; text: "Disconnect"; color: "#ffffff"; font.family: rootShell.shellFont; font.pixelSize: 12 }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: disconnectProc.disconnect(model.ssid) }
+                                        }
+                                        
+                                        Rectangle {
+                                            visible: model.connected
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            radius: 6; color: Qt.rgba(rootShell.colorClose.r, rootShell.colorClose.g, rootShell.colorClose.b, 0.2)
+                                            Text { anchors.centerIn: parent; text: "Forget"; color: rootShell.colorClose; font.family: rootShell.shellFont; font.pixelSize: 12 }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: forgetProc.forget(model.ssid) }
+                                        }
+
+                                        // -> Disconnected Controls (Known Network - No Password Input)
+                                        Rectangle {
+                                            visible: !model.connected && isKnown
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            radius: 6; color: Qt.rgba(255, 255, 255, 0.1)
+                                            Text { anchors.centerIn: parent; text: "Connect"; color: "#ffffff"; font.family: rootShell.shellFont; font.pixelSize: 12 }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: connectNetworkProc.connectTo(model.ssid, "", true) }
+                                        }
+                                        
+                                        Rectangle {
+                                            visible: !model.connected && isKnown
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            radius: 6; color: Qt.rgba(rootShell.colorClose.r, rootShell.colorClose.g, rootShell.colorClose.b, 0.2)
+                                            Text { anchors.centerIn: parent; text: "Forget"; color: rootShell.colorClose; font.family: rootShell.shellFont; font.pixelSize: 12 }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: forgetProc.forget(model.ssid) }
+                                        }
+
+                                        // -> Disconnected Controls (Unknown Network - Password Input)
+                                        Rectangle {
+                                            visible: !model.connected && !isKnown
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            radius: 6; color: Qt.rgba(0,0,0, 0.3)
+                                            border.width: 1; border.color: Qt.rgba(255,255,255,0.1)
+                                            
+                                            TextInput {
+                                                id: passInput
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8; anchors.rightMargin: 8
+                                                verticalAlignment: TextInput.AlignVCenter
+                                                color: "#ffffff"; font.pixelSize: 12; font.family: rootShell.shellFont
+                                                echoMode: TextInput.Password
+                                                
+                                                onAccepted: connectNetworkProc.connectTo(model.ssid, passInput.text, false)
+                                                
+                                                Text {
+                                                    text: "Password"
+                                                    color: Qt.rgba(255,255,255,0.4)
+                                                    font.family: rootShell.shellFont; font.pixelSize: 12
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    visible: passInput.text === "" && !passInput.activeFocus
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            visible: !model.connected && !isKnown
+                                            Layout.preferredWidth: 80; Layout.fillHeight: true
+                                            radius: 6; color: rootShell.colorAccent
+                                            Text { anchors.centerIn: parent; text: "Connect"; color: rootShell.colorBackground; font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: connectNetworkProc.connectTo(model.ssid, passInput.text, false) }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
