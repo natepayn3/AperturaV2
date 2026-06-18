@@ -56,6 +56,9 @@ Scope {
     readonly property var wifiRef: globalWifiPreview
     property real wifiProgress: 0.0
 
+    readonly property var dashboardRef: globalDashboardPreview
+    property real dashboardProgress: 0.0
+
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
     onShellFontChanged: saveConfig()
@@ -155,6 +158,17 @@ Scope {
         id: hideWifiAnim
         NumberAnimation { target: rootShell; property: "wifiProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalWifiPreview; property: "wifiActive"; value: false }
+    }
+
+    ParallelAnimation {
+        id: showDashboardAnim
+        NumberAnimation { target: rootShell; property: "dashboardProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+    }
+
+    ParallelAnimation {
+        id: hideDashboardAnim
+        NumberAnimation { target: rootShell; property: "dashboardProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
+        PropertyAction { target: globalDashboardPreview; property: "dashboardActive"; value: false }
     }
 
     function triggerOrientationChange(newEdge) {
@@ -411,6 +425,22 @@ Scope {
         }
     }
 
+    Timer {
+        id: dashboardDismissTimer
+        interval: 200 // Slightly increased to swallow Hyprland surface handoff latency
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!innerDashboardCard.isHovered) {
+                globalDashboardPreview.forceDismiss();
+            }
+        }
+    }
+
+    function startDashboardDismissTimer() {
+        dashboardDismissTimer.restart();
+    }
+
     // --- Global Popup Instances ---
     PanelWindow {
         id: globalWorkspacePreview
@@ -530,6 +560,46 @@ Scope {
                 if (rootShell.barPosition === "bottom") return parent.height - 44 - maxCardHeight;
                 return rootShell.barPosition === "top" ? 46 : 10; 
             }
+        }
+    }
+
+    PanelWindow {
+        id: globalDashboardPreview
+        property bool dashboardActive: false
+
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-dashboard-preview"
+        WlrLayershell.keyboardFocus: WlrLayershell.None 
+        WlrLayershell.exclusionMode: WlrLayershell.Ignore
+
+        anchors { left: true; right: true; top: true; bottom: true }
+        visible: dashboardActive || rootShell.dashboardProgress > 0.0
+        color: "transparent"
+
+        mask: Region { 
+            item: innerDashboardCard.active ? innerDashboardCard : null 
+        }
+
+        function cancelDismiss() { dashboardDismissTimer.stop(); }
+        function requestDismiss() { dashboardDismissTimer.restart(); }
+
+        function showDashboard() { 
+            if (!dashboardActive) {
+                closeAllPopups();
+                cancelDismiss();
+                dashboardActive = true; 
+                showDashboardAnim.restart(); 
+            }
+        }
+        function forceDismiss() { 
+            dashboardActive = false; 
+            hideDashboardAnim.restart(); 
+        }
+
+        // 🎯 FIX: Let the module handle its own geometry!
+        DashboardPopup {
+            id: innerDashboardCard
+            active: globalDashboardPreview.dashboardActive
         }
     }
 
