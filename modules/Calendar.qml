@@ -21,7 +21,7 @@ Item {
     property real wingSize: 14
 
     property real maxCardWidth: 340
-    property real maxCardHeight: 440
+    property real maxCardHeight: 370 // 🎯 Adjusted default height since the weather card is gone
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
@@ -37,60 +37,10 @@ Item {
     property int currentMonthOffsetIndex: 50
     property date viewerTargetDate: new Date()
 
-    property string weatherLocationOverride: ""
-    property string weatherTemp: "--"
-    property string weatherFeelsLike: "--"
-    property string weatherDesc: "Loading..."
-    property string weatherGlyph: "cloud"
-
-    readonly property var weatherIconMap: {
-        "0": "clear_day", "1": "partly_cloudy_day", "2": "partly_cloudy_day", "3": "cloudy",
-        "45": "foggy", "48": "foggy", "51": "rainy", "53": "rainy", "55": "rainy", "61": "rainy",
-        "63": "rainy", "65": "rainy", "71": "snowing", "73": "snowing", "75": "snowing",
-        "77": "snowing", "80": "rainy", "81": "rainy", "82": "rainy", "85": "snowing",
-        "86": "snowing", "95": "thunderstorm", "96": "thunderstorm", "99": "thunderstorm"
-    }
-
-    readonly property var weatherDescMap: {
-        "0": "Clear Sky", "1": "Mainly Clear", "2": "Partly Cloudy", "3": "Overcast",
-        "45": "Foggy", "48": "Rime Fog", "51": "Light Drizzle", "53": "Moderate Drizzle",
-        "55": "Dense Drizzle", "61": "Slight Rain", "63": "Moderate Rain", "65": "Heavy Rain",
-        "71": "Light Snow", "73": "Moderate Snow", "75": "Heavy Snow", "77": "Snow Grains",
-        "80": "Light Showers", "81": "Moderate Showers", "82": "Heavy Showers",
-        "85": "Light Snow Showers", "86": "Heavy Snow Showers", "95": "Thunderstorm",
-        "96": "Storm w/ Hail", "99": "Severe Storm"
-    }
-
     // --- Timers & Logic ---
     Timer {
         interval: 1000; running: true; repeat: true
         onTriggered: calendarRoot.currentDateTime = new Date()
-    }
-
-    Timer {
-        id: weatherTimer
-        interval: 900000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: weatherFetcher.running = true
-    }
-
-    Process {
-        id: weatherFetcher
-        command: ["curl", "-s", "https://wttr.is/" + calendarRoot.weatherLocationOverride.trim() + "?format=j1"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let data = JSON.parse(this.text);
-                    let current = data.current_condition[0];
-                    calendarRoot.weatherTemp = current.temp_F + "°F";
-                    calendarRoot.weatherFeelsLike = current.FeelsLikeF + "°F";
-                    let code = current.weatherCode.toString();
-                    calendarRoot.weatherDesc = calendarRoot.weatherDescMap[code] !== undefined ? calendarRoot.weatherDescMap[code] : current.weatherDesc[0].value;
-                    calendarRoot.weatherGlyph = calendarRoot.weatherIconMap[code] !== undefined ? calendarRoot.weatherIconMap[code] : "cloud";
-                } catch (e) {}
-                weatherFetcher.running = false;
-            }
-        }
     }
 
     function updateViewerDate() {
@@ -102,7 +52,6 @@ Item {
         if (active) {
             currentMonthOffsetIndex = 50;
             updateViewerDate();
-            if (weatherTemp === "--") weatherFetcher.running = true;
         }
     }
 
@@ -374,56 +323,6 @@ Item {
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-
-                // Divider
-                Rectangle {
-                    Layout.fillWidth: true; height: 1
-                    color: Qt.rgba(255,255,255,0.1)
-                }
-
-                // Weather Footer
-                Item {
-                    id: weatherCardSurface
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 56
-
-                    RowLayout {
-                        anchors.fill: parent; spacing: 14
-
-                        Text {
-                            text: calendarRoot.weatherGlyph
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 32
-                            color: rootShell.colorAccent
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        ColumnLayout {
-                            spacing: 2
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.fillWidth: true
-
-                            Text {
-                                text: calendarRoot.weatherDesc
-                                font.family: rootShell.shellFont; font.pixelSize: 14; font.weight: Font.Bold
-                                color: "#ffffff"
-                                elide: Text.ElideRight
-                            }
-
-                            Text {
-                                text: "Feels like " + calendarRoot.weatherFeelsLike
-                                font.family: rootShell.shellFont; font.pixelSize: 12
-                                color: "#ffffff"; opacity: 0.6
-                            }
-                        }
-
-                        Text {
-                            text: calendarRoot.weatherTemp
-                            font.family: rootShell.shellFont; font.pixelSize: 22; font.weight: Font.Bold
-                            color: "#ffffff"
-                            Layout.alignment: Qt.AlignVCenter
                         }
                     }
                 }
