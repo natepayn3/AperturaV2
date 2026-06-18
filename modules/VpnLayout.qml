@@ -27,6 +27,7 @@ Item {
         readonly property color subtext: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
         readonly property color accent: shellTarget ? shellTarget.colorAccent : "#89b4fa"
         readonly property color border: shellTarget ? shellTarget.colorBorder : "#313244"
+        readonly property color error: "#f38ba8"
         // FIX: Extract font family explicitly as a safe primitive string to prevent object-clashing
         readonly property string fontFamily: settingsWindow ? settingsWindow.selectedFont : "sans-serif"
     }
@@ -176,7 +177,7 @@ Item {
         }
     }
 
-    // Dynamic Connection State Machine Manager
+    // Dynamic Connection State Machine Manager (Handles Up/Down/Delete)
     Process {
         id: vpnStateExecutor
         running: false
@@ -254,6 +255,15 @@ Item {
         } else {
             vpnStateExecutor.command = ["nmcli", "connection", "down", "id", profileName];
         }
+        vpnStateExecutor.running = true;
+    }
+
+    // Disconnects profile if active, then purges connection profile from NetworkManager
+    function deleteProfile(profileName) {
+        if (vpnLayoutRoot.activeVpnName === profileName) {
+            vpnLayoutRoot.textVisible = false;
+        }
+        vpnStateExecutor.command = ["nmcli", "connection", "delete", "id", profileName];
         vpnStateExecutor.running = true;
     }
 
@@ -443,29 +453,63 @@ Item {
                                 }
                             }
 
-                            Switch {
-                                id: itemToggleSwitch
-                                checked: vpnLayoutRoot.activeVpnName === profileName
-                                
-                                onClicked: {
-                                    vpnLayoutRoot.toggleProfileState(profileName, checked);
+                            // Nested control layout aligns items cleanly on the right bound
+                            RowLayout {
+                                spacing: 30
+                                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                                Switch {
+                                    id: itemToggleSwitch
+                                    checked: vpnLayoutRoot.activeVpnName === profileName
+                                    
+                                    onClicked: {
+                                        vpnLayoutRoot.toggleProfileState(profileName, checked);
+                                    }
+
+                                    background: Rectangle {
+                                        implicitWidth: 44
+                                        implicitHeight: 22
+                                        radius: 11
+                                        color: itemToggleSwitch.checked ? vpnTheme.accent : vpnTheme.border
+                                        
+                                        Rectangle {
+                                            width: 16; height: 16; radius: 8; color: "#11111b"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            x: itemToggleSwitch.checked ? 24 : 4
+                                            Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+                                        }
+                                    }
+                                    indicator: Item {}
+                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                                 }
 
-                                background: Rectangle {
-                                    implicitWidth: 44
-                                    implicitHeight: 22
-                                    radius: 11
-                                    color: itemToggleSwitch.checked ? vpnTheme.accent : vpnTheme.border
-                                    
-                                    Rectangle {
-                                        width: 16; height: 16; radius: 8; color: "#11111b"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        x: itemToggleSwitch.checked ? 24 : 4
-                                        Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+                                Button {
+                                    id: deleteProfileBtn
+                                    flat: true
+                                    implicitWidth: 32
+                                    implicitHeight: 32
+
+                                    background: Rectangle {
+                                        color: deleteProfileBtn.hovered ? Qt.rgba(243/255, 139/255, 168/255, 0.15) : "transparent"
+                                        radius: 6
+                                        Behavior on color { ColorAnimation { duration: 100 } }
                                     }
+
+                                    contentItem: Text {
+                                        text: "delete"
+                                        font.family: "Material Symbols Outlined"
+                                        font.pixelSize: 18
+                                        color: deleteProfileBtn.hovered ? vpnTheme.error : vpnTheme.subtext
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+
+                                    onClicked: {
+                                        vpnLayoutRoot.deleteProfile(profileName);
+                                    }
+                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                                 }
-                                indicator: Item {}
-                                HoverHandler { cursorShape: Qt.PointingHandCursor }
                             }
                         }
                     }
@@ -478,7 +522,7 @@ Item {
                     font.family: vpnTheme.fontFamily
                     font.pixelSize: 13
                     font.bold: true
-                    color: "#f38ba8"
+                    color: vpnTheme.error
                     
                     anchors.top: parent.top
                     anchors.topMargin: -2 
