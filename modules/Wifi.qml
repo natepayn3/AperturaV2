@@ -34,6 +34,10 @@ Item {
     property string expandedSsid: ""
     property var knownNetworks: ({}) 
     
+    // Connection Feedback States
+    property string connectingSsid: ""
+    property string failedSsid: ""
+    
     property real baseLayoutHeight: 90
     property real calculatedHeight: baseLayoutHeight + (wifiModel.count * 48) + (Math.max(0, wifiModel.count - 1) * 6) + (expandedSsid !== "" ? 48 : 0)
 
@@ -66,6 +70,20 @@ Item {
 
     ListModel { id: wifiModel }
 
+    // --- Safe Process Chaining Functions ---
+    function step1_fetchKnown() {
+        fetchKnownProc.running = false;
+        fetchKnownProc.running = true;
+    }
+    function step2_fetchCurrentSsid() {
+        fetchCurrentSsidProc.running = false;
+        fetchCurrentSsidProc.running = true;
+    }
+    function step3_fetchNetworks() {
+        fetchNetworksProc.running = false;
+        fetchNetworksProc.running = true;
+    }
+
     // --- Core Network Drivers ---
     
     Timer {
@@ -84,7 +102,6 @@ Item {
         running: wifiRoot.active
         triggeredOnStart: true
         onTriggered: {
-            // Freeze the background updates if the user is typing/interacting with an expanded row
             if (!togglePowerProc.running && !connectNetworkProc.running && !wifiRoot.isScanning && !disconnectProc.running && wifiRoot.expandedSsid === "") {
                 fetchStatusProc.running = false;
                 fetchStatusProc.running = true;
@@ -102,8 +119,7 @@ Item {
                 wifiRoot.isPowered = (cleaned.includes("enabled") || cleaned.includes("有効"));
                 
                 if (wifiRoot.isPowered) {
-                    fetchKnownProc.running = false;
-                    fetchKnownProc.running = true;
+                    wifiRoot.step1_fetchKnown();
                 } else {
                     wifiRoot.activeSsid = "";
                     wifiRoot.expandedSsid = "";
@@ -126,16 +142,13 @@ Item {
                     if (lines[i].trim() === "") continue;
                     let parts = lines[i].split(":");
                     if (parts.length >= 2) {
-                        // Added strict trimming to ensure precise SSID matching
                         let type = parts.pop().trim();
                         let name = parts.join(":").trim();
                         if (type === "802-11-wireless") dict[name] = true;
                     }
                 }
                 wifiRoot.knownNetworks = dict;
-                
-                fetchCurrentSsidProc.running = false;
-                fetchCurrentSsidProc.running = true;
+                wifiRoot.step2_fetchCurrentSsid();
             }
         }
     }
@@ -155,48 +168,76 @@ Item {
                     }
                 }
                 wifiRoot.activeSsid = foundActive;
-                
-                fetchNetworksProc.running = false;
-                fetchNetworksProc.running = true;
+                wifiRoot.step3_fetchNetworks();
             }
         }
     }
 
     Process {
         id: fetchNetworksProc
-        command: ["nmcli", "-t", "-f", "ACTIVE,BARS,SIGNAL,SSID", "dev", "wifi"]
+        // Restructured to grab SECURITY while keeping SSID at the absolute end to prevent string split bugs
+        command: ["nmcli", "-t", "-f", "ACTIVE,BARS,SIGNAL,SECURITY,SSID", "dev", "wifi"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
                 let lines = this.text.split("\n");
-                let tempActiveList = [];
-                let tempNormalList = [];
-                let seenSsids = {};
+                let uniqueList = []; 
 
                 for (let i = 0; i < lines.length; i++) {
                     let line = lines[i].trim();
                     if (line === "") continue;
 
                     let parts = line.split(":");
-                    if (parts.length < 4) continue;
+                    if (parts.length < 5) continue;
 
-                    let isActive = parts[0] === "yes";
+                    let isActive = parts[0].indexOf("yes") !== -1;
                     let bars = parts[1].trim();
                     let signal = parseInt(parts[2].trim()) || 0;
-                    let ssid = parts.slice(3).join(":"); 
+                    
+                    // Parse security protocols
+                    let securityStr = parts[3].trim();
+                    let secureNode = (securityStr !== "" && securityStr !== "--");
+                    
+                    let ssid = parts.slice(4).join(":").trim(); 
 
-                    if (ssid === "" || seenSsids[ssid]) continue;
-                    seenSsids[ssid] = true;
+                    if (ssid === "") continue;
+                    if (ssid === wifiRoot.activeSsid) isActive = true;
 
-                    let itemData = {
-                        ssid: ssid,
-                        signalStrength: signal,
-                        barsString: bars,
-                        connected: isActive
-                    };
+                    let existingIndex = -1;
+                    for (let n = 0; n < uniqueList.length; n++) {
+                        if (uniqueList[n].ssid === ssid) {
+                            existingIndex = n;
+                            break;
+                        }
+                    }
 
-                    if (isActive) tempActiveList.push(itemData);
-                    else tempNormalList.push(itemData);
+                    if (existingIndex === -1) {
+                        uniqueList.push({
+                            ssid: ssid,
+                            signalStrength: signal,
+                            barsString: bars,
+                            connected: isActive,
+                            isSecure: secureNode
+                        });
+                    } else {
+                        if (isActive) uniqueList[existingIndex].connected = true;
+                        
+                        // Fallback: If any physical node for this SSID is secure, flag the whole network as secure
+                        if (secureNode) uniqueList[existingIndex].isSecure = true;
+                        
+                        if (signal > uniqueList[existingIndex].signalStrength) {
+                            uniqueList[existingIndex].signalStrength = signal;
+                            uniqueList[existingIndex].barsString = bars;
+                        }
+                    }
+                }
+
+                let tempActiveList = [];
+                let tempNormalList = [];
+                
+                for (let k = 0; k < uniqueList.length; k++) {
+                    if (uniqueList[k].connected) tempActiveList.push(uniqueList[k]);
+                    else tempNormalList.push(uniqueList[k]);
                 }
 
                 tempNormalList.sort((a, b) => b.signalStrength - a.signalStrength);
@@ -217,6 +258,7 @@ Item {
                         let existing = wifiModel.get(foundIndex);
                         if (existing.signalStrength !== newItem.signalStrength) wifiModel.setProperty(foundIndex, "signalStrength", newItem.signalStrength);
                         if (existing.connected !== newItem.connected) wifiModel.setProperty(foundIndex, "connected", newItem.connected);
+                        if (existing.isSecure !== newItem.isSecure) wifiModel.setProperty(foundIndex, "isSecure", newItem.isSecure);
                         
                         if (foundIndex !== j) wifiModel.move(foundIndex, j, 1);
                     } else {
@@ -256,19 +298,35 @@ Item {
     Process {
         id: connectNetworkProc
         running: false
+
         function connectTo(ssidTarget, password, isKnown) {
+            wifiRoot.failedSsid = "";
+            wifiRoot.connectingSsid = ssidTarget;
             running = false; 
+            
+            let cleanPass = password.trim();
             
             if (isKnown) {
                 command = ["nmcli", "connection", "up", "id", ssidTarget];
-            } else if (password === "") {
-                command = ["nmcli", "dev", "wifi", "connect", ssidTarget, "timeout", "15"];
+            } else if (cleanPass === "") {
+                command = ["nmcli", "dev", "wifi", "connect", ssidTarget];
             } else {
-                command = ["nmcli", "dev", "wifi", "connect", ssidTarget, "password", password, "timeout", "15"];
+                command = ["nmcli", "dev", "wifi", "connect", ssidTarget, "password", cleanPass];
             }
             running = true;
         }
-        onRunningChanged: { if (!running) { fetchStatusProc.running = true; wifiRoot.expandedSsid = ""; } }
+
+        onExited: function(exitCode) {
+            if (wifiRoot.connectingSsid !== "") { 
+                if (exitCode !== 0) {
+                    wifiRoot.failedSsid = wifiRoot.connectingSsid;
+                } else {
+                    wifiRoot.expandedSsid = ""; 
+                }
+                wifiRoot.connectingSsid = "";
+                fetchStatusProc.running = true; 
+            } 
+        }
     }
 
     Process {
@@ -498,6 +556,8 @@ Item {
                     delegate: Item {
                         property bool isExpanded: wifiRoot.expandedSsid === model.ssid
                         property bool isKnown: wifiRoot.knownNetworks[model.ssid] === true
+                        property bool isConnecting: wifiRoot.connectingSsid === model.ssid
+                        property bool isFailed: wifiRoot.failedSsid === model.ssid
                         
                         width: networkListView.width
                         height: isExpanded ? 96 : 48
@@ -540,9 +600,14 @@ Item {
                                         }
 
                                         Text {
-                                            text: model.connected 
-                                                ? "signal_wifi_4_bar" 
-                                                : (model.signalStrength > 75 ? "network_wifi" : (model.signalStrength > 45 ? "network_wifi_2_bar" : (model.signalStrength > 20 ? "network_wifi_1_bar" : "signal_wifi_off")))
+                                            // Exact mapping to requested Material Symbols
+                                            text: {
+                                                if (model.signalStrength > 75) return model.isSecure ? "network_wifi_locked" : "network_wifi";
+                                                if (model.signalStrength > 50) return model.isSecure ? "network_wifi_3_bar_locked" : "network_wifi_3_bar";
+                                                if (model.signalStrength > 25) return model.isSecure ? "network_wifi_2_bar_locked" : "network_wifi_2_bar";
+                                                return model.isSecure ? "network_wifi_1_bar_locked" : "network_wifi_1_bar";
+                                            }
+                                            
                                             font.family: "Material Symbols Outlined"
                                             font.pixelSize: 18
                                             color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
@@ -554,9 +619,14 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
+                                        enabled: !isConnecting 
                                         onClicked: {
-                                            if (wifiRoot.expandedSsid === model.ssid) wifiRoot.expandedSsid = "";
-                                            else wifiRoot.expandedSsid = model.ssid;
+                                            if (wifiRoot.expandedSsid === model.ssid) {
+                                                wifiRoot.expandedSsid = "";
+                                                wifiRoot.failedSsid = ""; 
+                                            } else {
+                                                wifiRoot.expandedSsid = model.ssid;
+                                            }
                                         }
                                     }
                                 }
@@ -591,29 +661,45 @@ Item {
                                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: forgetProc.forget(model.ssid) }
                                         }
 
-                                        // -> Disconnected Controls (Known Network - No Password Input)
+                                        // -> Disconnected Controls (No Password Input needed for Known OR Open networks)
                                         Rectangle {
-                                            visible: !model.connected && isKnown
+                                            visible: !model.connected && (isKnown || !model.isSecure)
                                             Layout.fillWidth: true; Layout.fillHeight: true
-                                            radius: 6; color: Qt.rgba(255, 255, 255, 0.1)
-                                            Text { anchors.centerIn: parent; text: "Connect"; color: "#ffffff"; font.family: rootShell.shellFont; font.pixelSize: 12 }
-                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: connectNetworkProc.connectTo(model.ssid, "", true) }
+                                            radius: 6
+                                            color: isFailed ? rootShell.colorClose : (isConnecting ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.5) : rootShell.colorAccent)
+                                            
+                                            Text { 
+                                                anchors.centerIn: parent
+                                                text: isConnecting ? "Connecting..." : (isFailed ? "Failed - Try Again" : "Connect")
+                                                color: "#ffffff"
+                                                font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold 
+                                            }
+                                            MouseArea { 
+                                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                                enabled: !isConnecting
+                                                onClicked: connectNetworkProc.connectTo(model.ssid, "", isKnown) 
+                                            }
                                         }
                                         
                                         Rectangle {
-                                            visible: !model.connected && isKnown
+                                            visible: !model.connected && (isKnown || !model.isSecure)
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             radius: 6; color: Qt.rgba(rootShell.colorClose.r, rootShell.colorClose.g, rootShell.colorClose.b, 0.2)
                                             Text { anchors.centerIn: parent; text: "Forget"; color: rootShell.colorClose; font.family: rootShell.shellFont; font.pixelSize: 12 }
-                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: forgetProc.forget(model.ssid) }
+                                            MouseArea { 
+                                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                                enabled: !isConnecting
+                                                onClicked: forgetProc.forget(model.ssid) 
+                                            }
                                         }
 
-                                        // -> Disconnected Controls (Unknown Network - Password Input)
+                                        // -> Disconnected Controls (Unknown Network AND Secure - Password Input)
                                         Rectangle {
-                                            visible: !model.connected && !isKnown
+                                            visible: !model.connected && !isKnown && model.isSecure
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             radius: 6; color: Qt.rgba(0,0,0, 0.3)
-                                            border.width: 1; border.color: Qt.rgba(255,255,255,0.1)
+                                            border.width: 1
+                                            border.color: isFailed ? rootShell.colorClose : Qt.rgba(255,255,255,0.1)
                                             
                                             TextInput {
                                                 id: passInput
@@ -622,8 +708,21 @@ Item {
                                                 verticalAlignment: TextInput.AlignVCenter
                                                 color: "#ffffff"; font.pixelSize: 12; font.family: rootShell.shellFont
                                                 echoMode: TextInput.Password
+                                                enabled: !isConnecting
                                                 
-                                                onAccepted: connectNetworkProc.connectTo(model.ssid, passInput.text, false)
+                                                Connections {
+                                                    target: wifiRoot
+                                                    function onFailedSsidChanged() {
+                                                        if (wifiRoot.failedSsid === model.ssid) passInput.text = "";
+                                                    }
+                                                }
+                                                
+                                                onAccepted: {
+                                                    if (!isConnecting) connectNetworkProc.connectTo(model.ssid, passInput.text, false)
+                                                }
+                                                onTextEdited: {
+                                                    if (isFailed) wifiRoot.failedSsid = "" 
+                                                }
                                                 
                                                 Text {
                                                     text: "Password"
@@ -636,11 +735,22 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            visible: !model.connected && !isKnown
-                                            Layout.preferredWidth: 80; Layout.fillHeight: true
-                                            radius: 6; color: rootShell.colorAccent
-                                            Text { anchors.centerIn: parent; text: "Connect"; color: rootShell.colorBackground; font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold }
-                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: connectNetworkProc.connectTo(model.ssid, passInput.text, false) }
+                                            visible: !model.connected && !isKnown && model.isSecure
+                                            Layout.preferredWidth: 90; Layout.fillHeight: true
+                                            radius: 6
+                                            color: isFailed ? rootShell.colorClose : (isConnecting ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.5) : rootShell.colorAccent)
+                                            
+                                            Text { 
+                                                anchors.centerIn: parent
+                                                text: isConnecting ? "Wait..." : (isFailed ? "Failed" : "Connect")
+                                                color: "#ffffff"
+                                                font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold 
+                                            }
+                                            MouseArea { 
+                                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                                enabled: !isConnecting
+                                                onClicked: connectNetworkProc.connectTo(model.ssid, passInput.text, false) 
+                                            }
                                         }
                                     }
                                 }
