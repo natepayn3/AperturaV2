@@ -710,13 +710,6 @@ Scope {
         Wifi {
             id: innerWifiCard
             active: globalWifiPreview.wifiActive
-            
-            MouseArea {
-                anchors.fill: parent
-                onPressed: (event) => event.accepted = true
-                onClicked: (event) => event.accepted = true
-            }
-
             hoverOriginX: globalWifiPreview.hoverOriginX
             hoverOriginY: globalWifiPreview.hoverOriginY
         }
