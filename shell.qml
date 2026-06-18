@@ -597,7 +597,7 @@ Scope {
         }
 
         // 🎯 FIX: Let the module handle its own geometry!
-        DashboardPopup {
+        Dashboard {
             id: innerDashboardCard
             active: globalDashboardPreview.dashboardActive
         }
