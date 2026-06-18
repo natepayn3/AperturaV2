@@ -548,7 +548,7 @@ Scope {
             onActivated: globalCalendarPreview.forceDismiss()
         }
 
-        CalendarPopup {
+        Calendar {
             id: innerCalendarCard
             active: globalCalendarPreview.calendarActive
 
