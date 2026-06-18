@@ -322,22 +322,24 @@ Scope {
                                     cursorShape: Qt.PointingHandCursor
                                     hoverEnabled: true
 
-                                    // Track the last known global mouse position
+                                    // Track the last known position relative to the screen
                                     property point lastPos: Qt.point(-1, -1)
 
-                                    onEntered: (mouse) => {
-                                        // Only update index if the mouse actually moved relative to the screen,
-                                        // preventing keyboard-scroll layout shifts from triggering a re-focus.
+                                    onPositionChanged: (mouse) => {
                                         let currentPos = Qt.point(mouse.screenX, mouse.screenY);
-                                        if (lastPos !== currentPos) {
-                                            appListView.currentIndex = index;
+                                        
+                                        // If this is the first move or the mouse actually shifted coordinates, update index
+                                        if (lastPos.x === -1 || lastPos.x !== currentPos.x || lastPos.y !== currentPos.y) {
+                                            if (appListView.currentIndex !== index) {
+                                                appListView.currentIndex = index;
+                                            }
                                             lastPos = currentPos;
                                         }
                                     }
 
-                                    onPositionChanged: (mouse) => {
-                                        // Keep the coordinates updated while moving within the same delegate
-                                        lastPos = Qt.point(mouse.screenX, mouse.screenY);
+                                    onExited: {
+                                        // Reset tracking when leaving the delegate bounds
+                                        lastPos = Qt.point(-1, -1);
                                     }
 
                                     onClicked: (mouse) => {
