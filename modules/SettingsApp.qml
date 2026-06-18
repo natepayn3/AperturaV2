@@ -61,7 +61,7 @@ Scope {
         property string selectedFont: "Rubik"
         property string fontSearchQuery: ""
 
-        readonly property string configDir: Quickshell.env("HOME") + "/.config/quickshell/Test"
+        readonly property string configDir: shellTarget ? shellTarget.customBasePath : ""
         readonly property string configFilePath: configDir + "/shell_settings.json"
 
         function getGeometricallySortedScreens() {
@@ -137,7 +137,7 @@ Scope {
             
             writeProc.command = [
                 "bash", "-c", 
-                "mkdir -p '" + configDir + "' && echo '" + JSON.stringify(updatePayload) + "' > '" + configFilePath + "'"
+                "echo '" + JSON.stringify(updatePayload) + "' > '" + configFilePath + "'"
             ];
             writeProc.running = false;
             writeProc.running = true;
