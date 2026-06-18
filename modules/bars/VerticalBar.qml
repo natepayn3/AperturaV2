@@ -130,6 +130,40 @@ PanelWindow {
             }
         }
 
+        // Center Dashboard Trigger
+        Item {
+            anchors.centerIn: parent
+            width: parent.width
+            height: 64 // 🎯 Forces the trigger to be exactly 64px tall
+
+            MouseArea {
+                id: dashHover
+                anchors.fill: parent // Now only fills the 64px Item, NOT the whole bar
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                
+                // Cancel dismissal immediately if moving back from the dashboard
+                onEntered: {
+                    rootShell.dashboardRef.cancelDismiss();
+                    rootShell.dashboardRef.showDashboard();
+                }
+                
+                // Fire the delayed request
+                onExited: rootShell.dashboardRef.requestDismiss()
+
+                Rectangle {
+                    width: 4
+                    height: dashHover.containsMouse || rootShell.dashboardProgress > 0.0 ? 32 : 16
+                    radius: 2
+                    anchors.centerIn: parent
+                    color: (dashHover.containsMouse || rootShell.dashboardProgress > 0.0) ? rootShell.colorAccent : rootShell.colorSubtext
+                    
+                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
+            }
+        }
+
         // Bottom Controls Container (SysTray + Navigation Modules)
         Column {
             anchors.bottom: parent.bottom
