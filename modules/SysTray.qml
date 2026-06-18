@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Io // For Process and StdioCollector
+import Quickshell.Io 
 
 Item {
     id: sysTrayContainer
@@ -55,24 +55,31 @@ Item {
         }
     }
 
-    // --- Audio State Engine (Event-Driven) ---
+    // --- Audio State Engine (Event-Driven & Isolated) ---
     Process {
         id: audioMuteCheck
-        // Listens to PipeWire sink events cleanly and executes an instantaneous check on every output line
+        // Uses an explicit if/else inside the while block to prevent loop breaks from 'grep -q' termination
         command: [
             "sh", "-c", 
-            "pactl subscribe | stdbuf -oL grep --line-buffered \"'change' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q 'MUTED' && echo true || echo false; done"
+            "pactl subscribe | stdbuf -oL grep --line-buffered \"'change' on sink\" | while read -r _; do if wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -F '[MUTED]' >/dev/null; then echo true; else echo false; fi; done"
         ]
         running: true
         
         property bool isMuted: false
 
-        // Using SplitParser to parse stream lines natively without accumulation blocks
         stdout: SplitParser {
             onRead: data => {
-                audioMuteCheck.isMuted = (data.trim() === "true");
+                let cleaned = data.trim();
+                if (cleaned === "true") {
+                    audioMuteCheck.isMuted = true;
+                } else if (cleaned === "false") {
+                    audioMuteCheck.isMuted = false;
+                }
             }
         }
+
+        // Auto-respawn back up if pipewire-pulse drops or bounces
+        onRunningChanged: if (!running) running = true
     }
 
     // Smooth physics mapping transitions
@@ -179,7 +186,7 @@ Item {
                                         popupWindow.hoverOriginX = globalPos.x;
                                         popupWindow.hoverOriginY = globalPos.y;
                                         
-                                        // 🎯 Pass the screen context of the bar window to the popup module
+                                        // Pass the screen context of the bar window to the popup module
                                         if (sysTrayContainer.parentBarWindow) {
                                             popupWindow.screen = sysTrayContainer.parentBarWindow.screen;
                                         }
@@ -199,7 +206,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            // Always volume_up unless the engine flags a hardware mute state
+                            // Bound directly to our isolated event-driven process property
                             text: audioMuteCheck.isMuted ? "volume_off" : "volume_up"
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 16
