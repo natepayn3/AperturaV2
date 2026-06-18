@@ -322,7 +322,23 @@ Scope {
                                     cursorShape: Qt.PointingHandCursor
                                     hoverEnabled: true
 
-                                    onEntered: appListView.currentIndex = index
+                                    // Track the last known global mouse position
+                                    property point lastPos: Qt.point(-1, -1)
+
+                                    onEntered: (mouse) => {
+                                        // Only update index if the mouse actually moved relative to the screen,
+                                        // preventing keyboard-scroll layout shifts from triggering a re-focus.
+                                        let currentPos = Qt.point(mouse.screenX, mouse.screenY);
+                                        if (lastPos !== currentPos) {
+                                            appListView.currentIndex = index;
+                                            lastPos = currentPos;
+                                        }
+                                    }
+
+                                    onPositionChanged: (mouse) => {
+                                        // Keep the coordinates updated while moving within the same delegate
+                                        lastPos = Qt.point(mouse.screenX, mouse.screenY);
+                                    }
 
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) {
