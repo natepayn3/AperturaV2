@@ -541,24 +541,24 @@ Item {
                     }
                 }
 
-                // Quick Action Utilities
+                // Quick Action Utilities - Large Icon-Only Horizontal Row
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 12
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 56 // Boosted row height for larger presence
+                    spacing: 12
+
+                    // 1. Settings App
                     Rectangle { 
                         id: settingsButton
-                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
-                        
-                        // Dynamic color selection based on hover state
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: parent.height
+                        radius: 30
                         color: actionHover.hovered 
-                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) // Brighter tint on hover
-                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15) // Default state
+                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
+                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                             
-                        // Smooth transition between state colors
                         Behavior on color { ColorAnimation { duration: 150 } }
-                        
-                        HoverHandler {
-                            id: actionHover
-                        }
+                        HoverHandler { id: actionHover }
                         
                         MouseArea {
                             anchors.fill: parent
@@ -574,71 +574,60 @@ Item {
                             text: "settings" 
                             font.family: "Material Symbols Outlined" 
                             color: rootShell.colorText 
-                            font.pixelSize: 22 
+                            font.pixelSize: 26 // Enlarged icon size
                         } 
                     }
-                    
+
+                    // 2. Application Launcher
                     Rectangle { 
                         id: launcherButton
-                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
-                        
-                        // Toggles layout color mapping based on live hover state
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: parent.height
+                        radius: 30
                         color: launcherHover.hovered 
                             ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
                             : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                             
                         Behavior on color { ColorAnimation { duration: 150 } }
-                        
-                        HoverHandler {
-                            id: launcherHover
-                        }
+                        HoverHandler { id: launcherHover }
                         
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                // Dismiss the active dashboard tracking container
                                 rootShell.dashboardRef.requestDismiss();
-                                
-                                // Toggle the app launcher state property exposed by shell.qml
                                 rootShell.launcherRef.active = !rootShell.launcherRef.active;
                             }
                         }
                         
                         Text { 
                             anchors.centerIn: parent 
-                            text: "apps" // Swapped glyph target to match your launcher layout
+                            text: "apps" 
                             font.family: "Material Symbols Outlined" 
                             color: rootShell.colorText 
-                            font.pixelSize: 22 
+                            font.pixelSize: 26 
                         } 
                     }
-                    
+
+                    // 3. Screenshot Region (Satty)
                     Rectangle { 
                         id: screenshotButton
-                        Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24
-                        
-                        // Smooth color change on hover
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: parent.height
+                        radius: 30
                         color: snipHover.hovered
                             ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
                             : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                             
                         Behavior on color { ColorAnimation { duration: 150 } }
-                        
-                        HoverHandler {
-                            id: snipHover
-                        }
+                        HoverHandler { id: snipHover }
                         
                         MouseArea { 
                             id: snipMouseArea
                             anchors.fill: parent 
                             cursorShape: Qt.PointingHandCursor 
-                            
                             onClicked: { 
-                                // Hide panel first to keep it pristine
                                 rootShell.dashboardRef.forceDismiss() 
-                                
-                                // Invoke the screenshot pipeline detached
                                 Quickshell.execDetached([
                                     "bash", "-c", 
                                     "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"
@@ -651,10 +640,40 @@ Item {
                             text: "screenshot_region" 
                             font.family: "Material Symbols Outlined" 
                             color: rootShell.colorText 
-                            font.pixelSize: 22 
-                        }
+                            font.pixelSize: 26 
+                        } 
                     }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 24; color: Qt.rgba(rootShell.colorClose.r, rootShell.colorClose.g, rootShell.colorClose.b, 0.2); Text { anchors.centerIn: parent; text: "power_settings_new"; font.family: "Material Symbols Outlined"; color: rootShell.colorClose; font.pixelSize: 22 } }
+
+                    // 4. Power Menu
+                    Rectangle { 
+                        id: powerMenuButton
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: parent.height
+                        radius: 30
+                        color: powerHover.hovered 
+                            ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25)
+                            : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        HoverHandler { id: powerHover }
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                rootShell.dashboardRef.forceDismiss();
+                                Quickshell.execDetached(["wlogout"]);
+                            }
+                        }
+                        
+                        Text { 
+                            anchors.centerIn: parent 
+                            text: "power_settings_new" 
+                            font.family: "Material Symbols Outlined" 
+                            color: rootShell.colorText 
+                            font.pixelSize: 26 
+                        } 
+                    }
                 }
 
                 // Sliders Control Area
