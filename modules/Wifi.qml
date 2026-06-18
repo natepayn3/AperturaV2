@@ -175,7 +175,6 @@ Item {
 
     Process {
         id: fetchNetworksProc
-        // Restructured to grab SECURITY while keeping SSID at the absolute end to prevent string split bugs
         command: ["nmcli", "-t", "-f", "ACTIVE,BARS,SIGNAL,SECURITY,SSID", "dev", "wifi"]
         running: false
         stdout: StdioCollector {
@@ -194,7 +193,6 @@ Item {
                     let bars = parts[1].trim();
                     let signal = parseInt(parts[2].trim()) || 0;
                     
-                    // Parse security protocols
                     let securityStr = parts[3].trim();
                     let secureNode = (securityStr !== "" && securityStr !== "--");
                     
@@ -221,8 +219,6 @@ Item {
                         });
                     } else {
                         if (isActive) uniqueList[existingIndex].connected = true;
-                        
-                        // Fallback: If any physical node for this SSID is secure, flag the whole network as secure
                         if (secureNode) uniqueList[existingIndex].isSecure = true;
                         
                         if (signal > uniqueList[existingIndex].signalStrength) {
@@ -363,6 +359,10 @@ Item {
 
     onActiveChanged: {
         if (active) fetchStatusProc.running = true;
+    }
+
+    Component.onCompleted: {
+        fetchStatusProc.running = true;
     }
 
     // --- Visual Layout and Dynamic Springs ---
@@ -586,7 +586,7 @@ Item {
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 12; anchors.rightMargin: 12
+                                        anchors.leftMargin: 12; anchors.rightMargin: 24 // Added scrollbar gutter
                                         spacing: 12
 
                                         Text {
@@ -600,7 +600,6 @@ Item {
                                         }
 
                                         Text {
-                                            // Exact mapping to requested Material Symbols
                                             text: {
                                                 if (model.signalStrength > 75) return model.isSecure ? "network_wifi_locked" : "network_wifi";
                                                 if (model.signalStrength > 50) return model.isSecure ? "network_wifi_3_bar_locked" : "network_wifi_3_bar";
@@ -641,7 +640,8 @@ Item {
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.bottomMargin: 8
+                                        anchors.leftMargin: 12; anchors.rightMargin: 24 // Added scrollbar gutter
+                                        anchors.bottomMargin: 8
                                         spacing: 8
 
                                         // -> Connected Controls
@@ -661,7 +661,7 @@ Item {
                                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: forgetProc.forget(model.ssid) }
                                         }
 
-                                        // -> Disconnected Controls (No Password Input needed for Known OR Open networks)
+                                        // -> Disconnected Controls (Known Network - No Password Input)
                                         Rectangle {
                                             visible: !model.connected && (isKnown || !model.isSecure)
                                             Layout.fillWidth: true; Layout.fillHeight: true
@@ -693,7 +693,7 @@ Item {
                                             }
                                         }
 
-                                        // -> Disconnected Controls (Unknown Network AND Secure - Password Input)
+                                        // -> Disconnected Controls (Unknown Network - Password Input)
                                         Rectangle {
                                             visible: !model.connected && !isKnown && model.isSecure
                                             Layout.fillWidth: true; Layout.fillHeight: true
