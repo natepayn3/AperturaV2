@@ -43,59 +43,6 @@ PanelWindow {
             height: parent.height
             
             MouseArea {
-                id: settingsMouse
-                width: 32; height: 32
-                anchors.verticalCenter: parent.verticalCenter
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onEntered: {
-                    if (rootShell.launcherRef.launcherActive) {
-                        rootShell.launcherRef.forceDismiss();
-                    }
-                }
-                onClicked: rootShell.settingsAppRef.windowVisible = !rootShell.settingsAppRef.windowVisible
-
-                Rectangle {
-                    anchors.fill: parent; radius: 6
-                    color: rootShell.colorAccent
-                    opacity: settingsMouse.containsMouse ? 0.3 : 0.0
-                }
-                Text { 
-                    text: "settings"; font.family: "Material Icons"; font.pixelSize: 22; 
-                    color: rootShell.settingsAppRef.windowVisible ? rootShell.colorAccent : rootShell.colorText; 
-                    anchors.centerIn: parent 
-                }
-            }
-
-            MouseArea {
-                id: launcherMouse
-                width: 32; height: 32
-                anchors.verticalCenter: parent.verticalCenter
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                
-                onClicked: {
-                    if (rootShell.launcherRef) {
-                        rootShell.launcherRef.active = !rootShell.launcherRef.active;
-                    }
-                }
-
-                Rectangle {
-                    anchors.fill: parent; radius: 6
-                    color: rootShell.colorAccent
-                    opacity: launcherMouse.containsMouse || rootShell.launcherRef.launcherActive ? 0.3 : 0.0
-                }
-                
-                Text {
-                    text: "apps"
-                    font.family: "Material Symbols Outlined"
-                    font.pixelSize: 22
-                    anchors.centerIn: parent 
-                    color: (rootShell.launcherRef && rootShell.launcherRef.active) ? rootShell.colorAccent : rootShell.colorText
-                }
-            }
-            
-            MouseArea {
                 id: clockMouse
                 width: clockRow.implicitWidth + 12; height: 32
                 hoverEnabled: true
@@ -135,6 +82,90 @@ PanelWindow {
             Workspaces { 
                 anchors.verticalCenter: parent.verticalCenter; shellTarget: rootShell; 
                 parentBarWindow: horizontalBar; previewWindowInstance: rootShell.workspaceRef 
+            }
+        }
+
+        // --- Center Dashboard Trigger Icon Module (Hover Animated) ---
+        Rectangle {
+            id: dashIconWrapper
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: edge === "top" ? 1 : -1
+            width: 32
+            height: 32
+            radius: 8
+            color: dashMouse.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent"
+
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            Text {
+                id: dashIconText
+                anchors.centerIn: parent
+                text: "space_dashboard"
+                font.family: "Material Symbols Outlined"
+                font.pixelSize: 22
+                color: (dashMouse.containsMouse || (rootShell.dashboardRef && rootShell.dashboardRef.dashboardActive)) ? rootShell.colorAccent : rootShell.colorSubtext
+                Behavior on color { ColorAnimation { duration: 150 } }
+                
+                // Spring scaling mechanics transformation anchors
+                transform: Scale {
+                    id: iconScale
+                    origin.x: dashIconText.width / 2
+                    origin.y: dashIconText.height / 2
+                    xScale: 1.0
+                    yScale: 1.0
+                }
+
+                states: State {
+                    name: "hovered"; 
+                    when: dashMouse.containsMouse || (rootShell.dashboardRef && rootShell.dashboardRef.dashboardActive)
+                    PropertyChanges { target: iconScale; xScale: 1.18; yScale: 1.18 }
+                }
+
+                transitions: [
+                    Transition {
+                        from: "*"; to: "hovered"
+                        NumberAnimation { properties: "xScale,yScale"; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+                    },
+                    Transition {
+                        from: "hovered"; to: "*"
+                        NumberAnimation { properties: "xScale,yScale"; duration: 250; easing.type: Easing.OutBounce }
+                    }
+                ]
+            }
+
+            MouseArea {
+                id: dashMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                
+                onEntered: {
+                    if (rootShell.dashboardRef) {
+                        if (rootShell.dashboardRef.dashboardActive) {
+                            rootShell.dashboardRef.cancelDismiss();
+                        } else {
+                            rootShell.dashboardRef.showDashboard();
+                        }
+                    }
+                }
+                onExited: {
+                    if (rootShell.dashboardRef) {
+                        // Call the module's dedicated dismiss request which handles the timeout logic
+                        rootShell.dashboardRef.requestDismiss();
+                    }
+                }
+                
+                // Fallback click action
+                onClicked: {
+                    if (rootShell.dashboardRef) {
+                        if (rootShell.dashboardRef.dashboardActive) {
+                            rootShell.dashboardRef.forceDismiss();
+                        } else {
+                            rootShell.dashboardRef.showDashboard();
+                        }
+                    }
+                }
             }
         }
 
