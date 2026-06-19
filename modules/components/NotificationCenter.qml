@@ -9,6 +9,10 @@ Rectangle {
 
     property var notificationModel: notifServer.trackedNotifications
 
+    // Dynamically calculate footprint based on content
+    implicitHeight: notifList.count <= 0 ? 80 : (notifList.count === 1 ? 132 : 204)
+    Behavior on implicitHeight { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 16
