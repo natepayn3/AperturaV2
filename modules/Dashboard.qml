@@ -340,11 +340,16 @@ Item {
 
     Item {
         anchors.fill: parent
+        z: 1
         HoverHandler {
             id: dashHover
+            // 🎯 FIX: Add an OR condition for slider interaction
             onHoveredChanged: {
-                if (hovered) rootShell.dashboardRef.cancelDismiss()
-                else if (!volSlider.isPressed && !brightSlider.isPressed) rootShell.dashboardRef.requestDismiss()
+                if (hovered) {
+                    rootShell.dashboardRef.cancelDismiss();
+                } else if (!bridgeHover.hovered && !volSlider.isPressed && !brightSlider.isPressed) {
+                    rootShell.dashboardRef.requestDismiss();
+                }
             }
         }
     }
@@ -368,9 +373,13 @@ Item {
 
         HoverHandler {
             id: bridgeHover
+            // 🎯 FIX: Only request dismiss if NOT hovering over the dashboard card itself
             onHoveredChanged: {
-                if (hovered) rootShell.dashboardRef.cancelDismiss()
-                else rootShell.dashboardRef.requestDismiss()
+                if (hovered) {
+                    rootShell.dashboardRef.cancelDismiss();
+                } else if (!dashHover.hovered) { // Only dismiss if we aren't hovering the card either
+                    rootShell.dashboardRef.requestDismiss();
+                }
             }
         }
     }
