@@ -6,7 +6,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Services.Notifications
-// Explicitly import your components directory if it's not implicitly in the search path
 import "components" 
 
 Item {
@@ -18,19 +17,28 @@ Item {
     property real radiusValue: 24
     property real wingSize: 14
 
-    property real maxCardWidth: 380
-    property real maxCardHeight: 760
+    // Dynamic responsive dimensions
+    property bool isHorizontal: rootShell.barPosition === "top" || rootShell.barPosition === "bottom"
+    property real maxCardWidth: isHorizontal ? 720 : 380
+    property real maxCardHeight: isHorizontal ? 480 : 760
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
     width: Math.round(maxCardWidth)
     height: Math.round(maxCardHeight)
 
-    anchors.verticalCenter: parent.verticalCenter
-    anchors.left: rootShell.barPosition === "left" ? parent.left : undefined
-    anchors.right: rootShell.barPosition === "right" ? parent.right : undefined
-    anchors.leftMargin: rootShell.barPosition === "left" ? 46 : 0
-    anchors.rightMargin: rootShell.barPosition === "right" ? 46 : 0
+    // Explicit coordinate mapping against the fullscreen PanelWindow parent
+    x: {
+        if (rootShell.barPosition === "left") return 46;
+        if (rootShell.barPosition === "right") return parent.width - width - 46;
+        return Math.round((parent.width - width) / 2);
+    }
+
+    y: {
+        if (rootShell.barPosition === "top") return 46;
+        if (rootShell.barPosition === "bottom") return parent.height - height - 46;
+        return Math.round((parent.height - height) / 2);
+    }
 
     // --- Live Data Tracking ---
     property real sysCpu: 0.0
@@ -38,7 +46,6 @@ Item {
     property real sysRam: 0.0
     property real sysDisk: 0.0
 
-    // Properties to store raw values for accurate CPU calculating
     property var lastCpuTotal: 0
     property var lastCpuIdle: 0
 
@@ -106,14 +113,6 @@ Item {
         checkHypridleProc.running = true;
     }
 
-    HoverHandler {
-        id: dashHover
-        onHoveredChanged: {
-            if (hovered) rootShell.dashboardRef.cancelDismiss();
-            else rootShell.dashboardRef.requestDismiss();
-        }
-    }
-
     NotificationServer {
         id: notifServer
         bodySupported: true
@@ -136,7 +135,6 @@ Item {
         id: sysStatsTimer
         interval: 5000; running: false; repeat: true
         onTriggered: {
-            // Trigger native reads without spawning processes
             cpuStatReader.reload();
             memInfoReader.reload();
             if (!diskGpuProc.running) diskGpuProc.running = true;
@@ -144,21 +142,17 @@ Item {
     }
 
     // --- Native SysStats Readers ---
-    
     FileView {
         id: memInfoReader
         path: "/proc/meminfo"
         onTextChanged: {
             let lines = text().split('\n');
             let total = 0, avail = 0;
-            
-            // Fast loop to rip out the exact byte values
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].startsWith("MemTotal:")) total = parseInt(lines[i].replace(/\D/g, ''));
                 if (lines[i].startsWith("MemAvailable:")) avail = parseInt(lines[i].replace(/\D/g, ''));
-                if (total && avail) break; // Bail early once we have both
+                if (total && avail) break; 
             }
-            
             if (total > 0) dashboardRoot.sysRam = (total - avail) / total;
         }
     }
@@ -167,10 +161,8 @@ Item {
         id: cpuStatReader
         path: "/proc/stat"
         onTextChanged: {
-            // Grab the very first line: "cpu  user nice system idle iowait irq softirq..."
             let cpuLine = text().split('\n')[0];
             let parts = cpuLine.split(/\s+/).filter(Boolean);
-            
             if (parts.length >= 5) {
                 let user = parseInt(parts[1]) || 0;
                 let nice = parseInt(parts[2]) || 0;
@@ -184,11 +176,7 @@ Item {
                 let totalDelta = total - dashboardRoot.lastCpuTotal;
                 let idleDelta = idle - dashboardRoot.lastCpuIdle;
 
-                if (totalDelta > 0) {
-                    dashboardRoot.sysCpu = (totalDelta - idleDelta) / totalDelta;
-                }
-                
-                // Cache for the next tick
+                if (totalDelta > 0) dashboardRoot.sysCpu = (totalDelta - idleDelta) / totalDelta;
                 dashboardRoot.lastCpuTotal = total;
                 dashboardRoot.lastCpuIdle = idle;
             }
@@ -197,7 +185,6 @@ Item {
 
     Process {
         id: diskGpuProc
-        // Only run bash for items that require parsing complex outputs or filesystem calls
         command: ["sh", "-c", "cat /sys/class/drm/card0/device/gpu_busy_percent 2>/dev/null || cat /sys/class/hwmon/hwmon*/device/gpu_busy_percent 2>/dev/null || nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 0; df / | awk 'NR==2 {print $5}' | sed 's/%//'"]
         running: false
         stdout: StdioCollector {
@@ -216,7 +203,6 @@ Item {
     }
 
     // --- System & Utilities Processes ---
-
     Process {
         id: checkHypridleProc
         command: ["pgrep", "-x", "hypridle"]
@@ -254,9 +240,7 @@ Item {
         command: ["sh", "-c", "pactl subscribe | grep --line-buffered \"sink\""]
         running: false
         stdout: SplitParser {
-            onRead: (data) => {
-                volFetcher.running = true;
-            }
+            onRead: (data) => volFetcher.running = true
         }
     }
 
@@ -313,9 +297,7 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 let parts = this.text.trim().split(" ");
-                if (parts.length >= 2 && !volSlider.isPressed) {
-                    dashboardRoot.currentVolume = parseFloat(parts[1]);
-                }
+                if (parts.length >= 2 && !volSlider.isPressed) dashboardRoot.currentVolume = parseFloat(parts[1]);
                 volFetcher.running = false;
             }
         }
@@ -359,7 +341,7 @@ Item {
     Item {
         anchors.fill: parent
         HoverHandler {
-            id: rootHover
+            id: dashHover
             onHoveredChanged: {
                 if (hovered) rootShell.dashboardRef.cancelDismiss()
                 else if (!volSlider.isPressed && !brightSlider.isPressed) rootShell.dashboardRef.requestDismiss()
@@ -367,11 +349,23 @@ Item {
         }
     }
 
+    // Explicitly positioned hover bridge (no anchors)
     Item {
-        width: 46; height: 64 
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: rootShell.barPosition === "left" ? parent.left : undefined
-        anchors.left: rootShell.barPosition === "right" ? parent.right : undefined
+        width: dashboardRoot.isHorizontal ? 120 : 46
+        height: dashboardRoot.isHorizontal ? 46 : 120 
+
+        x: {
+            if (rootShell.barPosition === "left") return -46;
+            if (rootShell.barPosition === "right") return dashboardRoot.width;
+            return (dashboardRoot.width - width) / 2;
+        }
+        
+        y: {
+            if (rootShell.barPosition === "top") return -46;
+            if (rootShell.barPosition === "bottom") return dashboardRoot.height;
+            return (dashboardRoot.height - height) / 2;
+        }
+
         HoverHandler {
             id: bridgeHover
             onHoveredChanged: {
@@ -402,8 +396,8 @@ Item {
             color: rootShell.colorBackground
             z: 2
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
-            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
+            bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
             bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
         }
 
@@ -412,10 +406,10 @@ Item {
             z: 3
             visible: dashboardRoot.width > 30
 
+            // --- Vertical Wings ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "left"
-
                 Shape {
                     x: 0; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
@@ -443,40 +437,81 @@ Item {
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
-
-                // --- Top Right Wing ---
                 Shape {
                     x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        
-                        // Start bottom-left
                         startX: 0; startY: dashboardRoot.wingSize
-                        // Line to bottom-right
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        // Line to top-right
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        // Sweep curve back to start, anchoring tension bottom-right
                         PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize }
                     }
                 }
-
-                // --- Bottom Right Wing ---
                 Shape {
                     x: parent.width - dashboardRoot.wingSize; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        
-                        // Start top-left
                         startX: 0; startY: 0
-                        // Line to top-right
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        // Line to bottom-right
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        // Sweep curve back to start, anchoring tension top-right
                         PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 }
+                    }
+                }
+            }
+
+            // --- Horizontal Wings ---
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "top"
+                Shape {
+                    x: -dashboardRoot.wingSize; y: 0
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: dashboardRoot.wingSize; y: 0 }
+                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
+                        PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 } 
+                    }
+                }
+                Shape {
+                    x: parent.width; y: 0
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathLine { x: dashboardRoot.wingSize; y: 0 } 
+                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 } 
+                        PathLine { x: 0; y: 0 } 
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "bottom"
+                Shape {
+                    x: -dashboardRoot.wingSize; y: parent.height - dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: dashboardRoot.wingSize; startY: 0
+                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
+                        PathLine { x: 0; y: dashboardRoot.wingSize } 
+                        PathQuad { x: dashboardRoot.wingSize; y: 0; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize } 
+                    }
+                }
+                Shape {
+                    x: parent.width; y: parent.height - dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
+                    ShapePath {
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        startX: 0; startY: 0
+                        PathQuad { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize; controlX: 0; controlY: dashboardRoot.wingSize }
+                        PathLine { x: 0; y: dashboardRoot.wingSize } 
+                        PathLine { x: 0; y: 0 } 
                     }
                 }
             }
@@ -529,9 +564,9 @@ Item {
                     SysRing { label: "DISK"; value: dashboardRoot.sysDisk; ringColor: "#f38ba8" }
                 }
 
-                // Toggle Grid
+                // Toggle Grid (Responds dynamically to isHorizontal flag)
                 GridLayout {
-                    columns: 2
+                    columns: dashboardRoot.isHorizontal ? 4 : 2
                     rowSpacing: 12
                     columnSpacing: 12
                     Layout.alignment: Qt.AlignHCenter
@@ -582,7 +617,6 @@ Item {
                         checked: dashboardRoot.caffeineActive
                         onToggled: {
                             dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
-                            
                             caffeineToggleProc.command = dashboardRoot.caffeineActive 
                                 ? ["pkill", "-x", "hypridle"]
                                 : ["hyprctl", "dispatch", "hl.dsp.exec_cmd('hypridle')"];
@@ -611,7 +645,6 @@ Item {
                         x: utilitiesWrapper.menuExpanded ? -parent.width - 16 : 0
                         Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
-                        // 1. Settings App
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: actionHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -621,7 +654,6 @@ Item {
                             Text { anchors.centerIn: parent; text: "settings"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
-                        // 2. Application Launcher
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: launcherHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -631,7 +663,6 @@ Item {
                             Text { anchors.centerIn: parent; text: "apps"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
-                        // 3. Screenshot Region (Satty)
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: snipHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -641,7 +672,6 @@ Item {
                             Text { anchors.centerIn: parent; text: "screenshot_region"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
-                        // 4. Power Activation Shell
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: powerHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -666,7 +696,6 @@ Item {
                             anchors.fill: parent
                             spacing: 12
 
-                            // Back Toggle Action Button
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                                 color: backHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -676,7 +705,6 @@ Item {
                                 Text { anchors.centerIn: parent; text: "arrow_back"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
 
-                            // Suspend
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                                 color: suspHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -686,7 +714,6 @@ Item {
                                 Text { anchors.centerIn: parent; text: "bedtime"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
 
-                            // Log Out
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                                 color: logoutHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -696,7 +723,6 @@ Item {
                                 Text { anchors.centerIn: parent; text: "logout"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
 
-                            // Reboot
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                                 color: rebootHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -706,7 +732,6 @@ Item {
                                 Text { anchors.centerIn: parent; text: "restart_alt"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
 
-                            // Shut Down
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                                 color: powerOffHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -747,7 +772,7 @@ Item {
                             id: brightSlider
                             anchors.fill: parent
                             iconLow: "light_mode"
-                            iconHigh: "" // Passing empty triggers the right-aligned percentage readout block 
+                            iconHigh: ""
                             value: dashboardRoot.currentBrightness
                             onMoved: (newValue) => {
                                 dashboardRoot.currentBrightness = newValue;
@@ -759,7 +784,6 @@ Item {
                     }
                 }
 
-                // Media Player Area
                 MediaControl {
                     onPlayPauseClicked: {
                         mediaControlProc.command = ["playerctl", "play-pause"]
@@ -775,7 +799,6 @@ Item {
                     }
                 }
 
-                // Notifications Area
                 NotificationCenter {}
             }
         }
