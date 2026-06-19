@@ -249,17 +249,25 @@ Item {
 
     Process {
         id: mediaFollower
-        // Appended the artUrl parameter to the JSON output format
         command: ["playerctl", "metadata", "--follow", "--format", "{\"title\": \"{{title}}\", \"artist\": \"{{artist}}\", \"status\": \"{{status}}\", \"artUrl\": \"{{mpris:artUrl}}\"}"]
         running: false
         stdout: SplitParser {
             onRead: (data) => {
                 try {
                     let parsed = JSON.parse(data.trim());
-                    dashboardRoot.mediaTitle = parsed.title || "Unknown";
-                    dashboardRoot.mediaArtist = parsed.artist || "Unknown";
-                    dashboardRoot.mediaStatus = parsed.status || "Stopped";
-                    dashboardRoot.mediaArtUrl = parsed.artUrl || "";
+                    
+                    // Trap the "Stopped" status to nuke the metadata
+                    if (parsed.status === "Stopped") {
+                        dashboardRoot.mediaTitle = "Not Playing";
+                        dashboardRoot.mediaArtist = "---";
+                        dashboardRoot.mediaStatus = "Stopped";
+                        dashboardRoot.mediaArtUrl = "";
+                    } else {
+                        dashboardRoot.mediaTitle = parsed.title || "Unknown";
+                        dashboardRoot.mediaArtist = parsed.artist || "Unknown";
+                        dashboardRoot.mediaStatus = parsed.status || "Stopped";
+                        dashboardRoot.mediaArtUrl = parsed.artUrl || "";
+                    }
                 } catch(e) {
                     dashboardRoot.mediaTitle = "Not Playing";
                     dashboardRoot.mediaArtist = "---";
