@@ -36,7 +36,12 @@ PanelWindow {
     function showBluetooth() { 
         if (!bluetoothActive) {
             rootShell.closeAllPopups();
-            rootShell.bluetoothDismissTimer.stop(); 
+            
+            // Safely check if the timer exists before stopping it
+            if (rootShell.bluetoothDismissTimer) {
+                rootShell.bluetoothDismissTimer.stop(); 
+            }
+            
             bluetoothActive = true; 
             showBluetoothAnim.restart();
             innerBluetoothCard.forceActiveFocus();
