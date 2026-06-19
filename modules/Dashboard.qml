@@ -845,11 +845,12 @@ Item {
 
                     MediaControl {
                         Layout.fillWidth: true
-                        // 🎯 CRITICAL: Forces a strict 50/50 split and stops grid overflow
                         Layout.minimumWidth: 0     
                         Layout.preferredWidth: 0   
-                        Layout.alignment: Qt.AlignTop
-                        Layout.fillHeight: dashboardRoot.isHorizontal
+                        
+                        // 🎯 Floats the card in the middle of the row's total height
+                        Layout.alignment: Qt.AlignVCenter 
+                        // (Removed Layout.fillHeight so it doesn't stretch to match the tray)
                         
                         onPlayPauseClicked: {
                             mediaControlProc.command = ["playerctl", "play-pause"]
