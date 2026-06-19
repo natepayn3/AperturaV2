@@ -497,7 +497,7 @@ Item {
                                         Text {
                                             text: model.name !== "" ? model.name : model.mac
                                             color: "#ffffff"
-                                            font.pixelSize: 13
+                                            font.pixelSize: 14
                                             font.weight: model.connected ? Font.Bold : Font.Normal
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
