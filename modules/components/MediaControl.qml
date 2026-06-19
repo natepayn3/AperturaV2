@@ -18,7 +18,24 @@ Item {
         Rectangle { 
             width: 48; height: 48; radius: 8
             color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.2)
-            Text { anchors.centerIn: parent; text: "music_note"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 24 } 
+            clip: true // Prevents image from bleeding out of the rounded corners
+
+            Image {
+                anchors.fill: parent
+                source: dashboardRoot.mediaArtUrl
+                fillMode: Image.PreserveAspectCrop
+                visible: dashboardRoot.mediaArtUrl !== ""
+                asynchronous: true
+            }
+
+            Text { 
+                anchors.centerIn: parent
+                text: "music_note"
+                font.family: "Material Symbols Outlined"
+                color: rootShell.colorText
+                font.pixelSize: 24 
+                visible: dashboardRoot.mediaArtUrl === ""
+            } 
         }
 
         ColumnLayout {
