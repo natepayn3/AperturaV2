@@ -24,9 +24,9 @@ Scope {
     property string barPosition: "left"
     property string enabledDisplayStr: "0"
     
-    property string colorBackground: "#cc11111b"
-    property string colorBorder: "#313244"
-    property string colorAccent: "#89b4fa"
+    property color colorBackground: "#cc11111b"
+    property color colorBorder: "#313244"
+    property color colorAccent: "#89b4fa"
     property string colorText: "#cdd6f4"
     property string colorSubtext: "#a6adc8"
     property string colorClose: "#f38ba8"
@@ -37,7 +37,7 @@ Scope {
 
     property string customBasePath: ""
     property string configFilePath: ""
-    property string matugenFilePath: ""
+    property string matugenFilePath: Quickshell.env("HOME") + "/.config/quickshell/AperturaV2/matugen.json"
 
     property real verticalBarProgress: 1.0
     property real horizontalBarProgress: 0.0
@@ -242,17 +242,27 @@ Scope {
         } catch (e) {}
     }
 
-    function parseMatugen(rawJson) {
-        if (!rawJson || rawJson.trim() === "") return;
+    function parseMatugen(jsonString) {
+        if (!jsonString || jsonString.trim() === "") return;
+
         try {
-            let parsed = JSON.parse(rawJson);
-            if (parsed.colors.background !== undefined) colorBackground = parsed.colors.background;
-            if (parsed.colors.border !== undefined) colorBorder = parsed.colors.border;
-            if (parsed.colors.accent !== undefined) colorAccent = parsed.colors.accent;
-            if (parsed.colors.text !== undefined) colorText = parsed.colors.text;
-            if (parsed.colors.subtext !== undefined) colorSubtext = parsed.colors.subtext;
-            if (parsed.colors.close !== undefined) colorClose = parsed.colors.close;
-        } catch (e) {}
+            let data = JSON.parse(jsonString);
+            
+            if (data && data.colors) {
+                let c = data.colors;
+                
+                let rawBg = c.background && c.background.dark ? c.background.dark.color.replace("#", "") : "11111b";
+                let rawBorder = c.outline && c.outline.dark ? c.outline.dark.color.replace("#", "") : "313244";
+                let rawAccent = c.primary && c.primary.dark ? c.primary.dark.color.replace("#", "") : "89b4fa";
+                
+                // 🎯 Explicitly using Qt.color() ensures the binding engine recognizes the change instantly
+                colorBackground = Qt.color("#cc" + rawBg);
+                colorBorder     = Qt.color("#" + rawBorder);
+                colorAccent     = Qt.color("#" + rawAccent);
+            }
+        } catch(e) {
+            // Quietly catch parsing errors
+        }
     }
 
     Process {
@@ -271,8 +281,11 @@ Scope {
         rootShell.customBasePath = localUri.replace("file://", "").trim();
         rootShell.configFilePath = rootShell.customBasePath + "/shell_settings.json";
         rootShell.matugenFilePath = rootShell.customBasePath + "/matugen.json";
+        
         startupConfigLoader.command = ["cat", rootShell.configFilePath]; 
         startupConfigLoader.running = true;
+        
+        // Boot load: Feed the initial state right into the parser
         readMatugenProc.command = ["cat", rootShell.matugenFilePath]; 
         readMatugenProc.running = true;
     }
