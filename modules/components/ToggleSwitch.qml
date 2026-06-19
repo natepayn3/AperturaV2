@@ -22,11 +22,13 @@ Rectangle {
         color: toggleRoot.checked ? rootShell.colorBackground : rootShell.colorText
         anchors.verticalCenter: parent.verticalCenter
         
-        // Use fixed points to stop the animation from "chasing" a moving target
-        x: toggleRoot.checked ? 16 : 60
-        width: 80 
+        // The empty space is exactly 100px wide. 
+        // x: 4 snaps it to the left margin, x: 52 snaps it right next to the left-aligned knob.
+        x: toggleRoot.checked ? 4 : 52
+        width: 100 
         
-        horizontalAlignment: toggleRoot.checked ? Text.AlignLeft : Text.AlignRight
+        // Center the text mathematically inside that 100px bounding box
+        horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         
         // Sync duration exactly with the knob's 200ms animation
