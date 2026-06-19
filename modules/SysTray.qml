@@ -298,9 +298,8 @@ Item {
                         }
                         MouseArea { id: batteryMouse; anchors.fill: parent; hoverEnabled: true }
                     }
-                    // ==========================================
-                    // 1. App Launcher Node
-                    // ==========================================
+
+                    // Application Launcher Node
                     Rectangle {
                         id: launcherIconWrapper
                         width: 24; height: 24; radius: 4
@@ -329,9 +328,39 @@ Item {
                         }
                     }
 
-                    // ==========================================
-                    // 2. Settings Application Node
-                    // ==========================================
+                    // Wallpaper Node
+                    Rectangle {
+                        id: wallpaperIconWrapper
+                        width: 24; height: 24; radius: 4
+                        // 🎯 Fixed: Now properly checks its own MouseArea for the hover state
+                        color: wallpaperMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "wallpaper"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            // 🎯 Fixed: Swapped windowVisible to active
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wallpaperRef && sysTrayContainer.shellTarget.wallpaperRef.active) 
+                                ? sysTrayContainer.shellTarget.colorAccent 
+                                : sysTrayContainer.shellTarget.colorText
+                        }
+
+                        MouseArea {
+                            id: wallpaperMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                // 🎯 Fixed: Now points to wallpaperRef and toggles the active state
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wallpaperRef) {
+                                    sysTrayContainer.shellTarget.wallpaperRef.active = !sysTrayContainer.shellTarget.wallpaperRef.active;
+                                }
+                            }
+                        }
+                    }
+
+                    // Settings Application Node
                     Rectangle {
                         id: settingsIconWrapper
                         width: 24; height: 24; radius: 4
