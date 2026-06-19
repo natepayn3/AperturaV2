@@ -39,7 +39,7 @@ Item {
 
     // --- Timers & Logic ---
     Timer {
-        interval: 1000; running: true; repeat: true
+        interval: 60000; running: true; repeat: true
         onTriggered: calendarRoot.currentDateTime = new Date()
     }
 
