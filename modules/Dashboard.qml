@@ -20,7 +20,7 @@ Item {
     // Dynamic responsive dimensions
     property bool isHorizontal: rootShell.barPosition === "top" || rootShell.barPosition === "bottom"
     property real maxCardWidth: isHorizontal ? 720 : 380
-    property real maxCardHeight: isHorizontal ? 480 : 760
+    property real maxCardHeight: isHorizontal ? 700 : 760
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
