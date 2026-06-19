@@ -7,19 +7,27 @@ Rectangle {
     radius: 12
     clip: true
 
+    // Dynamically calculate the card bounds based on internal content + margins
+    implicitWidth: internalGrid.implicitWidth + 32
+    implicitHeight: internalGrid.implicitHeight + 16
+
     signal playPauseClicked()
     signal prevClicked()
     signal nextClicked()
 
-    ColumnLayout {
+    GridLayout {
+        id: internalGrid // Tagged for the implicit dimension bindings
         anchors.fill: parent
         anchors.margins: 16
-        spacing: 16
+        
+        columns: dashboardRoot.isHorizontal ? 1 : 2
+        rowSpacing: 16
+        columnSpacing: 16
 
         // Layer 1: Art & Title
         RowLayout {
-            // Centers the entire row block within the parent card
-            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
+            Layout.alignment: dashboardRoot.isHorizontal ? Qt.AlignHCenter : Qt.AlignLeft
             spacing: 16
 
             Rectangle { 
@@ -47,8 +55,8 @@ Rectangle {
 
             ColumnLayout {
                 spacing: 4
-                // Restricts the text box size so long titles elide properly instead of pushing the layout wide
-                Layout.maximumWidth: 160 
+                // Expand the maximum width allowed when in the wider vertical layout
+                Layout.maximumWidth: dashboardRoot.isHorizontal ? 160 : 220
                 
                 Text { text: dashboardRoot.mediaTitle; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
                 Text { text: dashboardRoot.mediaArtist; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
@@ -58,8 +66,9 @@ Rectangle {
         // Layer 2: Playback Controls
         RowLayout {
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 24
+            // Center the controls when stacked, push them to the right when inline
+            Layout.alignment: dashboardRoot.isHorizontal ? Qt.AlignHCenter : Qt.AlignRight
+            spacing: 4
 
             MouseArea { 
                 width: 32; height: 32; cursorShape: Qt.PointingHandCursor
@@ -80,7 +89,10 @@ Rectangle {
             }
         }
         
-        // Pushes the content to the top so it doesn't float weirdly if the card gets tall
-        Item { Layout.fillHeight: true } 
+        // Pushes the content upward to prevent weird floating behavior
+        Item { 
+            Layout.fillHeight: true
+            Layout.columnSpan: dashboardRoot.isHorizontal ? 1 : 2
+        } 
     }
 }
