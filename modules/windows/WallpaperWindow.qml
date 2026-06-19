@@ -110,7 +110,8 @@ PanelWindow {
             if (ext === "mp4" || ext === "webm") {
                 command = ["sh", "-c", "killall awww-daemon; mpvpaper -vs -o 'loop no-audio' '*' '" + filePath + "'"];
             } else {
-                command = ["sh", "-c", "killall mpvpaper; awww-daemon & awww img '" + filePath + "' --transition-type fade --transition-step 150"];
+                // 🎯 Swapped to wipe transition with custom step and duration
+                command = ["sh", "-c", "killall mpvpaper; awww-daemon & awww img '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1"];
             }
             running = true;
             
@@ -166,18 +167,17 @@ PanelWindow {
         height: 320 
 
         opacity: wallpaperWindow.active ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        // 🎯 Reverted to punchy, fast animations
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
         transform: Translate {
             y: wallpaperWindow.active ? 0 : 40
             Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
         }
 
-        // 🎯 Horizontally center the list layout relative to your monitor bounds
         Item {
             id: carouselContainer
             height: parent.height
-            // 🎯 Fits perfectly on screen while adapting smoothly when elements grow/shrink
             width: Math.min(parent.width - 100, carousel.contentWidth)
             anchors.horizontalCenter: parent.horizontalCenter
 
@@ -191,21 +191,21 @@ PanelWindow {
                 interactive: true
                 boundsBehavior: Flickable.StopAtBounds
                 
+                // 🎯 Force QML to decode and hold items well outside the visible screen area
+                cacheBuffer: 2000 
+                
                 focus: true 
                 keyNavigationEnabled: true
                 highlightMoveDuration: 200
 
-                // 🎯 Track keyboard state to block synthetic mouse events
                 property bool isKeyboardNavigating: false
                 
                 Timer {
                     id: hoverBlockTimer
-                    // 🎯 Bumped to 400ms to comfortably outlast key-repeats and easing animations
                     interval: 400 
                     onTriggered: carousel.isKeyboardNavigating = false
                 }
 
-                // 🎯 Intercept keys to trigger the block
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Escape) {
                         wallpaperWindow.active = false;
@@ -261,9 +261,6 @@ PanelWindow {
                             }
                         }
                         
-                        // 🎯 REMOVED onPositionChanged! 
-                        // It was firing from animation sliding, not real human movement.
-                        
                         onClicked: {
                             carousel.currentIndex = index;
                             wallpaperBackend.apply(filePath);
@@ -302,26 +299,36 @@ PanelWindow {
                                 source: delegateRoot.isStaticImage ? fileUrl : ""
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true 
-                                sourceSize: Qt.size(300, parent.height) 
+                                sourceSize: Qt.size(300, 320) 
                                 cache: true
                                 visible: delegateRoot.isStaticImage
                             }
 
-                            AnimatedImage {
+                            // 🎯 Defer AnimatedImage memory allocation entirely until hovered
+                            Loader {
                                 anchors.fill: parent
-                                source: (delegateRoot.loadHeavyMedia && delegateRoot.isGif) ? fileUrl : ""
-                                fillMode: Image.PreserveAspectCrop
-                                visible: delegateRoot.isGif
+                                active: delegateRoot.loadHeavyMedia && delegateRoot.isGif
+                                sourceComponent: Component {
+                                    AnimatedImage {
+                                        source: fileUrl
+                                        fillMode: Image.PreserveAspectCrop
+                                    }
+                                }
                             }
 
-                            Video {
+                            // 🎯 Defer FFmpeg/CUDA initialization entirely until a video is hovered
+                            Loader {
                                 anchors.fill: parent
-                                source: (delegateRoot.loadHeavyMedia && delegateRoot.isVideo) ? fileUrl : ""
-                                fillMode: VideoOutput.PreserveAspectCrop
-                                loops: MediaPlayer.Infinite
-                                autoPlay: true 
-                                muted: true
-                                visible: delegateRoot.isVideo
+                                active: delegateRoot.loadHeavyMedia && delegateRoot.isVideo
+                                sourceComponent: Component {
+                                    Video {
+                                        source: fileUrl
+                                        fillMode: VideoOutput.PreserveAspectCrop
+                                        loops: MediaPlayer.Infinite
+                                        autoPlay: true 
+                                        muted: true
+                                    }
+                                }
                             }
                         }
                     }
