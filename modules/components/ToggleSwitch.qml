@@ -16,11 +16,26 @@ Rectangle {
 
     Text {
         text: toggleRoot.label
-        font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true
+        font.family: rootShell.shellFont
+        font.pixelSize: 13
+        font.bold: true
         color: toggleRoot.checked ? rootShell.colorBackground : rootShell.colorText
         anchors.verticalCenter: parent.verticalCenter
-        x: toggleRoot.checked ? 18 : 62
-        Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
+        
+        // Use fixed points to stop the animation from "chasing" a moving target
+        x: toggleRoot.checked ? 16 : 60
+        width: 80 
+        
+        horizontalAlignment: toggleRoot.checked ? Text.AlignLeft : Text.AlignRight
+        verticalAlignment: Text.AlignVCenter
+        
+        // Sync duration exactly with the knob's 200ms animation
+        Behavior on x {
+            NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
+        }
+        Behavior on color {
+            ColorAnimation { duration: 200 }
+        }
     }
 
     Rectangle {
