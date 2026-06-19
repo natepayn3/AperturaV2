@@ -184,9 +184,6 @@ Scope {
         if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
         if (globalWifiPreview.wifiActive) globalWifiPreview.forceDismiss();
         if (globalDashboardPreview.dashboardActive) globalDashboardPreview.forceDismiss();
-        
-        if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
-        if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
     }
 
     function isDisplayEnabled(idx) {
@@ -463,6 +460,11 @@ Scope {
         target: globalCalendarPreview; ignoreUnknownSignals: true
         function onCalendarShowRequested() {
             if (!globalCalendarPreview.calendarActive) {
+                
+                // Explicitly kill the standalone apps
+                if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
+                if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
+                
                 rootShell.closeAllPopups();
                 globalCalendarPreview.calendarActive = true;
                 showCalendarAnim.restart();
