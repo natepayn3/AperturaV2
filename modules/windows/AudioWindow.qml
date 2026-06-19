@@ -36,7 +36,12 @@ PanelWindow {
     function showAudio() { 
         if (!audioActive) {
             rootShell.closeAllPopups();
-            rootShell.audioDismissTimer.stop(); 
+            
+            // Safely check if exposed, otherwise let shell.qml handle it
+            if (rootShell.audioDismissTimer) {
+                rootShell.audioDismissTimer.stop(); 
+            }
+            
             audioActive = true; 
             showAudioAnim.restart();
             innerAudioCard.forceActiveFocus();
