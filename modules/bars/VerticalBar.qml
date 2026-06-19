@@ -41,50 +41,6 @@ PanelWindow {
             width: parent.width
             
             MouseArea {
-                id: settingsMouse
-                width: 28; height: 28
-                anchors.horizontalCenter: parent.horizontalCenter
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onEntered: {
-                    if (rootShell.launcherRef.launcherActive) {
-                        rootShell.launcherRef.forceDismiss();
-                    }
-                }
-                onClicked: rootShell.settingsAppRef.windowVisible = !rootShell.settingsAppRef.windowVisible
-
-                Rectangle {
-                    anchors.fill: parent; radius: 6
-                    color: rootShell.colorAccent
-                    opacity: settingsMouse.containsMouse ? 0.3 : 0.0
-                }
-                Text { 
-                    text: "settings"; font.family: "Material Icons"; font.pixelSize: 18; 
-                    color: rootShell.settingsAppRef.windowVisible ? rootShell.colorAccent : rootShell.colorText; 
-                    anchors.centerIn: parent 
-                }
-            }
-
-            MouseArea {
-                id: launcherMouse
-                width: 28; height: 28
-                anchors.horizontalCenter: parent.horizontalCenter
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: { if (rootShell.launcherRef) rootShell.launcherRef.active = !rootShell.launcherRef.active; }
-
-                Rectangle {
-                    anchors.fill: parent; radius: 6
-                    color: rootShell.colorAccent
-                    opacity: launcherMouse.containsMouse || rootShell.launcherRef.launcherActive ? 0.3 : 0.0
-                }
-                Text {
-                    text: "apps"; font.family: "Material Symbols Outlined"; font.pixelSize: 22; anchors.centerIn: parent 
-                    color: (rootShell.launcherRef && rootShell.launcherRef.active) ? rootShell.colorAccent : rootShell.colorText
-                }
-            }
-            
-            MouseArea {
                 id: clockMouse
                 width: 36; height: clockCol.implicitHeight + 8
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -120,7 +76,6 @@ PanelWindow {
             }
             
             Workspaces { 
-                // 🎯 FIX: Expand from 28 to 32 to accommodate the full pixel footprint of the nodes
                 width: 32 
                 anchors.horizontalCenter: parent.horizontalCenter; 
                 
@@ -130,37 +85,69 @@ PanelWindow {
             }
         }
 
-        // Center Dashboard Trigger
-        Item {
+        // --- Center Dashboard Trigger Icon Module ---
+        Rectangle {
+            id: dashIconWrapper
             anchors.centerIn: parent
-            width: parent.width
-            height: 64 // 🎯 Forces the trigger to be exactly 64px tall
+            width: 32
+            height: 32
+            radius: 8
+            color: dashMouse.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent"
+
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            Text {
+                id: dashIconText
+                anchors.centerIn: parent
+                text: "space_dashboard"
+                font.family: "Material Symbols Outlined"
+                font.pixelSize: 22
+                color: (dashMouse.containsMouse || rootShell.dashboardRef.dashboardActive) ? rootShell.colorAccent : rootShell.colorSubtext
+                Behavior on color { ColorAnimation { duration: 150 } }
+                
+                // Spring scaling mechanics transformation anchors
+                transform: Scale {
+                    id: iconScale
+                    origin.x: dashIconText.width / 2
+                    origin.y: dashIconText.height / 2
+                    xScale: 1.0
+                    yScale: 1.0
+                }
+
+                states: State {
+                    name: "hovered"; 
+                    // 🎯 FIX: Track the active state toggle instead of the visual transition progress rail
+                    when: dashMouse.containsMouse || rootShell.dashboardRef.dashboardActive
+                    PropertyChanges { target: iconScale; xScale: 1.18; yScale: 1.18 }
+                }
+
+                transitions: [
+                    Transition {
+                        from: "*"; to: "hovered"
+                        NumberAnimation { properties: "xScale,yScale"; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+                    },
+                    Transition {
+                        from: "hovered"; to: "*"
+                        NumberAnimation { properties: "xScale,yScale"; duration: 250; easing.type: Easing.OutBounce }
+                    }
+                ]
+            }
 
             MouseArea {
-                id: dashHover
-                anchors.fill: parent // Now only fills the 64px Item, NOT the whole bar
+                id: dashMouse
+                anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 
-                // Cancel dismissal immediately if moving back from the dashboard
                 onEntered: {
-                    rootShell.dashboardRef.cancelDismiss();
-                    rootShell.dashboardRef.showDashboard();
+                    // Hook directly into the decoupled window connection layers inside shell.qml
+                    if (rootShell.dashboardRef.dashboardActive) {
+                        rootShell.dashboardRef.cancelDismiss();
+                    } else {
+                        rootShell.dashboardRef.showDashboard();
+                    }
                 }
-                
-                // Fire the delayed request
-                onExited: rootShell.dashboardRef.requestDismiss()
-
-                Rectangle {
-                    width: 4
-                    height: dashHover.containsMouse || rootShell.dashboardProgress > 0.0 ? 32 : 16
-                    radius: 2
-                    anchors.centerIn: parent
-                    color: (dashHover.containsMouse || rootShell.dashboardProgress > 0.0) ? rootShell.colorAccent : rootShell.colorSubtext
-                    
-                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                }
+                onExited: rootShell.startDashboardDismissTimer()
             }
         }
 
