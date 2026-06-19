@@ -10,14 +10,6 @@ import "../"
 PanelWindow {
     id: wallpaperWindow
 
-    Component.onCompleted: {
-        // 🎯 Initialize the target file on boot so Matugen has a target before the first click
-        // Replace 'rootShell.startupWallpaperPath' with wherever you store your boot wallpaper
-        if (rootShell && rootShell.startupWallpaperPath) {
-            matugenRunner.targetFile = rootShell.startupWallpaperPath;
-        }
-    }
-
     required property var rootShell
     property bool active: false
 
@@ -28,6 +20,8 @@ PanelWindow {
     
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
+    
+    // 🎯 Reverted: Correctly unmaps from Wayland when closed so you can click your desktop
     visible: contentWrapper.opacity > 0.01
 
     onActiveChanged: {
@@ -36,6 +30,7 @@ PanelWindow {
 
     MouseArea {
         anchors.fill: parent
+        // 🎯 Reverted: Removed the 'enabled' toggle
         onClicked: wallpaperWindow.active = false
     }
 
@@ -131,27 +126,21 @@ PanelWindow {
         property string targetFile: ""
         
         // 🎯 Injects the dynamic scheme variable into the bash command
-        // Note: Matugen v2 uses `-t` for type/scheme. Adjust if using an older version.
         command: [
             "sh", "-c", 
             "matugen image \"" + targetFile + "\" -t " + wallpaperWindow.activeScheme + " --prefer=saturation --json hex > \"" + rootShell.matugenFilePath + "\" && sync"
         ]
-
-        // 🎯 Removed the ghost ID reference that was crashing the QML engine.
-        // FileView autonomously handles the reload via watchChanges, so we don't need onExited logic here anymore.
     }
 
-    // 🎯 Native Quickshell file tracker - No more XHR or Process hacks
+    // 🎯 Native Quickshell file tracker
     FileView {
         id: matugenReader
         path: rootShell.matugenFilePath
         watchChanges: true
         
-        // 🎯 CRITICAL: This is what tells the engine to pull the fresh bytes off the disk!
         onFileChanged: reload() 
         
         onTextChanged: {
-            // Retrieve the live string text from the wrapper function
             let fileContent = matugenReader.text(); 
             
             if (fileContent && fileContent.trim() !== "") {
@@ -162,12 +151,12 @@ PanelWindow {
 
     Item {
         id: contentWrapper
+        // 🎯 Reverted: Removed the 'enabled' toggle here too
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         anchors.bottomMargin: 80
         height: 320 
 
         opacity: wallpaperWindow.active ? 1.0 : 0.0
-        // 🎯 Reverted to punchy, fast animations
         Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
         transform: Translate {
@@ -191,7 +180,6 @@ PanelWindow {
                 interactive: true
                 boundsBehavior: Flickable.StopAtBounds
                 
-                // 🎯 Force QML to decode and hold items well outside the visible screen area
                 cacheBuffer: 2000 
                 
                 focus: true 
@@ -232,6 +220,32 @@ PanelWindow {
                     property bool isVideo: pathStr.endsWith(".mp4") || pathStr.endsWith(".webm")
                     property bool isGif: pathStr.endsWith(".gif")
                     property bool isStaticImage: !isVideo && !isGif
+
+                    // 🎯 Video Thumbnail Generator Properties
+                    property string fileName: String(filePath).split('/').pop()
+                    property string thumbDir: Quickshell.env("HOME") + "/.cache/quickshell_thumbs"
+                    property string thumbFile: thumbDir + "/" + fileName + ".jpg"
+                    property string thumbUrl: "file://" + thumbFile
+                    property bool thumbReady: false
+
+                    // 🎯 Async Frame Extractor
+                    // Silently generates a lightweight 300px jpeg of the video if one doesn't exist
+                    Process {
+                        id: thumbGen
+                        running: delegateRoot.isVideo
+                        command: [
+                            "bash", "-c", 
+                            "mkdir -p '" + thumbDir + "' && " +
+                            "if [ ! -f '" + thumbFile + "' ]; then " +
+                            // Grabs a frame at 0.1s (avoids pure black 0.0s frames)
+                            "ffmpeg -y -i '" + filePath + "' -ss 00:00:00.100 -vframes 1 -vf 'scale=300:-1' -q:v 2 '" + thumbFile + "' >/dev/null 2>&1; " +
+                            "fi"
+                        ]
+                        onExited: {
+                            // Tell the Image component the file is on the disk and ready to read
+                            delegateRoot.thumbReady = true;
+                        }
+                    }
 
                     z: isFocused ? 10 : 1
 
@@ -296,15 +310,16 @@ PanelWindow {
 
                             Image {
                                 anchors.fill: parent
-                                source: delegateRoot.isStaticImage ? fileUrl : ""
+                                // 🎯 Show static image, OR the generated thumbnail if it's a video
+                                source: delegateRoot.isStaticImage ? fileUrl : (delegateRoot.thumbReady ? delegateRoot.thumbUrl : "")
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true 
                                 sourceSize: Qt.size(300, 320) 
                                 cache: true
-                                visible: delegateRoot.isStaticImage
+                                // 🎯 Always visible so the video Loader seamlessly plays over the top of it
+                                visible: delegateRoot.isStaticImage || delegateRoot.thumbReady
                             }
 
-                            // 🎯 Defer AnimatedImage memory allocation entirely until hovered
                             Loader {
                                 anchors.fill: parent
                                 active: delegateRoot.loadHeavyMedia && delegateRoot.isGif
@@ -316,7 +331,6 @@ PanelWindow {
                                 }
                             }
 
-                            // 🎯 Defer FFmpeg/CUDA initialization entirely until a video is hovered
                             Loader {
                                 anchors.fill: parent
                                 active: delegateRoot.loadHeavyMedia && delegateRoot.isVideo
