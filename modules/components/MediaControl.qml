@@ -55,8 +55,10 @@ Rectangle {
 
             ColumnLayout {
                 spacing: 4
-                // Expand the maximum width allowed when in the wider vertical layout
-                Layout.maximumWidth: dashboardRoot.isHorizontal ? 160 : 220
+                Layout.maximumWidth: dashboardRoot.isHorizontal ? 160 : 220 
+                
+                // 🎯 Hides the text when stopped, allowing the art box to perfectly center itself
+                visible: dashboardRoot.mediaTitle !== "Not Playing"
                 
                 Text { text: dashboardRoot.mediaTitle; color: rootShell.colorText; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 14; elide: Text.ElideRight; Layout.fillWidth: true }
                 Text { text: dashboardRoot.mediaArtist; color: rootShell.colorSubtext; font.family: rootShell.shellFont; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true }
