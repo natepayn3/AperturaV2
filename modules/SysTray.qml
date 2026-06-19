@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io 
+import Qt.labs.folderlistmodel // 🎯 Required for the preloader to scan the directory
 
 Item {
     id: sysTrayContainer
@@ -14,8 +15,6 @@ Item {
 
     readonly property real collapsedSize: 34 
 
-    // 🎯 Let the root container passively follow the animated inner layout.
-    // Removed the root Behavior animations to stop the rubber-banding explosions.
     implicitWidth: isVertical ? 32 : (drawerOpen ? trayLayout.implicitWidth + 8 : collapsedSize)
     implicitHeight: isVertical ? (drawerOpen ? trayLayout.implicitHeight + 8 : collapsedSize) : 32
 
@@ -52,6 +51,43 @@ Item {
         stdout: SplitParser {
             onRead: data => {
                 if (data.includes("sink")) volumeDebounceTimer.restart();
+            }
+        }
+    }
+
+    // 🎯 Global Headless Image Preloader (Force-Load Edition)
+    Item {
+        visible: false // We can safely hide this again
+
+        FolderListModel {
+            id: globalWallpaperModel
+            folder: "file://" + Quickshell.env("HOME") + "/Pictures/Wallpapers"
+            nameFilters: ["*.jpg", "*.png", "*.gif", "*.mp4", "*.webm"]
+            showDirs: false
+        }
+
+        Repeater {
+            model: globalWallpaperModel
+            
+            delegate: Loader {
+                active: index < 15 
+                
+                sourceComponent: Component {
+                    Image {
+                        property string pathStr: String(filePath).toLowerCase()
+                        property bool isStatic: !pathStr.endsWith(".mp4") && !pathStr.endsWith(".webm") && !pathStr.endsWith(".gif")
+                        
+                        source: isStatic ? fileUrl : ""
+                        sourceSize: Qt.size(300, 320) 
+                        
+                        // 🎯 MATCH THE RENDERER: Ensure cache key is identical
+                        fillMode: Image.PreserveAspectCrop 
+                        
+                        // 🎯 THE FIX: Force QML to block and decode this immediately on boot. 
+                        // It overrides all visual optimizations and culling.
+                        asynchronous: false 
+                    }
+                }
             }
         }
     }
@@ -105,13 +141,11 @@ Item {
                 id: collapsibleGroup
                 property bool shouldBeVisible: sysTrayContainer.drawerOpen
                 
-                // 🎯 Mask clips the unconstrained Flow to create the smooth drawer slide
                 clip: true 
                 
                 width: sysTrayContainer.isVertical ? 24 : (shouldBeVisible ? inlineHardwareLayout.implicitWidth : 0)
                 height: sysTrayContainer.isVertical ? (shouldBeVisible ? inlineHardwareLayout.implicitHeight : 0) : 24
                 
-                // 🎯 Animate the mask size, not the Flow's items
                 Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                 Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
@@ -119,8 +153,6 @@ Item {
                     id: inlineHardwareLayout
                     spacing: 8
                     flow: sysTrayContainer.isVertical ? Flow.TopToBottom : Flow.LeftToRight
-                    
-                    // Note: No width/height bindings here, so the layout engine never attempts to wrap the inner items.
 
                     Rectangle {
                         id: bluetoothIconWrapper
