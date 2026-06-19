@@ -167,7 +167,7 @@ PanelWindow {
         Item {
             id: carouselContainer
             height: parent.height
-            width: Math.min(parent.width - 100, carousel.contentWidth)
+            width: Math.min(parent.width - 300, carousel.contentWidth)
             anchors.horizontalCenter: parent.horizontalCenter
 
             ListView {
@@ -187,7 +187,16 @@ PanelWindow {
                 highlightMoveDuration: 200
 
                 property bool isKeyboardNavigating: false
-                
+
+                MouseArea {
+                    anchors.fill: parent
+                    onWheel: (wheel) => {
+                        let dampening = 0.7;
+                        let delta = wheel.angleDelta.y || wheel.angleDelta.x;
+                        carousel.contentX -= (delta * dampening);
+                    }
+                }
+
                 Timer {
                     id: hoverBlockTimer
                     interval: 400 
