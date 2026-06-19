@@ -132,7 +132,7 @@ Item {
 
     Timer {
         id: sysStatsTimer
-        interval: 1500; running: false; repeat: true
+        interval: 5000; running: false; repeat: true
         onTriggered: {
             if (!sysStatsProc.running) sysStatsProc.running = true;
         }
@@ -140,11 +140,13 @@ Item {
 
     Process {
         id: checkHypridleProc
-        command: ["systemctl", "--user", "is-active", "hypridle.service"]
+        // 🎯 FIX: Query the process tree directly to catch manual or config-spawned threads
+        command: ["pgrep", "-x", "hypridle"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                dashboardRoot.caffeineActive = (this.text.trim() !== "active");
+                // If pgrep finds a PID, stdout won't be empty, meaning it's running (Caffeine Inactive)
+                dashboardRoot.caffeineActive = (this.text.trim() === "");
                 checkHypridleProc.running = false;
             }
         }
@@ -533,9 +535,11 @@ Item {
                         checked: dashboardRoot.caffeineActive
                         onToggled: {
                             dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
+                            
+                            // 🎯 FIX: Execute using the strict Lua wrapper dispatcher syntax
                             caffeineToggleProc.command = dashboardRoot.caffeineActive 
-                                ? ["systemctl", "--user", "stop", "hypridle.service"]
-                                : ["systemctl", "--user", "start", "hypridle.service"];
+                                ? ["pkill", "-x", "hypridle"]
+                                : ["hyprctl", "dispatch", "hl.dsp.exec_cmd('hypridle')"];
                             caffeineToggleProc.running = true
                         }
                     }
@@ -643,7 +647,7 @@ Item {
                                 color: logoutHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                                 Behavior on color { ColorAnimation { duration: 150 } }
                                 HoverHandler { id: logoutHover }
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["hyprctl", "dispatch", "exit"]); } }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.exit()"]); } }
                                 Text { anchors.centerIn: parent; text: "logout"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 }
                             }
 
