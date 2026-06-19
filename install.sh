@@ -56,15 +56,14 @@ echo "📂 Deploying shell files to $CONFIG_DIR..."
 mkdir -p "$CONFIG_DIR"
 cp -r ./* "$CONFIG_DIR/"
 
-# Inject Hyprland layer and window rules
+# Inject Hyprland layer and window rules using a standard multiline string
 HYPR_LUA="$HOME/.config/hypr/hyprland.lua"
 echo "⚙️ Injecting QuickShell & Satty rules into $HYPR_LUA..."
 
 # Ensure the directory exists before appending
 mkdir -p "$(dirname "$HYPR_LUA")"
 
-cat << 'EOF' >> "$HYPR_LUA"
-
+echo '
 -- AperturaV2 Rules
 -- Combined rule handles all quickshell layer panels (Bar, Settings HUD, etc.)
 hl.layer_rule({
@@ -80,7 +79,6 @@ hl.window_rule({
     name  = "satty-screenshot-floating",
     match = { class = "com.gabm.satty" },
     float = true,
-})
-EOF
+})' >> "$HYPR_LUA"
 
 echo "✅ Installation complete! Launch via 'quickshell' or bind it in your hyprland config."
