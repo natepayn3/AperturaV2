@@ -4,12 +4,22 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import "components"
 
 Scope {
     id: settingsModuleRoot
 
     property var shellTarget: null
     
+    // 🎯 The Binding Bridge
+    // Strongly typed properties force QML to track the dynamic Matugen updates 
+    // instead of losing them through the untyped `var` reference.
+    property color themeBackground: shellTarget ? shellTarget.colorBackground : "#cc11111b"
+    property color themeBorder: shellTarget ? shellTarget.colorBorder : "#313244"
+    property color themeAccent: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+    property color themeText: shellTarget ? shellTarget.colorText : "#cdd6f4"
+    property color themeSubtext: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+
     property alias settingsWindowObject: settingsWindow
     
     property bool windowVisible: false
@@ -29,7 +39,6 @@ Scope {
         id: settingsWindow
         visible: false
         
-        // Wayland Layer Shell adjustments to allow background click/hover propagation
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-settings"
         WlrLayershell.exclusionMode: WlrLayershell.Ignore
@@ -40,17 +49,12 @@ Scope {
         }
         color: "transparent"
 
-        // --- Pass-Through Outer Dismissal Tripwire ---
         MouseArea {
             anchors.fill: parent
             propagateComposedEvents: true
             
             onPressed: (mouse) => {
-                // Instantly hide the settings app window
                 settingsModuleRoot.windowVisible = false;
-                
-                // CRITICAL: Reject the event so Wayland passes the click 
-                // straight down to the underlying panel button or window
                 mouse.accepted = false;
             }
         }
@@ -60,6 +64,7 @@ Scope {
         property string activeCategory: "Layout"
         property string selectedFont: "Rubik"
         property string fontSearchQuery: ""
+        property string matugenScheme: "scheme-tonal-spot" 
 
         readonly property string configDir: shellTarget ? shellTarget.customBasePath : ""
         readonly property string configFilePath: configDir + "/shell_settings.json"
@@ -103,6 +108,9 @@ Scope {
                 if (shellTarget.shellFont !== undefined) {
                     selectedFont = shellTarget.shellFont;
                 }
+                if (shellTarget.activeScheme !== undefined) {
+                    matugenScheme = shellTarget.activeScheme;
+                }
             }
         }
 
@@ -132,7 +140,8 @@ Scope {
             let updatePayload = {
                 "position": settingsWindow.currentPosition,
                 "enabledDisplays": settingsWindow.enabledDisplays,
-                "font": settingsWindow.selectedFont
+                "font": settingsWindow.selectedFont,
+                "matugen_scheme": settingsWindow.matugenScheme
             };
             
             writeProc.command = [
@@ -148,7 +157,6 @@ Scope {
             running: false
         }
 
-        // Centralized container tracking settings layout bounds
         Item {
             id: settingsCardFrame
             width: 800
@@ -168,7 +176,6 @@ Scope {
                 onActivated: settingsModuleRoot.windowVisible = false
             }
 
-            // --- Animation States ---
             states: [
                 State {
                     name: "hidden"
@@ -182,7 +189,6 @@ Scope {
                 }
             ]
 
-            // --- Animation Transitions ---
             transitions: [
                 Transition {
                     from: "hidden"; to: "shown"
@@ -205,7 +211,6 @@ Scope {
                 }
             ]
 
-            // Focus Scope grabs active window interactions cleanly to evaluate hotkeys
             FocusScope {
                 anchors.fill: parent
                 Component.onCompleted: forceActiveFocus()
@@ -221,21 +226,19 @@ Scope {
                     }
                 }
 
-                // Main Framework Window Plate
                 Rectangle {
                     anchors.fill: parent
-                    color: shellTarget ? shellTarget.colorBackground : "#cc11111b" 
+                    color: settingsModuleRoot.themeBackground 
                     radius: 16
                     border.width: 0 
                     antialiasing: true
 
-                    // Outer 3px Border Wrapper Overlay (Matches text color)
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: -3 
                         color: "transparent"
                         radius: 19 
-                        border.color: shellTarget ? shellTarget.colorText : "#cdd6f4" 
+                        border.color: settingsModuleRoot.themeText
                         border.width: 3
                         antialiasing: true
                         z: 10 
@@ -244,19 +247,17 @@ Scope {
                     Row {
                         anchors.fill: parent
 
-                        // --- Left Navigation Sidebar Panel ---
                         Rectangle {
                             width: 220
                             height: parent.height
                             color: "transparent"
 
-                            // Updated 3px minimal split dividing segment (Matches text color)
                             Rectangle {
                                 anchors.right: parent.right
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 width: 3 
-                                color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                color: settingsModuleRoot.themeText
                             }
 
                             Column {
@@ -269,13 +270,12 @@ Scope {
                                     font.pixelSize: 13
                                     font.bold: true
                                     font.letterSpacing: 0.5
-                                    color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                                    color: settingsModuleRoot.themeSubtext
                                     height: 30
                                     x: 12
                                     verticalAlignment: Text.AlignVCenter
                                 }
 
-                                // Component Prototype: Sidebar Category Button
                                 component CategoryButton : Button {
                                     id: catBtnItem
                                     property string categoryName: ""
@@ -285,12 +285,10 @@ Scope {
                                     
                                     background: Rectangle { 
                                         color: settingsWindow.activeCategory === categoryName 
-                                            ? (shellTarget ? shellTarget.colorBorder : "#313244") 
+                                            ? settingsModuleRoot.themeBorder 
                                             : (catBtnItem.hovered ? Qt.rgba(255/255, 255/255, 255/255, 0.04) : "transparent")
                                         
-                                        border.color: catBtnItem.hovered 
-                                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                                            : "transparent"
+                                        border.color: catBtnItem.hovered ? settingsModuleRoot.themeAccent : "transparent"
                                         border.width: 1
                                         radius: 8 
                                         
@@ -300,9 +298,7 @@ Scope {
                                     
                                     contentItem: Text { 
                                         text: parent.categoryName
-                                        color: settingsWindow.activeCategory === categoryName 
-                                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
-                                            : (shellTarget ? shellTarget.colorText : "#cdd6f4")
+                                        color: settingsWindow.activeCategory === categoryName ? settingsModuleRoot.themeAccent : settingsModuleRoot.themeText
                                         font.family: settingsWindow.selectedFont
                                         font.pixelSize: 14
                                         font.bold: settingsWindow.activeCategory === categoryName
@@ -316,13 +312,13 @@ Scope {
                                 
                                 CategoryButton { categoryName: "Layout" }
                                 CategoryButton { categoryName: "Font" }
+                                CategoryButton { categoryName: "Colors" }
                                 CategoryButton { categoryName: "VPN" }
                                 CategoryButton { categoryName: "Modules" }
                                 CategoryButton { categoryName: "Behavior" }
                             }
                         }
 
-                        // --- Right Content Area ---
                         Item {
                             width: parent.width - 223 
                             height: parent.height
@@ -336,7 +332,7 @@ Scope {
                                     text: settingsWindow.activeCategory
                                     font.family: settingsWindow.selectedFont
                                     font.pixelSize: 24; font.bold: true
-                                    color: shellTarget ? shellTarget.colorText : "#cdd6f4"
+                                    color: settingsModuleRoot.themeText
                                     anchors.left: parent.left; anchors.leftMargin: 30
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
@@ -352,8 +348,8 @@ Scope {
                                     
                                     background: Rectangle { 
                                         anchors.fill: parent
-                                        color: closeBtn.hovered ? (shellTarget ? shellTarget.colorBorder : "#313244") : "transparent"
-                                        border.color: closeBtn.hovered ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") : "transparent"
+                                        color: closeBtn.hovered ? settingsModuleRoot.themeBorder : "transparent"
+                                        border.color: closeBtn.hovered ? settingsModuleRoot.themeAccent : "transparent"
                                         border.width: 1
                                         radius: 8 
                                         
@@ -365,7 +361,7 @@ Scope {
                                         text: "close" 
                                         font.family: "Material Symbols Outlined" 
                                         font.pixelSize: 20
-                                        color: shellTarget ? shellTarget.colorAccent : "#89b4fa"
+                                        color: settingsModuleRoot.themeAccent
                                         anchors.centerIn: parent
                                     }
                                     
@@ -392,6 +388,13 @@ Scope {
                                     settingsWindow: settingsWindow
                                 }
 
+                                ColorsLayout {
+                                    anchors.fill: parent
+                                    visible: settingsWindow.activeCategory === "Colors"
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    settingsWindow: settingsWindow
+                                }
+
                                 VpnLayout {
                                     id: vpnLayoutSection
                                     anchors.fill: parent
@@ -402,12 +405,12 @@ Scope {
                                 
                                 Loader {
                                     anchors.fill: parent
-                                    active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "VPN"
+                                    active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "Colors" && settingsWindow.activeCategory !== "VPN"
                                     sourceComponent: Component {
                                         Text { 
                                             text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
                                             font.family: settingsWindow.selectedFont; font.pixelSize: 18
-                                            color: shellTarget ? shellTarget.colorSubtext : "#a6adc8"
+                                            color: settingsModuleRoot.themeSubtext
                                             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                         }
                                     }
