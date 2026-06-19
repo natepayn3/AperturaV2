@@ -14,7 +14,7 @@ PanelWindow {
 
     screen: targetScreen
     WlrLayershell.namespace: "quickshell-bar"
-    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusionMode: WlrLayershell.Exclusive
     exclusiveZone: 36 * rootShell.horizontalBarProgress
     color: "transparent"
