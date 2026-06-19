@@ -20,12 +20,13 @@ Item {
     // Dynamic responsive dimensions
     property bool isHorizontal: rootShell.barPosition === "top" || rootShell.barPosition === "bottom"
     property real maxCardWidth: isHorizontal ? 720 : 380
-    property real maxCardHeight: isHorizontal ? 700 : 760
+    width: Math.round(maxCardWidth)
+    height: mainColumn.implicitHeight + 32
+
+    Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
-    width: Math.round(maxCardWidth)
-    height: Math.round(maxCardHeight)
 
     // Explicit coordinate mapping against the fullscreen PanelWindow parent
     x: {
@@ -533,22 +534,29 @@ Item {
 
         Item {
             id: layoutContentWrapper
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             anchors.margins: 24
             z: 5
 
             ColumnLayout {
-                anchors.fill: parent
+                id: mainColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
                 spacing: 16
 
                 // Top Header Section: Time/Weather & System Rings
-                RowLayout {
+                GridLayout {
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    columns: dashboardRoot.isHorizontal ? 2 : 1
+                    rowSpacing: 24
+                    columnSpacing: 16
 
-                    // --- Left: Time / Date / Weather ---
+                    // --- Left / Top: Time / Date / Weather ---
                     ColumnLayout {
-                        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignLeft) : Qt.AlignHCenter
+                        Layout.fillWidth: true // Pushes the rings perfectly to the right edge
                         spacing: 4
 
                         RowLayout {
@@ -592,13 +600,13 @@ Item {
                         }
                     }
 
-                    // --- Center Spacer ---
-                    Item { Layout.fillWidth: true }
-
-                    // --- Right: Systems Rings ---
+                    // --- Right / Bottom: Systems Rings ---
                     RowLayout {
-                        Layout.alignment: Qt.AlignTop | Qt.AlignRight
-                        spacing: 4 // Increased from 0
+                        Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignRight) : Qt.AlignHCenter
+                        
+                        // 🎯 CRITICAL: Protects the rings from being squished by the Time column
+                        Layout.minimumWidth: implicitWidth 
+                        spacing: 16
 
                         SysRing { label: "CPU"; value: dashboardRoot.sysCpu; ringColor: "#89b4fa" }
                         SysRing { label: "GPU"; value: dashboardRoot.sysGpu; ringColor: "#cba6f7" }
@@ -638,7 +646,7 @@ Item {
                     }
 
                     ToggleSwitch {
-                        label: "DND"
+                        label: "Focus"
                         iconName: "do_not_disturb_on"
                         checked: dashboardRoot.dndActive
                         onToggled: {
@@ -827,22 +835,48 @@ Item {
                     }
                 }
 
-                MediaControl {
-                    onPlayPauseClicked: {
-                        mediaControlProc.command = ["playerctl", "play-pause"]
-                        mediaControlProc.running = true
+                // --- Lower Section: Media & Notifications ---
+                GridLayout {
+                    Layout.fillWidth: true
+                    
+                    columns: dashboardRoot.isHorizontal ? 2 : 1
+                    rowSpacing: 16
+                    columnSpacing: 16
+
+                    MediaControl {
+                        Layout.fillWidth: true
+                        // 🎯 CRITICAL: Forces a strict 50/50 split and stops grid overflow
+                        Layout.minimumWidth: 0     
+                        Layout.preferredWidth: 0   
+                        Layout.alignment: Qt.AlignTop
+                        Layout.fillHeight: dashboardRoot.isHorizontal
+                        
+                        onPlayPauseClicked: {
+                            mediaControlProc.command = ["playerctl", "play-pause"]
+                            mediaControlProc.running = true
+                        }
+                        onPrevClicked: {
+                            mediaControlProc.command = ["playerctl", "previous"]
+                            mediaControlProc.running = true
+                        }
+                        onNextClicked: {
+                            mediaControlProc.command = ["playerctl", "next"]
+                            mediaControlProc.running = true
+                        }
                     }
-                    onPrevClicked: {
-                        mediaControlProc.command = ["playerctl", "previous"]
-                        mediaControlProc.running = true
-                    }
-                    onNextClicked: {
-                        mediaControlProc.command = ["playerctl", "next"]
-                        mediaControlProc.running = true
+
+                    NotificationCenter {
+                        Layout.fillWidth: true
+                        // 🎯 CRITICAL: Forces a strict 50/50 split and stops grid overflow
+                        Layout.minimumWidth: 0     
+                        Layout.preferredWidth: 0   
+                        Layout.alignment: Qt.AlignTop
+                        Layout.fillHeight: dashboardRoot.isHorizontal
                     }
                 }
 
-                NotificationCenter {}
+                // Absorbs all remaining vertical dead space, pushing everything else cleanly to the top
+                Item { Layout.fillHeight: true }
             }
         }
     }
