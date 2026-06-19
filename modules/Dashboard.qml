@@ -444,25 +444,38 @@ Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
 
+                // --- Top Right Wing ---
                 Shape {
                     x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        
+                        // Start bottom-left
                         startX: 0; startY: dashboardRoot.wingSize
+                        // Line to bottom-right
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        PathLine { x: parent.width; y: dashboardRoot.wingSize }
+                        // Line to top-right
+                        PathLine { x: dashboardRoot.wingSize; y: 0 }
+                        // Sweep curve back to start, anchoring tension bottom-right
                         PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize }
                     }
                 }
+
+                // --- Bottom Right Wing ---
                 Shape {
                     x: parent.width - dashboardRoot.wingSize; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
                         fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        
+                        // Start top-left
                         startX: 0; startY: 0
+                        // Line to top-right
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
+                        // Line to bottom-right
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
+                        // Sweep curve back to start, anchoring tension top-right
                         PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 }
                     }
                 }
