@@ -24,6 +24,12 @@ Item {
     implicitWidth: isVertical ? 32 : (drawerOpen ? trayLayout.implicitWidth + 8 : collapsedSize)
     implicitHeight: isVertical ? (drawerOpen ? expandedSize : collapsedSize) : 32
 
+    Timer {
+        id: volumeDebounceTimer
+        interval: 20 // Prevents wpctl from choking on fast scroll wheels
+        repeat: false
+    }
+    
     // --- Hardware Adapter Engines ---
     Process {
         id: wifiHardwareCheck
