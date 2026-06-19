@@ -505,7 +505,7 @@ Item {
 
                     Text {
                         text: Math.round(audioRoot.currentVolume * 100) + "%"
-                        font.pixelSize: 13
+                        font.pixelSize: 14
                         font.weight: Font.Bold
                         color: audioRoot.isMuted ? "#999999" : "#ffffff"
                         Layout.alignment: Qt.AlignVCenter
@@ -551,7 +551,7 @@ Item {
                                 Text {
                                     text: model.sinkName
                                     color: "#ffffff"
-                                    font.pixelSize: 13
+                                    font.pixelSize: 14
                                     font.weight: model.isDefault ? Font.Bold : Font.Normal
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -634,7 +634,7 @@ Item {
 
                 Text {
                     text: Math.round(audioRoot.currentVolume * 100) + "%"
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                     font.weight: Font.Bold
                     color: audioRoot.isMuted ? "#999999" : "#ffffff"
                     Layout.minimumWidth: 36 
