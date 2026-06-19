@@ -1,53 +1,93 @@
 import QtQuick
-import QtQuick.Layouts
 import QtQuick.Controls
 
 Item {
     id: sliderRoot
-    Layout.fillWidth: true
-    Layout.preferredHeight: 48
 
+    // Properties passed in from your Dashboard.qml
+    property real value: 0.0
     property string iconLow: ""
     property string iconHigh: ""
-    property real value: 0.0
-    property bool isPressed: slider.pressed
-
+    
+    // Signal to send the new value back to Dashboard.qml
     signal moved(real newValue)
 
-    Slider {
-        id: slider
-        anchors.fill: parent
-        value: sliderRoot.value
-        onMoved: sliderRoot.moved(value)
+    // The text string we want to display (e.g., "75%")
+    property string percentageText: Math.round(sliderRoot.value * 100) + "%"
 
-        background: Rectangle {
-            color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15); radius: 24
-            Rectangle { width: slider.visualPosition * parent.width; height: parent.height; color: rootShell.colorText; radius: 24 }
+    // 1. BACKGROUND TRACK (The empty part)
+    Rectangle {
+        id: bgTrack
+        anchors.fill: parent
+        color: Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15) // Light transparent background
+        radius: height / 2
+
+        // LIGHT TEXT: Sits in the background
+        Text {
+            anchors.centerIn: parent
+            text: sliderRoot.percentageText
+            color: rootShell.colorText // Normal text color
+            font.family: rootShell.shellFont
+            font.pixelSize: 14
+            font.bold: true
+        }
+    }
+
+    // 2. FILL BAR (The colored part that moves)
+    Rectangle {
+        id: fillBar
+        height: parent.height
+        width: Math.max(height, sliderRoot.width * sliderRoot.value) // Keeps it from getting smaller than a circle
+        color: rootShell.colorText // Solid accent color
+        radius: height / 2
+        
+        // 🎯 THE CLIPPING MAGIC
+        clip: true 
+
+        // DARK TEXT: Sits inside the moving bar
+        Text {
+            // Absolute positioning relative to the main slider, NOT the fill bar!
+            x: (sliderRoot.width - width) / 2
+            y: (sliderRoot.height - height) / 2
             
-            RowLayout {
-                anchors.fill: parent; anchors.margins: 16
-                Text { text: sliderRoot.iconLow; font.family: "Material Symbols Outlined"; color: rootShell.colorBackground; font.pixelSize: 20; Layout.alignment: Qt.AlignVCenter; transform: Translate { y: -3 } }
-                Item { Layout.fillWidth: true }
-                Text { 
-                    text: sliderRoot.iconHigh === "" ? Math.round(slider.value * 100) + "%" : sliderRoot.iconHigh
-                    font.family: sliderRoot.iconHigh === "" ? rootShell.shellFont : "Material Symbols Outlined"
-                    font.bold: sliderRoot.iconHigh === ""
-                    color: sliderRoot.iconHigh === "" ? rootShell.colorBackground : rootShell.colorSubtext
-                    font.pixelSize: sliderRoot.iconHigh === "" ? 12 : 20
-                    Layout.alignment: Qt.AlignVCenter
-                    transform: Translate { y: sliderRoot.iconHigh === "" ? 0 : -3 } 
-                }
-            }
-            
-            // Large center readout when sliding (optional for volume style)
-            Text { 
-                text: Math.round(slider.value * 100) + "%"
-                color: rootShell.colorBackground; font.family: rootShell.shellFont; font.bold: true; font.pixelSize: 14
-                anchors.centerIn: parent
-                opacity: (sliderRoot.iconHigh !== "" && slider.pressed) ? 1.0 : 0.0
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+            text: sliderRoot.percentageText
+            color: rootShell.colorBackground // Dark background color to contrast the solid bar
+            font.family: rootShell.shellFont
+            font.pixelSize: 14
+            font.bold: true
+        }
+    }
+
+    // 3. YOUR ICONS (Optional: you can clip these too if they overlap the bar!)
+    Text {
+        anchors.left: parent.left
+        anchors.leftMargin: 14
+        anchors.verticalCenter: parent.verticalCenter
+        text: sliderRoot.iconLow
+        font.family: "Material Symbols Outlined"
+        font.pixelSize: 20
+        color: sliderRoot.value > 0.1 ? rootShell.colorBackground : rootShell.colorText
+    }
+
+    // 4. INTERACTION LOGIC
+    MouseArea {
+        id: dragArea
+        anchors.fill: parent
+        
+        // Emits true when the user is actively dragging
+        property bool isPressed: pressed
+
+        onPositionChanged: (mouse) => {
+            if (pressed) {
+                // Calculate the new percentage based on mouse X position
+                let newPct = Math.max(0.0, Math.min(1.0, mouse.x / width));
+                sliderRoot.moved(newPct);
             }
         }
-        handle: Item {} 
+        
+        onClicked: (mouse) => {
+            let newPct = Math.max(0.0, Math.min(1.0, mouse.x / width));
+            sliderRoot.moved(newPct);
+        }
     }
 }
