@@ -19,6 +19,7 @@ Scope {
     readonly property var launcherRef: globalAppLauncherPreview
     readonly property var workspaceRef: globalWorkspacePreview
     readonly property var bluetoothRef: globalBluetoothPreview
+    readonly property var wallpaperRef: globalWallpaperPreview // 🎯 Added Global Alias
 
     property string barPosition: "left"
     property string enabledDisplayStr: "0"
@@ -184,6 +185,7 @@ Scope {
         if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
         if (globalWifiPreview.wifiActive) globalWifiPreview.forceDismiss();
         if (globalDashboardPreview.dashboardActive) globalDashboardPreview.forceDismiss();
+        if (globalWallpaperPreview.active) globalWallpaperPreview.active = false; // 🎯 Clean closing
     }
 
     function isDisplayEnabled(idx) {
@@ -345,6 +347,16 @@ Scope {
         }
     }
 
+    // 🎯 Added Wallpaper IPC Hook
+    IpcHandler {
+        target: "wallpaper"
+        function toggle(): void {
+            if (globalWallpaperPreview) {
+                globalWallpaperPreview.active = !globalWallpaperPreview.active;
+            }
+        }
+    }
+
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
     Timer { 
@@ -414,7 +426,6 @@ Scope {
         repeat: false
         onTriggered: {
             hoveredIndicatorWorkspace = -1;
-            // 🎯 FIX: Reset the parent property to maintain the binding flow sequence
             globalWorkspacePreview.targetWorkspace = -1;
         }
     }
@@ -443,7 +454,6 @@ Scope {
             if (screenObj) globalWorkspacePreview.targetScreen = screenObj;
             hoveredIndicatorWorkspace = ws;
             
-            // 🎯 FIX: Changed innerPreviewCard to globalWorkspacePreview.cardRef
             if (globalWorkspacePreview.cardRef && ws !== globalWorkspacePreview.cardRef.targetWorkspace) {
                 previewDebounceTimer.stop();
                 previewDebounceTimer.pendingWorkspace = ws;
@@ -460,8 +470,6 @@ Scope {
         target: globalCalendarPreview; ignoreUnknownSignals: true
         function onCalendarShowRequested() {
             if (!globalCalendarPreview.calendarActive) {
-                
-                // Explicitly kill the standalone apps
                 if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
                 
@@ -538,6 +546,7 @@ Scope {
     AudioWindow     { id: globalAudioPreview; rootShell: rootShell }
     BluetoothWindow { id: globalBluetoothPreview; rootShell: rootShell }
     WifiWindow      { id: globalWifiPreview; rootShell: rootShell }
+    WallpaperWindow { id: globalWallpaperPreview; rootShell: rootShell } // 🎯 Instantiation Node Attached
 
     // --- Dynamic Instantiators using Unified Modules ---
     Item {
