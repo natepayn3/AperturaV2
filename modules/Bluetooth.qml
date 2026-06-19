@@ -183,6 +183,7 @@ Item {
 
     function triggerScan() {
         deviceModel.clear();
+        deviceFetcher.running = true;
         bluetoothSession.write("agent on\n");
         bluetoothSession.write("default-agent\n");
         bluetoothSession.write("scan on\n");
@@ -497,7 +498,8 @@ Item {
                                         Text {
                                             text: model.name !== "" ? model.name : model.mac
                                             color: "#ffffff"
-                                            font.pixelSize: 14
+                                            font.family: rootShell.shellFont
+                                            font.pixelSize: 13
                                             font.weight: model.connected ? Font.Bold : Font.Normal
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
@@ -506,6 +508,7 @@ Item {
                                         Text {
                                             text: model.connected ? "Connected" : (model.paired ? "Paired" : model.mac)
                                             color: model.connected ? rootShell.colorAccent : rootShell.colorSubtext
+                                            font.family: rootShell.shellFont
                                             font.pixelSize: 11
                                         }
                                     }
