@@ -292,6 +292,67 @@ Item {
                         }
                         MouseArea { id: batteryMouse; anchors.fill: parent; hoverEnabled: true }
                     }
+                    // ==========================================
+                    // 1. App Launcher Node
+                    // ==========================================
+                    Rectangle {
+                        id: launcherIconWrapper
+                        width: 24; height: 24; radius: 4
+                        color: launcherMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "apps"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.launcherRef && sysTrayContainer.shellTarget.launcherRef.active) 
+                                ? sysTrayContainer.shellTarget.colorAccent 
+                                : sysTrayContainer.shellTarget.colorText
+                        }
+
+                        MouseArea {
+                            id: launcherMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.launcherRef) {
+                                    sysTrayContainer.shellTarget.launcherRef.active = !sysTrayContainer.shellTarget.launcherRef.active;
+                                }
+                            }
+                        }
+                    }
+
+                    // ==========================================
+                    // 2. Settings Application Node
+                    // ==========================================
+                    Rectangle {
+                        id: settingsIconWrapper
+                        width: 24; height: 24; radius: 4
+                        color: settingsMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "settings"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.settingsAppRef && sysTrayContainer.shellTarget.settingsAppRef.windowVisible) 
+                                ? sysTrayContainer.shellTarget.colorAccent 
+                                : sysTrayContainer.shellTarget.colorText
+                        }
+
+                        MouseArea {
+                            id: settingsMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.settingsAppRef) {
+                                    sysTrayContainer.shellTarget.settingsAppRef.windowVisible = !sysTrayContainer.shellTarget.settingsAppRef.windowVisible;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
