@@ -11,6 +11,13 @@ Scope {
     id: launcherModuleRoot
 
     property alias launcherWindowObject: launcherWindow
+
+    // 🎯 The Reactive Bridge
+    // This forces the UI to re-bind whenever the shellTarget updates
+    property color themeBackground: rootShell ? rootShell.colorBackground : "#11111b"
+    property color themeText: rootShell ? rootShell.colorText : "#cdd6f4"
+    property color themeAccent: rootShell ? rootShell.colorAccent : "#89b4fa"
+    property color themeBorder: rootShell ? rootShell.colorBorder : "#313244"
     
     property bool active: false
     onActiveChanged: {
@@ -191,9 +198,9 @@ Scope {
             Rectangle {
                 id: cardMainBody
                 anchors.fill: parent
-                color: rootShell.colorBackground
+                color: launcherModuleRoot.themeBackground
                 radius: 20
-                border.color: rootShell.colorText
+                border.color: launcherModuleRoot.themeAccent
                 border.width: 3
                 antialiasing: true
             }
@@ -221,7 +228,7 @@ Scope {
                         
                         background: Rectangle {
                             color: Qt.rgba(0, 0, 0, 0.2)
-                            border.color: searchInput.activeFocus ? rootShell.colorAccent : rootShell.colorBorder
+                            border.color: searchInput.activeFocus ? launcherModuleRoot.themeAccent : launcherModuleRoot.themeBorder
                             border.width: 1
                             radius: 8
                         }
@@ -251,7 +258,7 @@ Scope {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 1
-                        color: rootShell.colorText
+                        color: launcherModuleRoot.themeAccent
                     }
 
                     ScrollView {
