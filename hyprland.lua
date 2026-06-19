@@ -28,7 +28,7 @@ local terminal    = "kitty"
 local fileManager = "nautilus"
 local menu = "qs -c AperturaV2 ipc call launcher toggle"
 local settings = "qs -c AperturaV2 ipc call settings toggle"
-
+local wallpaper = "qs -c AperturaV2 ipc call wallpaper toggle"
 
 -------------------
 ---- AUTOSTART ----
@@ -46,7 +46,7 @@ local settings = "qs -c AperturaV2 ipc call settings toggle"
 -- end)
 
 hl.on("hyprland.start", function () 
-  hl.exec_cmd("qs -c Apertura")
+  hl.exec_cmd("qs -c AperturaV2")
   hl.exec_cmd("systemctl --user start hyprpolkitagent")
   hl.exec_cmd("hypridle")
   hl.exec_cmd("awww-daemon")
@@ -232,7 +232,7 @@ hl.config({
 
         follow_mouse = 1,
 
-        sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
+        sensitivity = 0.7, -- -1.0 - 1.0, 0 means no modification.
 
         touchpad = {
             natural_scroll = false,
@@ -269,10 +269,11 @@ hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + ALT + S", hl.dsp.exec_cmd(settings))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(wallpaper))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("google-chrome-stable"))
-hl.bind(mainMod .. " + ALT + W", hl.dsp.exec_cmd("google-chrome-stable --incognito"))
+hl.bind(mainMod .. " + Z", hl.dsp.exec_cmd("google-chrome-stable"))
+hl.bind(mainMod .. " + ALT + Z", hl.dsp.exec_cmd("google-chrome-stable --incognito"))
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + C", hl.dsp.exec_cmd("vscodium"))
 hl.bind(mainMod .. " + H", hl.dsp.exec_cmd("sh ~/.config/hypr/hypridle.sh"))
@@ -382,21 +383,18 @@ hl.window_rule({
 
 hl.window_rule({ match = { class = "signal" }, opacity = "0.85 0.85" })
 
--- Combined rule for all components
+-- Combined rule handles all quickshell layer panels (Bar, Settings HUD, etc.)
 hl.layer_rule({
     name         = "quickshell-all",
-    -- This matches any layer starting with "quickshell-"
     match        = { namespace = "^quickshell-.*" },
     blur         = true,
     xray         = true,
-    ignore_alpha = 0.7,
+    ignore_alpha = 0.7, -- 🧪 Background blur masks to your sharp QML card shape automatically!
 })
 
 -- Satty always floats
 hl.window_rule({
     name  = "satty-screenshot-floating",
-    match = { 
-        class = "com.gabm.satty" 
-    },
+    match = { class = "com.gabm.satty" },
     float = true,
 })
