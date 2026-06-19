@@ -83,8 +83,10 @@ Item {
 
     onActiveChanged: {
         if (active) {
-            sysStatsProc.running = true;
+            diskGpuProc.running = true;
             sysStatsTimer.running = true;
+            cpuStatReader.reload();
+            memInfoReader.reload();
             volFetcher.running = true;
             brightFetcher.running = true;
             wifiStateCheck.running = true;
@@ -134,18 +136,93 @@ Item {
         id: sysStatsTimer
         interval: 5000; running: false; repeat: true
         onTriggered: {
-            if (!sysStatsProc.running) sysStatsProc.running = true;
+            // Trigger native reads without spawning processes
+            cpuStatReader.reload();
+            memInfoReader.reload();
+            if (!diskGpuProc.running) diskGpuProc.running = true;
+        }
+    }
+
+    // --- Native SysStats Readers ---
+    
+    FileView {
+        id: memInfoReader
+        path: "/proc/meminfo"
+        onTextChanged: {
+            let lines = text().split('\n');
+            let total = 0, avail = 0;
+            
+            // Fast loop to rip out the exact byte values
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith("MemTotal:")) total = parseInt(lines[i].replace(/\D/g, ''));
+                if (lines[i].startsWith("MemAvailable:")) avail = parseInt(lines[i].replace(/\D/g, ''));
+                if (total && avail) break; // Bail early once we have both
+            }
+            
+            if (total > 0) dashboardRoot.sysRam = (total - avail) / total;
+        }
+    }
+
+    FileView {
+        id: cpuStatReader
+        path: "/proc/stat"
+        onTextChanged: {
+            // Grab the very first line: "cpu  user nice system idle iowait irq softirq..."
+            let cpuLine = text().split('\n')[0];
+            let parts = cpuLine.split(/\s+/).filter(Boolean);
+            
+            if (parts.length >= 5) {
+                let user = parseInt(parts[1]) || 0;
+                let nice = parseInt(parts[2]) || 0;
+                let system = parseInt(parts[3]) || 0;
+                let idle = parseInt(parts[4]) || 0;
+                let iowait = parseInt(parts[5]) || 0;
+                let irq = parseInt(parts[6]) || 0;
+                let softirq = parseInt(parts[7]) || 0;
+
+                let total = user + nice + system + idle + iowait + irq + softirq;
+                let totalDelta = total - dashboardRoot.lastCpuTotal;
+                let idleDelta = idle - dashboardRoot.lastCpuIdle;
+
+                if (totalDelta > 0) {
+                    dashboardRoot.sysCpu = (totalDelta - idleDelta) / totalDelta;
+                }
+                
+                // Cache for the next tick
+                dashboardRoot.lastCpuTotal = total;
+                dashboardRoot.lastCpuIdle = idle;
+            }
         }
     }
 
     Process {
+        id: diskGpuProc
+        // Only run bash for items that require parsing complex outputs or filesystem calls
+        command: ["sh", "-c", "cat /sys/class/drm/card0/device/gpu_busy_percent 2>/dev/null || cat /sys/class/hwmon/hwmon*/device/gpu_busy_percent 2>/dev/null || nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 0; df / | awk 'NR==2 {print $5}' | sed 's/%//'"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    let lines = this.text.trim().split("\n");
+                    if (lines.length >= 2) {
+                        let rawGpu = parseFloat(lines[0]) || 0.0;
+                        dashboardRoot.sysGpu = rawGpu > 1.0 ? rawGpu / 100.0 : rawGpu;
+                        dashboardRoot.sysDisk = (parseFloat(lines[1]) || 0.0) / 100.0;
+                    }
+                } catch(e) {}
+                diskGpuProc.running = false;
+            }
+        }
+    }
+
+    // --- System & Utilities Processes ---
+
+    Process {
         id: checkHypridleProc
-        // 🎯 FIX: Query the process tree directly to catch manual or config-spawned threads
         command: ["pgrep", "-x", "hypridle"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                // If pgrep finds a PID, stdout won't be empty, meaning it's running (Caffeine Inactive)
                 dashboardRoot.caffeineActive = (this.text.trim() === "");
                 checkHypridleProc.running = false;
             }
@@ -225,49 +302,6 @@ Item {
             onStreamFinished: {
                 dashboardRoot.btActive = (this.text.trim() === "ON");
                 btStateCheck.running = false;
-            }
-        }
-    }
-
-    Process {
-        id: sysStatsProc
-        command: ["sh", "-c", "echo \"$(cat /proc/stat | grep 'cpu ')\"; awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} END {print (t-a)/t}' /proc/meminfo; cat /sys/class/drm/card0/device/gpu_busy_percent 2>/dev/null || cat /sys/class/hwmon/hwmon*/device/gpu_busy_percent 2>/dev/null || nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 0; df / | awk 'NR==2 {print $5}' | sed 's/%//'"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let lines = this.text.trim().split("\n");
-                    if (lines.length >= 4) {
-                        let cpuParts = lines[0].split(/\s+/).filter(Boolean);
-                        if (cpuParts.length >= 5) {
-                            let user = parseInt(cpuParts[1]) || 0;
-                            let nice = parseInt(cpuParts[2]) || 0;
-                            let system = parseInt(cpuParts[3]) || 0;
-                            let idle = parseInt(cpuParts[4]) || 0;
-                            let iowait = parseInt(cpuParts[5]) || 0;
-                            let irq = parseInt(cpuParts[6]) || 0;
-                            let softirq = parseInt(cpuParts[7]) || 0;
-                            
-                            let total = user + nice + system + idle + iowait + irq + softirq;
-                            let totalDelta = total - dashboardRoot.lastCpuTotal;
-                            let idleDelta = idle - dashboardRoot.lastCpuIdle;
-                            
-                            if (totalDelta > 0) {
-                                dashboardRoot.sysCpu = (totalDelta - idleDelta) / totalDelta;
-                            }
-                            dashboardRoot.lastCpuTotal = total;
-                            dashboardRoot.lastCpuIdle = idle;
-                        }
-                        
-                        dashboardRoot.sysRam = parseFloat(lines[1]) || 0.0;
-                        
-                        let rawGpu = parseFloat(lines[2]) || 0.0;
-                        dashboardRoot.sysGpu = rawGpu > 1.0 ? rawGpu / 100.0 : rawGpu;
-                        
-                        dashboardRoot.sysDisk = (parseFloat(lines[3]) || 0.0) / 100.0;
-                    }
-                } catch(e) {}
-                sysStatsProc.running = false;
             }
         }
     }
@@ -536,7 +570,6 @@ Item {
                         onToggled: {
                             dashboardRoot.caffeineActive = !dashboardRoot.caffeineActive
                             
-                            // 🎯 FIX: Execute using the strict Lua wrapper dispatcher syntax
                             caffeineToggleProc.command = dashboardRoot.caffeineActive 
                                 ? ["pkill", "-x", "hypridle"]
                                 : ["hyprctl", "dispatch", "hl.dsp.exec_cmd('hypridle')"];
@@ -555,14 +588,13 @@ Item {
                     property bool menuExpanded: false
                     onVisibleChanged: { if (!visible) menuExpanded = false; }
 
-                    // Layer 1: Static Baseline Buttons (Slides out to the left when expanded)
+                    // Layer 1: Static Baseline Buttons
                     RowLayout {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: parent.width
                         spacing: 12
 
-                        // Move left by the full width of the container (plus spacing) when expanded
                         x: utilitiesWrapper.menuExpanded ? -parent.width - 16 : 0
                         Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
@@ -607,7 +639,7 @@ Item {
                         }
                     }
 
-                    // Layer 2: Absolute-Positioned Slide Tray Overlay (Slides in from the right)
+                    // Layer 2: Absolute-Positioned Slide Tray Overlay
                     Item {
                         id: slideOverlay
                         anchors.top: parent.top
