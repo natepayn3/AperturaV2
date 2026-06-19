@@ -198,17 +198,24 @@ PanelWindow {
                 Keys.onEscapePressed: wallpaperWindow.active = false
 
                 delegate: Item {
+                    id: delegateRoot // 🎯 Explicit ID for unbreakable scope mapping
+                    
                     width: isFocused ? 200 : 140
                     height: carousel.height
                     
                     property bool isFocused: ListView.isCurrentItem
-                    // 🎯 Tracks if we have paused long enough to load heavy media
                     property bool loadHeavyMedia: false 
+
+                    // 🎯 Safely defined at the root level, explicitly cast to string
+                    property string pathStr: String(filePath).toLowerCase()
+                    property bool isVideo: pathStr.endsWith(".mp4") || pathStr.endsWith(".webm")
+                    property bool isGif: pathStr.endsWith(".gif")
+                    property bool isStaticImage: !isVideo && !isGif
+
                     z: isFocused ? 10 : 1
 
                     Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
-                    // 🎯 Debounce timer to prevent stuttering when skipping past items quickly
                     Timer {
                         id: mediaDebounce
                         interval: 150 
@@ -216,14 +223,12 @@ PanelWindow {
                         onTriggered: loadHeavyMedia = true
                     }
 
-                    // 🎯 Clean up memory immediately when focus is lost
                     onIsFocusedChanged: {
                         if (!isFocused) {
                             loadHeavyMedia = false;
                         }
                     }
 
-                    // 🎯 Catch clicks, enable hover focus, and change cursor
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
@@ -240,7 +245,6 @@ PanelWindow {
                     Keys.onReturnPressed: if (isFocused) wallpaperBackend.apply(filePath)
                     Keys.onSpacePressed: if (isFocused) wallpaperBackend.apply(filePath)
 
-                    // 🎯 The Main Card Frame
                     Item {
                         id: slantedCard
                         anchors.centerIn: parent
@@ -251,7 +255,6 @@ PanelWindow {
                         scale: isFocused ? 1.25 : 0.95
                         Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack; easing.overshoot: 1.3 } }
 
-                        // 🎯 True Geometric Shear Matrix
                         transform: Matrix4x4 {
                             matrix: Qt.matrix4x4(
                                 1.0, -0.16,  0.0,  0.0,  
@@ -261,49 +264,41 @@ PanelWindow {
                             )
                         }
 
-                        // 🎯 The Direct Media Wrapper
                         Item {
                             anchors.centerIn: parent
                             width: parent.width * 1.5
                             height: parent.height
 
-                            // Helper properties for clean conditional logic
-                            property bool isVideo: filePath.endsWith(".mp4") || filePath.endsWith(".webm")
-                            property bool isGif: filePath.endsWith(".gif")
-                            property bool isStaticImage: !isVideo && !isGif
-
                             Image {
                                 anchors.fill: parent
-                                // 🎯 Only assign source if it's an actual image
-                                source: isStaticImage ? fileUrl : ""
+                                // 🎯 Strict reference via delegateRoot ID
+                                source: delegateRoot.isStaticImage ? fileUrl : ""
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true 
                                 sourceSize: Qt.size(300, parent.height) 
                                 cache: true
-                                visible: isStaticImage
+                                visible: delegateRoot.isStaticImage
                             }
 
                             AnimatedImage {
                                 anchors.fill: parent
-                                // 🎯 Only decode if focused AND it is actually a gif
-                                source: (loadHeavyMedia && isGif) ? fileUrl : ""
+                                source: (delegateRoot.loadHeavyMedia && delegateRoot.isGif) ? fileUrl : ""
                                 fillMode: Image.PreserveAspectCrop
-                                visible: isGif
+                                visible: delegateRoot.isGif
                             }
 
                             Video {
                                 anchors.fill: parent
-                                // 🎯 Stop the CUDA engine from trying to play JPEGs
-                                source: (loadHeavyMedia && isVideo) ? fileUrl : ""
+                                source: (delegateRoot.loadHeavyMedia && delegateRoot.isVideo) ? fileUrl : ""
                                 fillMode: VideoOutput.PreserveAspectCrop
                                 loops: MediaPlayer.Infinite
                                 autoPlay: true 
                                 muted: true
-                                visible: isVideo
+                                visible: delegateRoot.isVideo
                             }
                         }
                     }
-                }               
+                }              
             }
         }
     }
