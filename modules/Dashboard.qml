@@ -541,41 +541,70 @@ Item {
                 anchors.fill: parent
                 spacing: 16
 
-                // Time / Date / Weather Section
-                ColumnLayout {
+                // Top Header Section: Time/Weather & System Rings
+                RowLayout {
                     Layout.fillWidth: true
-                    spacing: 4
+                    Layout.alignment: Qt.AlignTop
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "h:mm AP"); font.family: rootShell.shellFont; font.pixelSize: 48; font.bold: true; color: rootShell.colorText }
-                        Item { Layout.fillWidth: true }
-                        ColumnLayout {
-                            spacing: -4
-                            Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "dddd"); font.family: rootShell.shellFont; font.pixelSize: 22; font.bold: true; color: rootShell.colorText; Layout.alignment: Qt.AlignRight }
-                            Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "MMMM d"); font.family: rootShell.shellFont; font.pixelSize: 16; color: rootShell.colorSubtext; Layout.alignment: Qt.AlignRight }
+                    // --- Left: Time / Date / Weather ---
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        spacing: 4
+
+                        RowLayout {
+                            spacing: 16
+                            
+                            Text { 
+                                text: Qt.formatDateTime(rootShell.clockRef.currentTime, "h:mm AP")
+                                font.family: rootShell.shellFont
+                                font.pixelSize: 48
+                                font.bold: true
+                                color: rootShell.colorText 
+                            }
+                            
+                            ColumnLayout {
+                                spacing: -4
+                                Layout.alignment: Qt.AlignVCenter
+                                
+                                Text { 
+                                    text: Qt.formatDateTime(rootShell.clockRef.currentTime, "dddd")
+                                    font.family: rootShell.shellFont
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                    color: rootShell.colorText
+                                }
+                                Text { 
+                                    text: Qt.formatDateTime(rootShell.clockRef.currentTime, "MMMM d")
+                                    font.family: rootShell.shellFont
+                                    font.pixelSize: 16
+                                    color: rootShell.colorSubtext
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 8
+                            
+                            Text { text: dashboardRoot.weatherGlyph; font.family: "Material Symbols Outlined"; font.pixelSize: 20; color: rootShell.colorAccent }
+                            Text { text: dashboardRoot.weatherDesc; font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true; color: rootShell.colorText }
+                            Text { text: "•  Feels like " + dashboardRoot.weatherFeelsLike; font.family: rootShell.shellFont; font.pixelSize: 13; color: rootShell.colorSubtext }
+                            Text { text: dashboardRoot.weatherTemp; font.family: rootShell.shellFont; font.pixelSize: 15; font.bold: true; color: rootShell.colorText }
                         }
                     }
 
+                    // --- Center Spacer ---
+                    Item { Layout.fillWidth: true }
+
+                    // --- Right: Systems Rings ---
                     RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: dashboardRoot.weatherGlyph; font.family: "Material Symbols Outlined"; font.pixelSize: 20; color: rootShell.colorAccent }
-                        Text { text: dashboardRoot.weatherDesc; font.family: rootShell.shellFont; font.pixelSize: 13; font.bold: true; color: rootShell.colorText }
-                        Text { text: "•  Feels like " + dashboardRoot.weatherFeelsLike; font.family: rootShell.shellFont; font.pixelSize: 13; color: rootShell.colorSubtext; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Text { text: dashboardRoot.weatherTemp; font.family: rootShell.shellFont; font.pixelSize: 15; font.bold: true; color: rootShell.colorText }
+                        Layout.alignment: Qt.AlignTop | Qt.AlignRight
+                        spacing: 4 // Increased from 0
+
+                        SysRing { label: "CPU"; value: dashboardRoot.sysCpu; ringColor: "#89b4fa" }
+                        SysRing { label: "GPU"; value: dashboardRoot.sysGpu; ringColor: "#cba6f7" }
+                        SysRing { label: "RAM"; value: dashboardRoot.sysRam; ringColor: "#a6e3a1" }
+                        SysRing { label: "DISK"; value: dashboardRoot.sysDisk; ringColor: "#f38ba8" }
                     }
-                }
-
-                // Systems Rings Area
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    SysRing { label: "CPU"; value: dashboardRoot.sysCpu; ringColor: "#89b4fa" }
-                    SysRing { label: "GPU"; value: dashboardRoot.sysGpu; ringColor: "#cba6f7" }
-                    SysRing { label: "RAM"; value: dashboardRoot.sysRam; ringColor: "#a6e3a1" }
-                    SysRing { label: "DISK"; value: dashboardRoot.sysDisk; ringColor: "#f38ba8" }
                 }
 
                 // Toggle Grid (Responds dynamically to isHorizontal flag)
