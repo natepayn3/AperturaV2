@@ -58,28 +58,19 @@ Item {
     // --- Audio State Engine (Event-Driven & Isolated) ---
     Process {
         id: audioMuteCheck
-        // Uses an explicit if/else inside the while block to prevent loop breaks from 'grep -q' termination
-        command: [
-            "sh", "-c", 
-            "pactl subscribe | stdbuf -oL grep --line-buffered \"'change' on sink\" | while read -r _; do if wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -F '[MUTED]' >/dev/null; then echo true; else echo false; fi; done"
-        ]
+        // Let the shell stream events natively, handle the logic in QML
+        command: ["stdbuf", "-oL", "pactl", "subscribe"]
         running: true
         
-        property bool isMuted: false
-
         stdout: SplitParser {
             onRead: data => {
-                let cleaned = data.trim();
-                if (cleaned === "true") {
-                    audioMuteCheck.isMuted = true;
-                } else if (cleaned === "false") {
-                    audioMuteCheck.isMuted = false;
+                if (data.includes("sink")) {
+                    // Trigger a debounced QML timer here to fetch volume
+                    // instead of forking bash inside the stream
+                    volumeDebounceTimer.restart();
                 }
             }
         }
-
-        // Auto-respawn back up if pipewire-pulse drops or bounces
-        onRunningChanged: if (!running) running = true
     }
 
     // Smooth physics mapping transitions
