@@ -10,7 +10,6 @@ Item {
     id: bluetoothRoot
 
     property bool isLocked: false
-
     property string namespace: "quickshell-bluetooth-popup"
     property bool active: false
     
@@ -40,7 +39,7 @@ Item {
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46; 
+            case "bottom": return Screen.height - height - 46;
             case "top":    return 46;                             
             case "left":   return Screen.height - height - 10        
             case "right":  return Screen.height - height - 10;
@@ -51,29 +50,19 @@ Item {
     // --- State Management ---
     property bool isPowered: false
     property bool isScanning: false
-    property bool _lockoutPolling: false 
     
-    property string activeStatusText: isScanning 
-        ? "Scanning..." 
-        : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
+    property string activeStatusText: isScanning ? "Scanning..." : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
     
     ListModel {
         id: deviceModel
     }
 
-    // --- Core Model Sorting Engine ---
     function sortDeviceModel() {
         if (deviceModel.count <= 1) return;
-
         let items = [];
         for (let i = 0; i < deviceModel.count; i++) {
             let item = deviceModel.get(i);
-            items.push({
-                mac: item.mac,
-                name: item.name,
-                connected: item.connected,
-                paired: item.paired
-            });
+            items.push({ mac: item.mac, name: item.name, connected: item.connected, paired: item.paired });
         }
 
         items.sort((a, b) => {
@@ -81,14 +70,14 @@ Item {
             if (a.paired !== b.paired) return a.paired ? -1 : 1;
             return 0;
         });
-
+        
         deviceModel.clear();
         for (let k = 0; k < items.length; k++) {
             deviceModel.append(items[k]);
         }
     }
 
-    // --- Unified Bluetooth Session ---
+    // --- Unified Bluetooth Session (Event Listener) ---
     Process {
         id: bluetoothSession
         command: ["/usr/bin/bluetoothctl"]
@@ -97,6 +86,7 @@ Item {
         stdout: StdioCollector {
             onTextChanged: {
                 let cleaned = this.text.trim();
+                // Rely entirely on stdout streams to manage device state changes instead of timers
                 if (cleaned.includes("[CHG]") || cleaned.includes("Device")) {
                     handleBluetoothEvent(cleaned);
                 }
@@ -104,7 +94,6 @@ Item {
         }
     }
 
-    // --- Core Bluetooth Processes ---
     Process {
         id: stateFetcher
         command: ["/usr/bin/bluetoothctl", "show"]
@@ -123,21 +112,9 @@ Item {
         }
     }
 
-    // The clean initial frame-1 bootstrapper you liked
-    Process {
-        id: bootstrapPairedFetcher
-        command: ["/usr/bin/bluetoothctl", "paired-devices"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                handleBluetoothEvent(this.text);
-                deviceFetcher.running = true;
-            }
-        }
-    }
-
     Process {
         id: deviceFetcher
+        // This is a heavy process, so it will now ONLY run once when the widget opens
         command: [
             "/bin/bash", 
             "-c", 
@@ -148,10 +125,8 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 let lines = this.text.trim().split("\n");
-                
                 for (let i = 0; i < lines.length; i++) {
                     if (lines[i] === "") continue;
-                    
                     let parts = lines[i].split("|");
                     if (parts.length < 4) continue;
 
@@ -161,7 +136,6 @@ Item {
                     let isPaired = parts[3] === "true";
                     
                     if (name.includes("RSSI:") || name.includes("TxPower:")) continue;
-
                     let found = false;
 
                     for (let j = 0; j < deviceModel.count; j++) {
@@ -188,18 +162,12 @@ Item {
                 }
                 
                 sortDeviceModel();
-                
                 deviceFetcher.running = false;
-                if (!bluetoothRoot._lockoutPolling) {
-                    stateFetcher.running = false;
-                    stateFetcher.running = true;
-                }
             }
         }
     }
 
     Process { id: togglePowerProc; running: false; onRunningChanged: { if (!running) stateFetcher.running = true; } }
-    Process { id: toggleScanProc; running: false; onRunningChanged: { if (!running) stateFetcher.running = true; } }
     Process { id: deviceActionProc; running: false }
 
     Timer {
@@ -208,27 +176,8 @@ Item {
         repeat: false
         onTriggered: {
             bluetoothRoot.isScanning = false;
-            bluetoothRoot._lockoutPolling = true; 
             bluetoothSession.write("scan off\n");
-            
-            Qt.callLater(() => {
-                bluetoothRoot._lockoutPolling = false;
-                stateFetcher.running = true;
-            }, 1000);
-        }
-    }
-
-    Timer {
-        id: stateFetcherTimer
-        interval: 1500
-        repeat: true
-        running: bluetoothRoot.active
-        onTriggered: {
-            if (!togglePowerProc.running && !toggleScanProc.running && !deviceActionProc.running) {
-                if (!stateFetcher.running && !deviceFetcher.running && !bootstrapPairedFetcher.running) {
-                    deviceFetcher.running = true;
-                }
-            }
+            Qt.callLater(() => { stateFetcher.running = true; }, 1000);
         }
     }
 
@@ -259,7 +208,6 @@ Item {
         bluetoothSession.write("pair " + mac + "\n");
     }
 
-    // Your Exact Preferred Logic Block
     function handleBluetoothEvent(text) { 
         let lines = text.split("\n");
         let modelChanged = false;
@@ -308,10 +256,10 @@ Item {
     }
 
     onActiveChanged: {
-        // 🎯 FIX: Removed deviceModel.clear() from here so the cached frame stays visible instantly
         if (active) {
             stateFetcher.running = true;
-            bootstrapPairedFetcher.running = true; 
+            // Bootstraps initial state once, then leaves updates to the dbus stream
+            deviceFetcher.running = true; 
         }
     }
 
@@ -525,8 +473,8 @@ Item {
                             radius: 8
                             
                             color: model.connected 
-                                   ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
-                                   : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
+                                  ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
+                                  : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
 
                             border.width: model.connected ? 1 : 0
                             border.color: rootShell.colorAccent
@@ -641,11 +589,7 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 enabled: bluetoothRoot.isPowered
-                                onClicked: {
-                                    stateFetcherTimer.running = false;
-                                    bluetoothRoot.triggerScan();
-                                    Qt.callLater(() => { stateFetcherTimer.running = true; }, 2000);
-                                }
+                                onClicked: bluetoothRoot.triggerScan();
                             }
                         }
 
