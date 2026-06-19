@@ -144,9 +144,11 @@ Scope {
                 "matugen_scheme": settingsWindow.matugenScheme
             };
             
+            // 🎯 jq merges the new payload with existing keys instead of overwriting the whole file
             writeProc.command = [
                 "bash", "-c", 
-                "echo '" + JSON.stringify(updatePayload) + "' > '" + configFilePath + "'"
+                "if [ ! -f '" + configFilePath + "' ]; then echo '{}' > '" + configFilePath + "'; fi && " +
+                "jq '. + " + JSON.stringify(updatePayload) + "' '" + configFilePath + "' > /tmp/shell_settings.tmp && mv /tmp/shell_settings.tmp '" + configFilePath + "'"
             ];
             writeProc.running = false;
             writeProc.running = true;
@@ -238,7 +240,7 @@ Scope {
                         anchors.margins: -3 
                         color: "transparent"
                         radius: 19 
-                        border.color: settingsModuleRoot.themeText
+                        border.color: settingsModuleRoot.themeAccent
                         border.width: 3
                         antialiasing: true
                         z: 10 
@@ -257,7 +259,7 @@ Scope {
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 width: 3 
-                                color: settingsModuleRoot.themeText
+                                color: settingsModuleRoot.themeAccent
                             }
 
                             Column {
@@ -393,6 +395,11 @@ Scope {
                                     visible: settingsWindow.activeCategory === "Colors"
                                     shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
+                                    
+                                    // 🎯 Inject the reactive variables here
+                                    themeBorder: settingsModuleRoot.themeBorder
+                                    themeAccent: settingsModuleRoot.themeAccent
+                                    themeText: settingsModuleRoot.themeText
                                 }
 
                                 VpnLayout {
