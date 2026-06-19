@@ -195,10 +195,32 @@ PanelWindow {
                 keyNavigationEnabled: true
                 highlightMoveDuration: 200
 
-                Keys.onEscapePressed: wallpaperWindow.active = false
+                // 🎯 Track keyboard state to block synthetic mouse events
+                property bool isKeyboardNavigating: false
+                
+                Timer {
+                    id: hoverBlockTimer
+                    // 🎯 Bumped to 400ms to comfortably outlast key-repeats and easing animations
+                    interval: 400 
+                    onTriggered: carousel.isKeyboardNavigating = false
+                }
+
+                // 🎯 Intercept keys to trigger the block
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Escape) {
+                        wallpaperWindow.active = false;
+                        event.accepted = true;
+                        return;
+                    }
+                    if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+                        isKeyboardNavigating = true;
+                        hoverBlockTimer.restart();
+                        event.accepted = false; 
+                    }
+                }
 
                 delegate: Item {
-                    id: delegateRoot // 🎯 Explicit ID for unbreakable scope mapping
+                    id: delegateRoot
                     
                     width: isFocused ? 200 : 140
                     height: carousel.height
@@ -206,7 +228,6 @@ PanelWindow {
                     property bool isFocused: ListView.isCurrentItem
                     property bool loadHeavyMedia: false 
 
-                    // 🎯 Safely defined at the root level, explicitly cast to string
                     property string pathStr: String(filePath).toLowerCase()
                     property bool isVideo: pathStr.endsWith(".mp4") || pathStr.endsWith(".webm")
                     property bool isGif: pathStr.endsWith(".gif")
@@ -234,7 +255,14 @@ PanelWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor 
                         
-                        onEntered: carousel.currentIndex = index 
+                        onEntered: {
+                            if (!carousel.isKeyboardNavigating) {
+                                carousel.currentIndex = index;
+                            }
+                        }
+                        
+                        // 🎯 REMOVED onPositionChanged! 
+                        // It was firing from animation sliding, not real human movement.
                         
                         onClicked: {
                             carousel.currentIndex = index;
@@ -271,7 +299,6 @@ PanelWindow {
 
                             Image {
                                 anchors.fill: parent
-                                // 🎯 Strict reference via delegateRoot ID
                                 source: delegateRoot.isStaticImage ? fileUrl : ""
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true 
@@ -298,7 +325,7 @@ PanelWindow {
                             }
                         }
                     }
-                }              
+                }               
             }
         }
     }
