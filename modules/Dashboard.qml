@@ -56,6 +56,8 @@ Item {
     property string mediaTitle: "Not Playing"
     property string mediaArtist: "---"
     property string mediaStatus: "Stopped"
+    property string mediaArtUrl: ""
+    
 
     property bool wifiAvailable: false
     property bool wifiActive: false
@@ -246,7 +248,8 @@ Item {
 
     Process {
         id: mediaFollower
-        command: ["playerctl", "metadata", "--follow", "--format", "{\"title\": \"{{title}}\", \"artist\": \"{{artist}}\", \"status\": \"{{status}}\"}"]
+        // Appended the artUrl parameter to the JSON output format
+        command: ["playerctl", "metadata", "--follow", "--format", "{\"title\": \"{{title}}\", \"artist\": \"{{artist}}\", \"status\": \"{{status}}\", \"artUrl\": \"{{mpris:artUrl}}\"}"]
         running: false
         stdout: SplitParser {
             onRead: (data) => {
@@ -255,10 +258,12 @@ Item {
                     dashboardRoot.mediaTitle = parsed.title || "Unknown";
                     dashboardRoot.mediaArtist = parsed.artist || "Unknown";
                     dashboardRoot.mediaStatus = parsed.status || "Stopped";
+                    dashboardRoot.mediaArtUrl = parsed.artUrl || "";
                 } catch(e) {
                     dashboardRoot.mediaTitle = "Not Playing";
                     dashboardRoot.mediaArtist = "---";
                     dashboardRoot.mediaStatus = "Stopped";
+                    dashboardRoot.mediaArtUrl = "";
                 }
             }
         }
