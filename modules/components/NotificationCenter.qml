@@ -4,28 +4,41 @@ import QtQuick.Layouts
 ColumnLayout {
     id: notifRoot
     Layout.fillWidth: true
-    // Smoothly scale the parent height based on whether notifications are present
-    Layout.preferredHeight: notifList.count <= 0 ? 104 : (notifList.count === 1 ? 104 : 176)
+    
+    // Dropped the empty-state height from 104 to 64 to match the geometry layer
+    Layout.preferredHeight: notifList.count <= 0 ? 64 : (notifList.count === 1 ? 104 : 176)
+    
     Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
     spacing: 12
 
-    // Interface to pass the notification tracking map down from DashboardPopup
     property var notificationModel: notifServer.trackedNotifications
 
     RowLayout {
         Layout.fillWidth: true
-        Text { text: "Notifications"; font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText }
+        // Hides the entire row, removing its layout footprint when empty
+        visible: notifList.count > 0 
+        
         Item { Layout.fillWidth: true } 
+        
         Item {
-            implicitWidth: clearText.width + 10; implicitHeight: 20; visible: notifList.count > 0
-            Text { id: clearText; text: "Clear all"; font.family: rootShell.shellFont; font.pixelSize: 11; anchors.centerIn: parent; color: clearMouse.containsMouse ? rootShell.colorText : rootShell.colorAccent }
+            implicitWidth: clearText.width + 10; implicitHeight: 20
+            
+            Text { 
+                id: clearText
+                text: "Clear all"
+                font.family: rootShell.shellFont
+                font.pixelSize: 11
+                anchors.centerIn: parent
+                color: clearMouse.containsMouse ? rootShell.colorText : rootShell.colorAccent 
+            }
+            
             MouseArea {
                 id: clearMouse
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                
                 onClicked: {
-                    // Loop backwards to safely clear the model entries without index displacement
                     let arr = notifRoot.notificationModel.values;
                     if (arr && arr.length > 0) {
                         for (let i = arr.length - 1; i >= 0; i--) {
