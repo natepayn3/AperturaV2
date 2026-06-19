@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import "../" // Step up to access your main modules folder
+import "../" 
 
 PanelWindow {
     id: wifiWindow
@@ -23,6 +23,14 @@ PanelWindow {
     property int hoverOriginX: 0
     property int hoverOriginY: 0
 
+    // 🛡️ Defend against shell.qml instant-close loops
+    Timer {
+        id: lockoutTimer
+        interval: 100
+        running: false
+        repeat: false
+    }
+
     MouseArea {
         anchors.fill: parent
         propagateComposedEvents: true
@@ -35,6 +43,8 @@ PanelWindow {
 
     function showWifi() { 
         if (!wifiActive) {
+            // Lock the dismissal gate for 100ms so shell.qml can't instantly kill the window
+            lockoutTimer.restart(); 
             rootShell.closeAllPopups();
             wifiActive = true; 
             showWifiAnim.restart();
@@ -43,6 +53,9 @@ PanelWindow {
     }
     
     function forceDismiss() {
+        // If the lockout timer is running, ignore rogue dismiss commands from the shell event loop
+        if (lockoutTimer.running) return; 
+        
         wifiActive = false;
         hideWifiAnim.restart();
     }
