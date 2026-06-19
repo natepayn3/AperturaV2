@@ -52,7 +52,7 @@ PanelWindow {
             return rootShell.barPosition === "left" ? 46 : 10; 
         }
         hoverOriginY: {
-            if (rootShell.barPosition === "bottom") return parent.height - 44 - innerCalendarCard.maxCardHeight;
+            if (rootShell.barPosition === "bottom") return parent.height - 46 - innerCalendarCard.maxCardHeight;
             return rootShell.barPosition === "top" ? 46 : 10; 
         }
     }
