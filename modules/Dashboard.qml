@@ -25,9 +25,6 @@ Item {
 
     Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
-    implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.round(maxCardHeight)
-
     // Explicit coordinate mapping against the fullscreen PanelWindow parent
     x: {
         if (rootShell.barPosition === "left") return 46;
