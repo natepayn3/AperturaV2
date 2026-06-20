@@ -44,41 +44,44 @@ PanelWindow {
             targetFile = filePath;
             let ext = filePath.split('.').pop().toLowerCase();
             let sockPath = "/run/user/$(id -u)/${WAYLAND_DISPLAY:-wayland-1}-awww-daemon.sock";
-            let script = "";
-
+            
+            let script = "killall -q mpvpaper; ";
+            
             if (activeOnly) {
-                // 🎯 1. TARGETED MODE: Manage surfaces per-monitor
                 script += "TARGET_MON=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name'); ";
-                
                 if (ext === "mp4" || ext === "webm") {
-                    // 🎯 Tell awww to drop ONLY the active monitor's surface, leaving the other alive
-                    script += "awww clear -o \"$TARGET_MON\" 2>/dev/null; ";
-                    // 🎯 Try to kill only the video on this monitor (falls back to killing all if it was a global video)
-                    script += "pkill -f \"mpvpaper.*$TARGET_MON\" || killall -q mpvpaper; ";
-                    script += "mpvpaper -vs -o 'loop no-audio' \"$TARGET_MON\" '" + filePath + "'";
+                    script += "awww clear -o \"$TARGET_MON\" 2>/dev/null; pkill -f \"mpvpaper.*$TARGET_MON\" || true; mpvpaper -vs -o 'loop no-audio' \"$TARGET_MON\" '" + filePath + "'; ";
                 } else {
-                    script += "pkill -f \"mpvpaper.*$TARGET_MON\" || killall -q mpvpaper; ";
-                    // 🎯 Ensure daemon is alive (in case the other monitor was a video and the daemon was dead)
-                    script += "if ! pgrep -x 'awww-daemon' > /dev/null; then rm -f " + sockPath + "; nohup awww-daemon >/dev/null 2>&1 & disown; sleep 0.3; fi; ";
-                    script += "awww img -o \"$TARGET_MON\" '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1";
+                    script += "if ! pgrep -x 'awww-daemon' > /dev/null; then rm -f " + sockPath + "; nohup awww-daemon >/dev/null 2>&1 & disown; sleep 0.5; fi; ";
+                    script += "awww img -o \"$TARGET_MON\" '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1; ";
                 }
             } else {
-                // 🎯 2. GLOBAL MODE: The nuclear option (kills everything, blankets all monitors)
                 if (ext === "mp4" || ext === "webm") {
-                    script += "killall -q mpvpaper; awww kill 2>/dev/null || killall -9 -q awww-daemon; rm -f " + sockPath + "; mpvpaper -vs -o 'loop no-audio' '*' '" + filePath + "'";
+                    script += "awww kill 2>/dev/null || killall -9 -q awww-daemon; rm -f " + sockPath + "; mpvpaper -vs -o 'loop no-audio' '*' '" + filePath + "'; ";
                 } else {
-                    script += "killall -q mpvpaper; sleep 0.2; if ! pgrep -x 'awww-daemon' > /dev/null; then rm -f " + sockPath + "; nohup awww-daemon >/dev/null 2>&1 & disown; sleep 0.3; fi; ";
-                    script += "awww img '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1";
+                    script += "if ! pgrep -x 'awww-daemon' > /dev/null; then rm -f " + sockPath + "; nohup awww-daemon >/dev/null 2>&1 & disown; sleep 0.5; fi; ";
+                    script += "awww img '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1; ";
                 }
             }
+
+            // 🎯 ROBUST MATUGEN PIPELINE
+            // 1. Ensure target directory exists before running matugen
+            // 2. Wrap strings cleanly so paths with special characters don't break bash execution
+            let outPath = rootShell.matugenFilePath;
+            script += "mkdir -p \"$(dirname '" + outPath + "')\" && ";
+            script += "matugen image '" + filePath + "' -t scheme-tonal-spot --prefer=saturation --json hex > '" + outPath + ".tmp' && ";
+            script += "mv '" + outPath + ".tmp' '" + outPath + "' && sync";
 
             command = ["bash", "-c", script];
             running = false;
             running = true;
+        }
 
-            matugenRunner.targetFile = filePath;
-            matugenRunner.running = false;
-            matugenRunner.running = true;
+        // Catch problems if the bash script fails
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                console.warn("Wallpaper/Matugen pipeline failed with exit code: " + exitCode);
+            }
         }
     }
 
