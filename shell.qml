@@ -20,52 +20,55 @@ Scope {
     readonly property var launcherRef: globalAppLauncherPreview
     readonly property var workspaceRef: globalWorkspacePreview
     readonly property var bluetoothRef: globalBluetoothPreview
-    readonly property var wallpaperRef: globalWallpaperPreview // 🎯 Added Global Alias
+    readonly property var wallpaperRef: globalWallpaperPreview 
 
-    property string barPosition: "left"
-    property string enabledDisplayStr: "0"
-    
-    property color colorBackground: "#cc11111b"
-    property color colorBorder: "#313244"
-    property color colorAccent: "#89b4fa"
+    // --- Modular Theme Provider Integration ---
+    MatugenProvider { id: themeProvider }
+
+    // Colors automatically link to the provider changes
+    property color colorBackground: themeProvider.background
+    property color colorBorder: themeProvider.border
+    property color colorAccent: themeProvider.accent
+    property string matugenFilePath: themeProvider.matugenFilePath
+
+    // Rest of your static styling strings
     property string colorText: "#cdd6f4"
     property string colorSubtext: "#a6adc8"
     property string colorClose: "#f38ba8"
+    property string shellFont: "Rubik"
 
+    // --- Window Layout & State Management ---
+    property string barPosition: "left"
+    property string enabledDisplayStr: "0"
     property string targetPosition: "left"
     property string activeLayoutOrientation: "vertical"
     property bool safeToLoad: false
-
     property string customBasePath: ""
     property string configFilePath: ""
-    property string matugenFilePath: Quickshell.env("HOME") + "/.config/quickshell/AperturaV2/matugen.json"
 
     property real verticalBarProgress: 1.0
     property real horizontalBarProgress: 0.0
-
     property real verticalFrameProgress: 1.0
     property real horizontalFrameProgress: 0.0
 
-    property string shellFont: "Rubik"
-
+    // Popup Progress Trackers
     property real previewProgress: 0.0
     property real calendarProgress: 0.0
     property real launcherProgress: 0.0
     property real bluetoothProgress: 0.0
+    property real audioProgress: 0.0
+    property real wifiProgress: 0.0
+    property real dashboardProgress: 0.0
 
     readonly property var audioRef: globalAudioPreview
-    property real audioProgress: 0.0
-
     readonly property var wifiRef: globalWifiPreview
-    property real wifiProgress: 0.0
-
     readonly property var dashboardRef: globalDashboardPreview
-    property real dashboardProgress: 0.0
 
     onBarPositionChanged: saveConfig()
     onEnabledDisplayStrChanged: saveConfig()
     onShellFontChanged: saveConfig()
 
+    // --- Window Animations ---
     SequentialAnimation {
         id: orientationAnim
         ParallelAnimation {
@@ -108,72 +111,49 @@ Scope {
         PropertyAction { target: globalWorkspacePreview; property: "targetWorkspace"; value: -1 }
     }
 
-    ParallelAnimation {
-        id: showCalendarAnim
-        NumberAnimation { target: rootShell; property: "calendarProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showCalendarAnim; NumberAnimation { target: rootShell; property: "calendarProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideCalendarAnim
         NumberAnimation { target: rootShell; property: "calendarProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalCalendarPreview; property: "calendarActive"; value: false }
     }
 
-    ParallelAnimation {
-        id: showLauncherAnim
-        NumberAnimation { target: rootShell; property: "launcherProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showLauncherAnim; NumberAnimation { target: rootShell; property: "launcherProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideLauncherAnim
         NumberAnimation { target: rootShell; property: "launcherProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalAppLauncherPreview; property: "launcherActive"; value: false }
     }
 
-    ParallelAnimation {
-        id: showBluetoothAnim
-        NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showBluetoothAnim; NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideBluetoothAnim
         NumberAnimation { target: rootShell; property: "bluetoothProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalBluetoothPreview; property: "bluetoothActive"; value: false }
     }
 
-    ParallelAnimation {
-        id: showAudioAnim
-        NumberAnimation { target: rootShell; property: "audioProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showAudioAnim; NumberAnimation { target: rootShell; property: "audioProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideAudioAnim
         NumberAnimation { target: rootShell; property: "audioProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalAudioPreview; property: "audioActive"; value: false }
     }
 
-    ParallelAnimation {
-        id: showWifiAnim
-        NumberAnimation { target: rootShell; property: "wifiProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showWifiAnim; NumberAnimation { target: rootShell; property: "wifiProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideWifiAnim
         NumberAnimation { target: rootShell; property: "wifiProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalWifiPreview; property: "wifiActive"; value: false }
     }
 
-    ParallelAnimation {
-        id: showDashboardAnim
-        NumberAnimation { target: rootShell; property: "dashboardProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
-    }
-
+    ParallelAnimation { id: showDashboardAnim; NumberAnimation { target: rootShell; property: "dashboardProgress"; to: 1.0; duration: 220; easing.type: Easing.OutCubic } }
     ParallelAnimation {
         id: hideDashboardAnim
         NumberAnimation { target: rootShell; property: "dashboardProgress"; to: 0.0; duration: 350; easing.type: Easing.InQuad }
         PropertyAction { target: globalDashboardPreview; property: "dashboardActive"; value: false }
     }
 
+    // --- Control Functions ---
     function triggerOrientationChange(newEdge) {
         if (barPosition === newEdge) return;
         targetPosition = newEdge;
@@ -186,7 +166,7 @@ Scope {
         if (globalAudioPreview.audioActive) globalAudioPreview.forceDismiss();
         if (globalWifiPreview.wifiActive) globalWifiPreview.forceDismiss();
         if (globalDashboardPreview.dashboardActive) globalDashboardPreview.forceDismiss();
-        if (globalWallpaperPreview.active) globalWallpaperPreview.active = false; // 🎯 Clean closing
+        if (globalWallpaperPreview.active) globalWallpaperPreview.active = false; 
     }
 
     function isDisplayEnabled(idx) {
@@ -227,43 +207,16 @@ Scope {
                 targetPosition = parsed.position; 
                 activeLayoutOrientation = (parsed.position === "left" || parsed.position === "right") ? "vertical" : "horizontal";
                 if (activeLayoutOrientation === "vertical") {
-                    verticalBarProgress = 1.0
-                    verticalFrameProgress = 1.0
-                    horizontalBarProgress = 0.0
-                    horizontalFrameProgress = 0.0
+                    verticalBarProgress = 1.0; verticalFrameProgress = 1.0;
+                    horizontalBarProgress = 0.0; horizontalFrameProgress = 0.0;
                 } else {
-                    verticalBarProgress = 0.0
-                    verticalFrameProgress = 0.0
-                    horizontalBarProgress = 1.0
-                    horizontalFrameProgress = 1.0
+                    verticalBarProgress = 0.0; verticalFrameProgress = 0.0;
+                    horizontalBarProgress = 1.0; horizontalFrameProgress = 1.0;
                 }
             }
             if (parsed.enabledDisplays !== undefined) enabledDisplayStr = parsed.enabledDisplays;
             if (parsed.font !== undefined) shellFont = parsed.font;
         } catch (e) {}
-    }
-
-    function parseMatugen(jsonString) {
-        if (!jsonString || jsonString.trim() === "") return;
-
-        try {
-            let data = JSON.parse(jsonString);
-            
-            if (data && data.colors) {
-                let c = data.colors;
-                
-                let rawBg = c.background && c.background.dark ? c.background.dark.color.replace("#", "") : "11111b";
-                let rawBorder = c.outline && c.outline.dark ? c.outline.dark.color.replace("#", "") : "313244";
-                let rawAccent = c.primary && c.primary.dark ? c.primary.dark.color.replace("#", "") : "89b4fa";
-                
-                // 🎯 Explicitly using Qt.color() ensures the binding engine recognizes the change instantly
-                colorBackground = Qt.color("#cc" + rawBg);
-                colorBorder     = Qt.color("#" + rawBorder);
-                colorAccent     = Qt.color("#" + rawAccent);
-            }
-        } catch(e) {
-            // Quietly catch parsing errors
-        }
     }
 
     Process {
@@ -272,36 +225,20 @@ Scope {
         stdout: StdioCollector { onTextChanged: { parseConfig(text); rootShell.safeToLoad = true; } }
     }
 
-    Process {
-        id: saveConfigProc
-        running: false
-    }
+    Process { id: saveConfigProc; running: false }
 
     Component.onCompleted: {
         const localUri = Qt.resolvedUrl(".").toString();
         rootShell.customBasePath = localUri.replace("file://", "").trim();
         rootShell.configFilePath = rootShell.customBasePath + "/shell_settings.json";
-        rootShell.matugenFilePath = rootShell.customBasePath + "/matugen.json";
         
         startupConfigLoader.command = ["cat", rootShell.configFilePath]; 
         startupConfigLoader.running = true;
-        
-        // Boot load: Feed the initial state right into the parser
-        readMatugenProc.command = ["cat", rootShell.matugenFilePath]; 
-        readMatugenProc.running = true;
-    }
-
-    Process { 
-        id: readMatugenProc
-        running: false
-        property string output: ""
-        stdout: StdioCollector { onTextChanged: { readMatugenProc.output = text; parseMatugen(text); } }
     }
 
     // --- Core Engine Window State Cross-Trackers ---
     Connections {
-        target: settingsAppInstance
-        ignoreUnknownSignals: true
+        target: settingsAppInstance; ignoreUnknownSignals: true
         function onWindowVisibleChanged() {
             if (settingsAppInstance.windowVisible) {
                 if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
@@ -311,8 +248,7 @@ Scope {
     }
 
     Connections {
-        target: globalAppLauncherPreview
-        ignoreUnknownSignals: true
+        target: globalAppLauncherPreview; ignoreUnknownSignals: true
         function onActiveChanged() {
             if (globalAppLauncherPreview.active) {
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
@@ -322,8 +258,7 @@ Scope {
     }
 
     Connections {
-        target: globalWifiPreview
-        ignoreUnknownSignals: true
+        target: globalWifiPreview; ignoreUnknownSignals: true
         function onWifiActiveChanged() {
             if (globalWifiPreview.wifiActive) {
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
@@ -334,144 +269,39 @@ Scope {
     }
 
     // --- Input Processing Interfaces ---
-    IpcHandler {
-        target: "settings"
-        function toggle(): void {
-            if (settingsAppInstance) {
-                settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible;
-            }
-        }
-    }
-    
-    IpcHandler {
-        target: "launcher"
-        function toggle(): void {
-            if (globalAppLauncherPreview) {
-                globalAppLauncherPreview.active = !globalAppLauncherPreview.active;
-            }
-        }
-    }
-
-    IpcHandler {
-        target: "audio"
-        function updateVolume(): void {
-            if (globalAudioPreview && globalAudioPreview.cardRef) {
-                globalAudioPreview.cardRef.showOsd();
-            }
-        }
-    }
-
-    // 🎯 Added Wallpaper IPC Hook
-    IpcHandler {
-        target: "wallpaper"
-        function toggle(): void {
-            if (globalWallpaperPreview) {
-                globalWallpaperPreview.active = !globalWallpaperPreview.active;
-            }
-        }
-    }
+    IpcHandler { target: "settings"; function toggle(): void { if (settingsAppInstance) settingsAppInstance.windowVisible = !settingsAppInstance.windowVisible; } }
+    IpcHandler { target: "launcher"; function toggle(): void { if (globalAppLauncherPreview) globalAppLauncherPreview.active = !globalAppLauncherPreview.active; } }
+    IpcHandler { target: "audio"; function updateVolume(): void { if (globalAudioPreview && globalAudioPreview.cardRef) globalAudioPreview.cardRef.showOsd(); } }
+    IpcHandler { target: "wallpaper"; function toggle(): void { if (globalWallpaperPreview) globalWallpaperPreview.active = !globalWallpaperPreview.active; } }
 
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
-    Timer { 
-        id: clockTimer
-        interval: 1000
-        running: true
-        repeat: true
-        property var currentTime: new Date()
-        onTriggered: currentTime = new Date() 
-    }
+    Timer { id: clockTimer; interval: 1000; running: true; repeat: true; property var currentTime: new Date(); onTriggered: currentTime = new Date() }
 
-    Timer {
-        id: calendarDismissTimer
-        interval: 150
-        running: false
-        repeat: false
-        onTriggered: {
-            if (globalCalendarPreview.cardRef && !globalCalendarPreview.cardRef.isHovered) {
-                hideCalendarAnim.restart();
-            }
-        }
-    }
-
-    Timer {
-        id: bluetoothDismissTimer
-        interval: 150
-        running: false
-        repeat: false
-        onTriggered: {
-            if (globalBluetoothPreview.cardRef && !globalBluetoothPreview.cardRef.isHovered) {
-                hideBluetoothAnim.restart();
-            }
-        }
-    }
-
-    Timer {
-        id: audioDismissTimer
-        interval: 150
-        running: false
-        repeat: false
-        onTriggered: {
-            if (globalAudioPreview.cardRef && !globalAudioPreview.cardRef.isHovered) {
-                hideAudioAnim.restart();
-            }
-        }
-    }
+    // --- Dismiss Timers ---
+    Timer { id: calendarDismissTimer; interval: 150; running: false; repeat: false; onTriggered: if (globalCalendarPreview.cardRef && !globalCalendarPreview.cardRef.isHovered) hideCalendarAnim.restart() }
+    Timer { id: bluetoothDismissTimer; interval: 150; running: false; repeat: false; onTriggered: if (globalBluetoothPreview.cardRef && !globalBluetoothPreview.cardRef.isHovered) hideBluetoothAnim.restart() }
+    Timer { id: audioDismissTimer; interval: 150; running: false; repeat: false; onTriggered: if (globalAudioPreview.cardRef && !globalAudioPreview.cardRef.isHovered) hideAudioAnim.restart() }
+    Timer { id: dashboardDismissTimer; interval: 200; running: false; repeat: false; onTriggered: if (globalDashboardPreview.cardRef && !globalDashboardPreview.cardRef.isHovered) globalDashboardPreview.forceDismiss() }
 
     property int hoveredIndicatorWorkspace: -1
-
     Timer {
-        id: previewDebounceTimer
-        interval: 50
-        running: false
-        repeat: false
-        property int pendingWorkspace: -1
-        onTriggered: {
-            if (pendingWorkspace !== -1 && globalWorkspacePreview.cardRef) {
-                globalWorkspacePreview.cardRef.targetWorkspace = pendingWorkspace;
-            }
-        }
+        id: previewDebounceTimer; interval: 50; running: false; repeat: false; property int pendingWorkspace: -1
+        onTriggered: if (pendingWorkspace !== -1 && globalWorkspacePreview.cardRef) globalWorkspacePreview.cardRef.targetWorkspace = pendingWorkspace
     }
+    Timer { id: dismissTimer; interval: 100; running: false; repeat: false; onTriggered: { hoveredIndicatorWorkspace = -1; globalWorkspacePreview.targetWorkspace = -1; } }
 
-    Timer {
-        id: dismissTimer
-        interval: 100
-        running: false
-        repeat: false
-        onTriggered: {
-            hoveredIndicatorWorkspace = -1;
-            globalWorkspacePreview.targetWorkspace = -1;
-        }
-    }
+    function startDashboardDismissTimer() { dashboardDismissTimer.restart(); }
 
-    Timer {
-        id: dashboardDismissTimer
-        interval: 200
-        running: false
-        repeat: false
-        onTriggered: {
-            if (globalDashboardPreview.cardRef && !globalDashboardPreview.cardRef.isHovered) {
-                globalDashboardPreview.forceDismiss();
-            }
-        }
-    }
-
-    function startDashboardDismissTimer() {
-        dashboardDismissTimer.restart();
-    }
-
-    // --- Window Module Trigger Handlers mapped via Connections ---
+    // --- Window Module Trigger Handlers via Connections ---
     Connections {
         target: globalWorkspacePreview; ignoreUnknownSignals: true
         function onWorkspaceTargetChanged(ws, screenObj) {
             dismissTimer.stop();
             if (screenObj) globalWorkspacePreview.targetScreen = screenObj;
             hoveredIndicatorWorkspace = ws;
-            
             if (globalWorkspacePreview.cardRef && ws !== globalWorkspacePreview.cardRef.targetWorkspace) {
-                previewDebounceTimer.stop();
-                previewDebounceTimer.pendingWorkspace = ws;
-                previewDebounceTimer.restart();
+                previewDebounceTimer.stop(); previewDebounceTimer.pendingWorkspace = ws; previewDebounceTimer.restart();
             }
             showPreviewAnim.restart();
         }
@@ -486,7 +316,6 @@ Scope {
             if (!globalCalendarPreview.calendarActive) {
                 if (globalAppLauncherPreview.active) globalAppLauncherPreview.active = false;
                 if (settingsAppInstance.windowVisible) settingsAppInstance.windowVisible = false;
-                
                 rootShell.closeAllPopups();
                 globalCalendarPreview.calendarActive = true;
                 showCalendarAnim.restart();
@@ -500,10 +329,8 @@ Scope {
         target: globalDashboardPreview; ignoreUnknownSignals: true
         function onDashboardShowRequested() {
             if (!globalDashboardPreview.dashboardActive) {
-                rootShell.closeAllPopups();
-                dashboardDismissTimer.stop();
-                globalDashboardPreview.dashboardActive = true;
-                showDashboardAnim.restart();
+                rootShell.closeAllPopups(); dashboardDismissTimer.stop();
+                globalDashboardPreview.dashboardActive = true; showDashboardAnim.restart();
             }
         }
         function onDismissRequested() { dashboardDismissTimer.restart(); }
@@ -514,10 +341,8 @@ Scope {
         target: globalAudioPreview; ignoreUnknownSignals: true
         function onAudioShowRequested() {
             if (!globalAudioPreview.audioActive) {
-                rootShell.closeAllPopups();
-                audioDismissTimer.stop();
-                globalAudioPreview.audioActive = true;
-                showAudioAnim.restart();
+                rootShell.closeAllPopups(); audioDismissTimer.stop();
+                globalAudioPreview.audioActive = true; showAudioAnim.restart();
                 if (globalAudioPreview.cardRef) globalAudioPreview.cardRef.forceActiveFocus();
             }
         }
@@ -529,10 +354,8 @@ Scope {
         target: globalBluetoothPreview; ignoreUnknownSignals: true
         function onBluetoothShowRequested() {
             if (!globalBluetoothPreview.bluetoothActive) {
-                rootShell.closeAllPopups();
-                bluetoothDismissTimer.stop();
-                globalBluetoothPreview.bluetoothActive = true;
-                showBluetoothAnim.restart();
+                rootShell.closeAllPopups(); bluetoothDismissTimer.stop();
+                globalBluetoothPreview.bluetoothActive = true; showBluetoothAnim.restart();
                 if (globalBluetoothPreview.cardRef) globalBluetoothPreview.cardRef.forceActiveFocus();
             }
         }
@@ -545,8 +368,7 @@ Scope {
         function onWifiShowRequested() {
             if (!globalWifiPreview.wifiActive) {
                 rootShell.closeAllPopups();
-                globalWifiPreview.wifiActive = true;
-                showWifiAnim.restart();
+                globalWifiPreview.wifiActive = true; showWifiAnim.restart();
                 if (globalWifiPreview.cardRef) globalWifiPreview.cardRef.forceActiveFocus();
             }
         }
@@ -560,50 +382,29 @@ Scope {
     AudioWindow     { id: globalAudioPreview; rootShell: rootShell }
     BluetoothWindow { id: globalBluetoothPreview; rootShell: rootShell }
     WifiWindow      { id: globalWifiPreview; rootShell: rootShell }
-    WallpaperWindow { id: globalWallpaperPreview; rootShell: rootShell } // 🎯 Instantiation Node Attached
+    WallpaperWindow { id: globalWallpaperPreview; rootShell: rootShell } 
 
     // --- Dynamic Instantiators using Unified Modules ---
-    Item {
-        id: globalCtx
-        property var ref: rootShell
-    }
+    Item { id: globalCtx; property var ref: rootShell }
 
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: VerticalBar { 
-            targetScreen: modelData; edge: "left"; rootShell: globalCtx.ref
-            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "left" && globalCtx.ref.verticalBarProgress > 0.0 
-        } 
+        delegate: VerticalBar { targetScreen: modelData; edge: "left"; rootShell: globalCtx.ref; visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "left" && globalCtx.ref.verticalBarProgress > 0.0 } 
     }
-    
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: VerticalBar { 
-            targetScreen: modelData; edge: "right"; rootShell: globalCtx.ref
-            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "right" && globalCtx.ref.verticalBarProgress > 0.0 
-        } 
+        delegate: VerticalBar { targetScreen: modelData; edge: "right"; rootShell: globalCtx.ref; visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "right" && globalCtx.ref.verticalBarProgress > 0.0 } 
     }
-    
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: HorizontalBar { 
-            targetScreen: modelData; edge: "top"; rootShell: globalCtx.ref
-            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "top" && globalCtx.ref.horizontalBarProgress > 0.0 
-        } 
+        delegate: HorizontalBar { targetScreen: modelData; edge: "top"; rootShell: globalCtx.ref; visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "top" && globalCtx.ref.horizontalBarProgress > 0.0 } 
     }
-    
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: HorizontalBar { 
-            targetScreen: modelData; edge: "bottom"; rootShell: globalCtx.ref
-            visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "bottom" && globalCtx.ref.horizontalBarProgress > 0.0 
-        } 
+        delegate: HorizontalBar { targetScreen: modelData; edge: "bottom"; rootShell: globalCtx.ref; visible: globalCtx.ref.isDisplayEnabled(index) && globalCtx.ref.barPosition === "bottom" && globalCtx.ref.horizontalBarProgress > 0.0 } 
     }
-
     Instantiator { 
         model: rootShell.safeToLoad ? Quickshell.screens : null
-        delegate: ScreenEdgeFrame { 
-            targetScreen: modelData; parentIndex: index; rootShell: globalCtx.ref 
-        } 
+        delegate: ScreenEdgeFrame { targetScreen: modelData; parentIndex: index; rootShell: globalCtx.ref } 
     }
 }
