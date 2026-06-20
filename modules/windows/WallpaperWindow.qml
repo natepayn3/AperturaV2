@@ -97,17 +97,84 @@ PanelWindow {
         anchors.bottomMargin: 80
         height: 450 
 
+        // 🎯 --- NEW: HOVER SCROLL LOGIC ---
+        Timer {
+            id: hoverScrollTimer
+            interval: 150 
+            repeat: true
+            property int direction: 0 // -1 for left, 1 for right
+
+            onTriggered: {
+                // If keyboard is used while hovering, yield to the keyboard and stop scrolling
+                if (carousel.isKeyboarding) {
+                    stop();
+                    return;
+                }
+                
+                if (direction === -1) {
+                    carousel.currentIndex = Math.max(0, carousel.currentIndex - 1);
+                } else if (direction === 1) {
+                    carousel.currentIndex = Math.min(carousel.count - 1, carousel.currentIndex + 1);
+                }
+            }
+        }
+
+        // 🎯 Left Edge Trigger Zone
+        Item {
+            anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+            width: 300 // Adjust this to make the trigger area wider/narrower
+            z: 20 // Sits above the list visually, but HoverHandler lets clicks pass through
+
+            HoverHandler {
+                onHoveredChanged: {
+                    if (hovered && !carousel.isKeyboarding) {
+                        hoverScrollTimer.direction = -1;
+                        hoverScrollTimer.start();
+                    } else if (hoverScrollTimer.direction === -1) {
+                        hoverScrollTimer.stop();
+                    }
+                }
+            }
+        }
+
+        // 🎯 Right Edge Trigger Zone
+        Item {
+            anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
+            width: 300 
+            z: 20
+
+            HoverHandler {
+                onHoveredChanged: {
+                    if (hovered && !carousel.isKeyboarding) {
+                        hoverScrollTimer.direction = 1;
+                        hoverScrollTimer.start();
+                    } else if (hoverScrollTimer.direction === 1) {
+                        hoverScrollTimer.stop();
+                    }
+                }
+            }
+        }
+        // 🎯 --- END NEW LOGIC ---
+
         ListView {
             id: carousel
             anchors.centerIn: parent
+            
+            // 🎯 Shrunk from the edges so nothing touches the monitor bezels
             width: parent.width - 400
             height: parent.height
+            
+            // 🎯 MUST be false. We use opacity math below to hide cards, preventing ugly mid-pixel cuts
             clip: false 
+            
             orientation: ListView.Horizontal
             property real cardSkew: 35
             spacing: -cardSkew + 5 
+
+            // 🎯 Prevents QML from destroying delegates when they are pushed off-screen
             cacheBuffer: 3000
 
+            // 🎯 Allows the active item to perfectly rest in the center
             leftMargin: width / 2 - 90
             rightMargin: width / 2 - 90
 
@@ -120,34 +187,37 @@ PanelWindow {
             highlightRangeMode: ListView.StrictlyEnforceRange
             highlightMoveDuration: 200
 
+            // 🎯 --- 1. THE ENTER/SPACE FIX ---
             property string currentFilePath: ""
+            
             Keys.onReturnPressed: (event) => wallpaperBackend.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
             Keys.onSpacePressed: (event) => wallpaperBackend.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
             Keys.onEscapePressed: wallpaperWindow.active = false
 
-            // 🎯 --- THE PHYSICAL MOUSE TRACKER ---
-            // Replaced the timer with strict boolean and global coordinate trackers
-            property bool isKeyboarding: false
-            property real lastMouseX: 0
-            property real lastMouseY: 0
-            
+            // 🎯 --- 2. THE KEYBOARD LOCK FIX ---
+            property bool isKeyboarding: keyLockTimer.running
             property int hoveredIndex: -1
             property int activeIndex: (!isKeyboarding && hoveredIndex !== -1) ? hoveredIndex : currentIndex
 
+            Timer {
+                id: keyLockTimer
+                interval: 1000 // 🎯 Mouse is completely ignored for 1 second after any keystroke
+            }
+
             Keys.onLeftPressed: {
-                carousel.isKeyboarding = true;
+                keyLockTimer.restart();
                 carousel.hoveredIndex = -1; 
                 if (currentIndex > 0) currentIndex--;
             }
             Keys.onRightPressed: {
-                carousel.isKeyboarding = true;
+                keyLockTimer.restart();
                 carousel.hoveredIndex = -1; 
                 if (currentIndex < count - 1) currentIndex++;
             }
 
             WheelHandler {
                 onWheel: (event) => {
-                    carousel.isKeyboarding = false; // Using the wheel naturally restores the mouse
+                    keyLockTimer.stop(); // Scrolling restores mouse access
                     if (event.angleDelta.y > 0 || event.angleDelta.x > 0) {
                         carousel.currentIndex = Math.max(0, carousel.currentIndex - 1);
                     } else if (event.angleDelta.y < 0 || event.angleDelta.x < 0) {
@@ -167,9 +237,11 @@ PanelWindow {
                 property bool isFocused: ListView.isCurrentItem
                 property bool isActiveTarget: carousel.activeIndex === index
                 
+                // 🎯 Dynamically updates the global variable so the Space/Enter keys know what to execute
                 onIsFocusedChanged: if (isFocused) carousel.currentFilePath = filePath;
                 Component.onCompleted: if (isFocused) carousel.currentFilePath = filePath;
                 
+                // 🎯 The Coverflow Push: Siblings slide gracefully out of the way
                 property real targetXShift: {
                     if (index < carousel.activeIndex) return -(carousel.extraWidth / 2);
                     if (index > carousel.activeIndex) return (carousel.extraWidth / 2);
@@ -177,6 +249,7 @@ PanelWindow {
                 }
 
                 Behavior on targetXShift { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                
                 z: isActiveTarget ? 10 : 1 
 
                 property string pathStr: String(filePath).toLowerCase()
@@ -199,6 +272,8 @@ PanelWindow {
                 Item {
                     id: visualContainer
                     anchors.verticalCenter: parent.verticalCenter
+                    
+                    // 🎯 Centers the expanded wrapper over the root, then adds the dynamic shift
                     x: (delegateRoot.width - width) / 2 + delegateRoot.targetXShift
                     height: parent.height * 0.85 
                     
@@ -208,8 +283,12 @@ PanelWindow {
                     scale: delegateRoot.isActiveTarget ? 1.05 : 0.95
                     Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
 
+                    // 🎯 --- 3. THE GEOMETRIC EDGE CLIPPING FIX ---
+                    // Tracks exactly where the visual boundaries of this specific card are 
                     property real relX: delegateRoot.x - carousel.contentX
                     property real visualX: relX + x
+                    
+                    // Fades to 0 opacity if the card's physical pixels hang outside the carousel bounds
                     property bool isFullyVisible: visualX >= -5 && (visualX + width) <= (carousel.width + 5)
                     
                     opacity: isFullyVisible ? 1.0 : 0.0
@@ -218,29 +297,9 @@ PanelWindow {
 
                     MouseArea {
                         anchors.fill: parent
-                        hoverEnabled: true
+                        // 🎯 If the keyboard is locking navigation, disable the hitboxes completely
+                        hoverEnabled: !carousel.isKeyboarding
                         cursorShape: carousel.isKeyboarding ? Qt.BlankCursor : Qt.PointingHandCursor 
-                        
-                        // 🎯 Tracks actual physical device movement instead of UI layout shifts
-                        onPositionChanged: (mouse) => {
-                            // Map local coordinate to the absolute global window
-                            let globalPos = mapToItem(null, mouse.x, mouse.y);
-                            
-                            // Check if the physical mouse moved more than 2 pixels (avoids rounding errors)
-                            let dx = Math.abs(globalPos.x - carousel.lastMouseX);
-                            let dy = Math.abs(globalPos.y - carousel.lastMouseY);
-
-                            if (dx > 2 || dy > 2) {
-                                carousel.isKeyboarding = false; 
-                            }
-
-                            carousel.lastMouseX = globalPos.x;
-                            carousel.lastMouseY = globalPos.y;
-
-                            if (!carousel.isKeyboarding && carousel.hoveredIndex !== index) {
-                                carousel.hoveredIndex = index;
-                            }
-                        }
                         
                         onEntered: if (!carousel.isKeyboarding) carousel.hoveredIndex = index;
                         onExited: if (carousel.hoveredIndex === index) carousel.hoveredIndex = -1;
