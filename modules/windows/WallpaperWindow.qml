@@ -11,8 +11,14 @@ import Quickshell.Io
 PanelWindow {
     id: wallpaperWindow
 
+    
+
     property bool active: false
     required property var rootShell
+
+    // 🎯 THE RELIABLE ROOT SCOPE PROPERTIES
+    property string currentWallpaperPath: ""
+    property string currentScheme: "scheme-tonal-spot"
 
     WlrLayershell.namespace: "quickshell-wallpaper"
     WlrLayershell.layer: WlrLayer.Top
@@ -38,10 +44,9 @@ PanelWindow {
     Process {
         id: wallpaperBackend
         running: false
-        property string targetFile: ""
 
-        function apply(filePath, activeOnly = false) {
-            targetFile = filePath;
+        // Move the core script generation inside a clean root-accessible function
+        function triggerBackendRun(filePath, activeOnly) {
             let ext = filePath.split('.').pop().toLowerCase();
             let sockPath = "/run/user/$(id -u)/${WAYLAND_DISPLAY:-wayland-1}-awww-daemon.sock";
             
@@ -64,25 +69,31 @@ PanelWindow {
                 }
             }
 
-            // 🎯 ROBUST MATUGEN PIPELINE
-            // 1. Ensure target directory exists before running matugen
-            // 2. Wrap strings cleanly so paths with special characters don't break bash execution
+            let matugenTarget = (ext === "mp4" || ext === "webm") 
+                ? (Quickshell.env("HOME") + "/.cache/quickshell_thumbs/" + filePath.split('/').pop() + ".jpg") 
+                : filePath;
+
             let outPath = rootShell.matugenFilePath;
             script += "mkdir -p \"$(dirname '" + outPath + "')\" && ";
-            script += "matugen image '" + filePath + "' -t scheme-tonal-spot --prefer=saturation --json hex > '" + outPath + ".tmp' && ";
+            script += "matugen image '" + matugenTarget + "' -t " + wallpaperWindow.currentScheme + " --prefer=saturation --json hex > '" + outPath + ".tmp' && ";
             script += "mv '" + outPath + ".tmp' '" + outPath + "' && sync";
 
             command = ["bash", "-c", script];
             running = false;
             running = true;
         }
+    }
 
-        // Catch problems if the bash script fails
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                console.warn("Wallpaper/Matugen pipeline failed with exit code: " + exitCode);
-            }
+    function apply(filePath, activeOnly = false, customScheme = "") {
+        if (filePath && filePath !== "") currentWallpaperPath = filePath;
+        if (customScheme !== "") currentScheme = customScheme;
+        
+        // Fallback to carousel's active selection if an explicit file wasn't provided
+        if (!currentWallpaperPath || currentWallpaperPath === "") {
+            currentWallpaperPath = carousel.currentFilePath;
         }
+
+        wallpaperBackend.triggerBackendRun(currentWallpaperPath, activeOnly);
     }
 
     Process {
@@ -183,8 +194,8 @@ PanelWindow {
             highlightMoveDuration: 200
 
             property string currentFilePath: ""
-            Keys.onReturnPressed: (event) => wallpaperBackend.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
-            Keys.onSpacePressed: (event) => wallpaperBackend.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
+            Keys.onReturnPressed: wallpaperWindow.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
+            Keys.onSpacePressed: wallpaperWindow.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
             Keys.onEscapePressed: wallpaperWindow.active = false
 
             // 🎯 --- THE PHYSICAL MOUSE TRACKER ---
@@ -307,7 +318,7 @@ PanelWindow {
                         onEntered: if (!carousel.isKeyboarding) carousel.hoveredIndex = index;
                         onExited: if (carousel.hoveredIndex === index) carousel.hoveredIndex = -1;
                         
-                        onClicked: (mouse) => wallpaperBackend.apply(filePath, mouse.modifiers & Qt.ControlModifier)
+                        onClicked: (mouse) => wallpaperWindow.apply(filePath, mouse.modifiers & Qt.ControlModifier)
                     }
                     
                     Item {
