@@ -5,6 +5,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import "components"
 
 Item {
     id: audioRoot
@@ -12,7 +13,7 @@ Item {
     property string namespace: "quickshell-audio-popup"
     property bool active: false
     
-    property bool isHovered: popupHoverArea.containsMouse || contentHoverHandler.hovered
+    property bool isHovered: animatedGroup.isHovered || contentHoverHandler.hovered
     
     property int hoverOriginX: 0
     property int hoverOriginY: 0
@@ -40,7 +41,7 @@ Item {
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46; 
+            case "bottom": return Screen.height - height - 46;
             case "top":    return 46;                             
             case "left":   return Screen.height - height - 10        
             case "right":  return Screen.height - height - 10;
@@ -56,15 +57,11 @@ Item {
 
     ListModel { id: sinkModel }
 
-    // --- Active State Timers ---
-    
-    // Dedicated timer for the bottom-center hardware overlay
     Timer {
         id: hardwareOsdTimer
         interval: 1000 
     }
 
-    // Trigger graph rebuilds whenever the interactive menu is opened
     onActiveChanged: {
         if (active) {
             fetchSinksProc.running = false;
@@ -72,11 +69,8 @@ Item {
         }
     }
 
-    // --- Core Audio Processes (Event-Driven Streams) ---
-    
     Process {
         id: audioEventStream
-        // Taps directly into native pipewire monitoring events, bypassing pactl entirely
         command: [
             "sh", "-c",
             "pw-mon | stdbuf -oL grep --line-buffered -E \"changed|sinks\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
@@ -91,14 +85,11 @@ Item {
                 let isNowMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
                 let volVal = parseFloat(parts[1]);
-
                 if (!isNaN(volVal) && !mainSlider.pressed && !toggleMuteProc.running) {
                     if (Math.abs(audioRoot.currentVolume - volVal) > 0.001 || audioRoot.isMuted !== isNowMuted) {
                         audioRoot.currentVolume = volVal;
                         audioRoot.isMuted = isNowMuted;
 
-                        // FIX: If it's the first time seeing the volume, initialize lastSeenVolume 
-                        // and still fire the OSD timer so it pops up immediately.
                         if (!audioRoot.active) {
                             hardwareOsdTimer.restart();
                         }
@@ -118,19 +109,14 @@ Item {
     Process {
         id: setVolumeProc
         running: false
-        
         property real pendingVolume: 0.0
 
         function setVol(volVal) {
             pendingVolume = volVal;
-            
             if (audioRoot.isMuted) {
                 unmuteProc.running = true;
                 audioRoot.isMuted = false;
-                
-                Qt.callLater(() => {
-                    executeVolumeSet(pendingVolume);
-                });
+                Qt.callLater(() => { executeVolumeSet(pendingVolume); });
             } else {
                 executeVolumeSet(volVal);
             }
@@ -163,7 +149,6 @@ Item {
 
                 for (let i = 0; i < lines.length; i++) {
                     let line = lines[i];
-
                     if (line.includes("Sinks:")) { parsingSinks = true; continue; }
                     if (parsingSinks && (line.includes("Sources:") || line.includes("Filters:") || line.includes("Streams:"))) { parsingSinks = false; }
 
@@ -189,30 +174,25 @@ Item {
     }
     
     Process { 
-    id: setDefaultSinkProc
-    running: false 
-    
-    function switchSink(sinkId) {
-        // 1. Optimistically update the UI for instant visual feedback
-        for (let i = 0; i < sinkModel.count; i++) {
-            let item = sinkModel.get(i);
-            item.isDefault = (item.sinkId === sinkId);
-            sinkModel.set(i, item);
+        id: setDefaultSinkProc
+        running: false 
+        
+        function switchSink(sinkId) {
+            for (let i = 0; i < sinkModel.count; i++) {
+                let item = sinkModel.get(i);
+                item.isDefault = (item.sinkId === sinkId);
+                sinkModel.set(i, item);
+            }
+            
+            command = ["wpctl", "set-default", sinkId];
+            running = true;
+            
+            Qt.callLater(() => {
+                bootstrapVolume.running = false;
+                bootstrapVolume.running = true;
+            });
         }
-        
-        // 2. Send the actual command to WirePlumber
-        command = ["wpctl", "set-default", sinkId];
-        running = true;
-        
-        // 3. Dropped the fetchSinksProc call to kill the race condition.
-        // Instead, explicitly trigger a volume check so the main slider 
-        // instantly snaps to reflect the newly selected sink's volume level.
-        Qt.callLater(() => {
-            bootstrapVolume.running = false;
-            bootstrapVolume.running = true;
-        });
     }
-}
 
     Process {
         id: bootstrapVolume
@@ -235,187 +215,23 @@ Item {
         bootstrapVolume.running = true;
     }
 
-    // --- Visual Control Panel Component Layout ---
-    Item {
+    AnimatedCard {
         id: animatedGroup
         anchors.fill: parent
-
-        transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.BottomLeft
-            if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopRight
-            if (rootShell.barPosition === "bottom") return Item.BottomRight
-            return Item.Center
-        }
-
-        opacity: audioRoot.active ? 1.0 : 0.0
-        scale: audioRoot.active ? 1.0 : 0.0
-        x: audioRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
-        y: audioRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
         
-        visible: opacity > 0.01
-
-        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
-        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-
-        Rectangle {
-            id: cardMainBody
-            anchors.fill: parent
-            color: rootShell.colorBackground
-            z: 2
-            border.width: 0
-
-            topLeftRadius:     getCornerRadius("topLeft")
-            topRightRadius:    getCornerRadius("topRight")
-            bottomLeftRadius:  getCornerRadius("bottomLeft")
-            bottomRightRadius: getCornerRadius("bottomRight")
-
-            function getCornerRadius(corner) {
-                let pos = rootShell.barPosition;
-                let rad = audioRoot.radiusValue;
-
-                if (pos === "top") return (corner === "bottomLeft") ? rad : 0;
-                if (pos === "bottom") return (corner === "topLeft") ? rad : 0;
-                if (pos === "left") return (corner === "topRight") ? rad : 0;
-                if (pos === "right") return (corner === "topLeft") ? rad : 0;
-                return rad;
-            }
-        }
-
-        Item {
-            anchors.fill: parent
-            visible: audioRoot.width > 30
-            z: 2 
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "left"
-                
-                Shape {
-                    x: 0; y: -audioRoot.wingSize
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: audioRoot.wingSize
-                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: audioRoot.wingSize }
-                        PathLine { x: 0; y: audioRoot.wingSize }
-                    }
-                }
-                
-                Shape {
-                    rotation: -90
-                    transformOrigin: Item.TopLeft
-                    x: parent.width; y: parent.height
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: audioRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: audioRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "right"
-
-                Shape {
-                    x: parent.width - audioRoot.wingSize; y: -audioRoot.wingSize
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: audioRoot.wingSize; startY: audioRoot.wingSize
-                        PathLine { x: 0; y: audioRoot.wingSize }
-                        PathQuad { x: audioRoot.wingSize; y: 0; controlX: audioRoot.wingSize; controlY: audioRoot.wingSize }
-                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
-                    }
-                }
-
-                Shape {
-                    rotation: 90
-                    transformOrigin: Item.TopRight
-                    x: 0 - audioRoot.wingSize; y: parent.height
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: audioRoot.wingSize; startY: 0
-                        PathLine { x: 0; y: 0 }
-                        PathQuad { x: audioRoot.wingSize; y: audioRoot.wingSize; controlX: audioRoot.wingSize; controlY: 0 }
-                        PathLine { x: audioRoot.wingSize; y: 0 }
-                    }
-                }
-            }
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "top"
-
-                Shape {
-                    x: -audioRoot.wingSize; y: 0
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: audioRoot.wingSize; startY: 0
-                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: audioRoot.wingSize; controlY: 0 }
-                        PathLine { x: audioRoot.wingSize; y: 0 }
-                    }
-                }
-                
-                Shape {
-                    x: parent.width - audioRoot.wingSize; y: parent.height
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: audioRoot.wingSize; startY: 0
-                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: audioRoot.wingSize; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "bottom" 
-                
-                Shape {
-                    x: parent.width - audioRoot.wingSize; y: -audioRoot.wingSize
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: audioRoot.wingSize; startY: audioRoot.wingSize
-                        PathLine { x: 0; y: audioRoot.wingSize }
-                        PathQuad { x: audioRoot.wingSize; y: 0; controlX: audioRoot.wingSize; controlY: audioRoot.wingSize }
-                        PathLine { x: audioRoot.wingSize; y: audioRoot.wingSize }
-                    }
-                }
-                
-                Shape {
-                    rotation: 180 
-                    transformOrigin: Item.TopLeft
-                    x: parent.width - maxCardWidth; y: parent.height 
-                    width: audioRoot.wingSize; height: audioRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: audioRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: audioRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-        }
-
-        MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
+        // 🎯 Pass the live properties down instead of the whole object
+        barPosition: rootShell.barPosition
+        backgroundColor: rootShell.colorBackground
+        
+        active: audioRoot.active
+        radiusValue: audioRoot.radiusValue
+        wingSize: audioRoot.wingSize
+        targetWidth: audioRoot.width
+        targetHeight: audioRoot.height
 
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
-            z: 5
 
             HoverHandler { id: contentHoverHandler }
 
@@ -516,7 +332,8 @@ Item {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true; height: 1
+                    Layout.fillWidth: true;
+                    height: 1
                     color: Qt.rgba(255,255,255,0.1)
                 }
 
@@ -581,7 +398,6 @@ Item {
         }
     }
 
-    // --- Floating Hardware Volume OSD ---
     PanelWindow {
         id: volumePillWindow
         WlrLayershell.namespace: audioRoot.namespace
