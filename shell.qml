@@ -7,6 +7,7 @@ import Quickshell.Wayland
 import Quickshell.Io
 import "modules"
 import "modules/bars"
+import "modules/components"
 import "modules/windows"
 
 Scope {
