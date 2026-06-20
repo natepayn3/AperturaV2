@@ -120,9 +120,20 @@ PanelWindow {
                 property bool isFocused: ListView.isCurrentItem
                 property bool isActiveTarget: carousel.hoveredIndex !== -1 ? (carousel.hoveredIndex === index) : isFocused
                 
-                // 🎯 Expands the card width to a full 16:9 ratio, plus the necessary padding to account for the slant
                 width: isActiveTarget ? (carousel.height * 0.85 * 1.77 + carousel.cardSkew) : 180 
                 Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+
+                // 🎯 The Edge-Clipping Fix
+                // relX is the card's position minus the scroll offset
+                property real relX: x - carousel.contentX
+                // The +1 and -1 are just tiny math buffers to prevent 1px rounding flickers
+                property bool fullyInView: relX >= -1 && (relX + width) <= (carousel.width + 1)
+                
+                opacity: fullyInView ? 1.0 : 0.0
+                Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                
+                // 🎯 Disable hit-testing for hidden cards so they don't eat your mouse inputs
+                visible: opacity > 0.01
 
                 z: isActiveTarget ? 10 : 1 
 
@@ -178,7 +189,6 @@ PanelWindow {
                             preferredRendererType: Shape.CurveRenderer
                             
                             property real r: 12 
-                            // 🎯 Reverted the animation; this strictly enforces the permanent parallelogram shape
                             property real sk: carousel.cardSkew
                             
                             ShapePath {
