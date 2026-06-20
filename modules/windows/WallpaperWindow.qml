@@ -1,17 +1,18 @@
 import QtQuick
 import QtQuick.Layouts
 import Qt.labs.folderlistmodel
-import QtMultimedia
+import QtQuick.Shapes
+import QtQuick.Effects
+import QtMultimedia     // 🎯 Required for the Video playback
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
-import "../"
 
 PanelWindow {
     id: wallpaperWindow
 
-    required property var rootShell
     property bool active: false
+    required property var rootShell
 
     WlrLayershell.namespace: "quickshell-wallpaper"
     WlrLayershell.layer: WlrLayer.Top
@@ -20,17 +21,10 @@ PanelWindow {
     
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    
-    // 🎯 Reverted: Correctly unmaps from Wayland when closed so you can click your desktop
-    visible: contentWrapper.opacity > 0.01
-
-    onActiveChanged: {
-        if (active) carousel.forceActiveFocus();
-    }
+    visible: active
 
     MouseArea {
         anchors.fill: parent
-        // 🎯 Reverted: Removed the 'enabled' toggle
         onClicked: wallpaperWindow.active = false
     }
 
@@ -41,58 +35,6 @@ PanelWindow {
         showDirs: false
     }
 
-    // 🎯 Track the active scheme locally
-    property string activeScheme: "scheme-tonal-spot"
-
-    // 🎯 The Public Bridge: ColorsLayout will call this to force an update
-    function triggerMatugen(filePath, newScheme) {
-        if (filePath) matugenRunner.targetFile = filePath;
-        if (newScheme) activeScheme = newScheme;
-        
-        // Don't run if we haven't picked a wallpaper yet
-        if (matugenRunner.targetFile === "") return;
-
-        matugenRunner.running = false;
-        matugenRunner.running = true;
-    }
-
-    // 🎯 Dynamically grab the same path SettingsApp uses
-    readonly property string configFilePath: rootShell ? rootShell.customBasePath + "/shell_settings.json" : ""
-
-    // 🎯 1. Boot Sync: Pulls the last known wallpaper into memory immediately on launch
-    Process {
-        id: bootConfigReader
-        command: ["cat", wallpaperWindow.configFilePath]
-        running: true
-        stdout: StdioCollector {
-            onTextChanged: {
-                if (text.trim() === "") return;
-                try {
-                    let config = JSON.parse(text);
-                    if (config.current_wallpaper) {
-                        matugenRunner.targetFile = config.current_wallpaper;
-                    }
-                    if (config.matugen_scheme) {
-                        wallpaperWindow.activeScheme = config.matugen_scheme;
-                    }
-                } catch(e) {}
-            }
-        }
-    }
-
-    // 🎯 2. State Writer: Updates the JSON silently when you select a new media file
-    Process {
-        id: wallpaperStateWriter
-        running: false
-        property string newWall: ""
-        command: [
-            "bash", "-c", 
-            "if [ ! -f '" + wallpaperWindow.configFilePath + "' ]; then echo '{}' > '" + wallpaperWindow.configFilePath + "'; fi && " +
-            "jq '.current_wallpaper = \"" + newWall + "\"' '" + wallpaperWindow.configFilePath + "' > /tmp/shell_settings.tmp && mv /tmp/shell_settings.tmp '" + wallpaperWindow.configFilePath + "'"
-        ]
-    }
-
-    // 🎯 1. The Trigger
     Process {
         id: wallpaperBackend
         running: false
@@ -102,260 +44,196 @@ PanelWindow {
             targetFile = filePath;
             let ext = filePath.split('.').pop().toLowerCase();
             
+            let sockPath = "/run/user/$(id -u)/${WAYLAND_DISPLAY:-wayland-1}-awww-daemon.sock";
+            let script = "";
+            
             if (ext === "mp4" || ext === "webm") {
-                command = ["sh", "-c", "killall awww-daemon; mpvpaper -vs -o 'loop no-audio' '*' '" + filePath + "'"];
+                script = "killall -q mpvpaper; awww kill 2>/dev/null || killall -9 -q awww-daemon; rm -f " + sockPath + "; mpvpaper -vs -o 'loop no-audio' '*' '" + filePath + "'";
             } else {
-                // 🎯 Swapped to wipe transition with custom step and duration
-                command = ["sh", "-c", "killall mpvpaper; awww-daemon & awww img '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1"];
+                // 🎯 Added sleep for Wayland surface handoff, and nohup/disown to detach the daemon
+                script = "killall -q mpvpaper; sleep 0.2; if ! pgrep -x 'awww-daemon' > /dev/null; then rm -f " + sockPath + "; nohup awww-daemon >/dev/null 2>&1 & disown; sleep 0.3; fi; awww img '" + filePath + "' --transition-type wipe --transition-step 16 --transition-duration 1";
             }
+            command = ["bash", "-c", script];
+            
+            running = false;
             running = true;
-            
-            // 🎯 Safely patch the JSON file with the new path
-            wallpaperStateWriter.newWall = filePath;
-            wallpaperStateWriter.running = false;
-            wallpaperStateWriter.running = true;
-            
-            triggerMatugen(filePath, null); 
+
+            matugenRunner.targetFile = filePath;
+            matugenRunner.running = false;
+            matugenRunner.running = true;
         }
     }
 
-    // 🎯 2. The Writer
     Process {
         id: matugenRunner
         running: false
         property string targetFile: ""
-        
-        // 🎯 Injects the dynamic scheme variable into the bash command
         command: [
             "sh", "-c", 
-            "matugen image \"" + targetFile + "\" -t " + wallpaperWindow.activeScheme + " --prefer=saturation --json hex > \"" + rootShell.matugenFilePath + "\" && sync"
+            "matugen image \"" + targetFile + "\" -t scheme-tonal-spot --prefer=saturation --json hex > \"" + rootShell.matugenFilePath + "\" && sync"
         ]
     }
 
-    // 🎯 Native Quickshell file tracker
-    FileView {
-        id: matugenReader
-        path: rootShell.matugenFilePath
-        watchChanges: true
-        
-        onFileChanged: reload() 
-        
-        onTextChanged: {
-            let fileContent = matugenReader.text(); 
-            
-            if (fileContent && fileContent.trim() !== "") {
-                rootShell.parseMatugen(fileContent);
-            }
-        }
-    }
-
     Item {
-        id: contentWrapper
-        // 🎯 Reverted: Removed the 'enabled' toggle here too
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         anchors.bottomMargin: 80
-        height: 320 
+        height: 450 
 
-        opacity: wallpaperWindow.active ? 1.0 : 0.0
-        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
-
-        transform: Translate {
-            y: wallpaperWindow.active ? 0 : 40
-            Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        }
-
-        Item {
-            id: carouselContainer
+        ListView {
+            id: carousel
+            anchors.centerIn: parent
+            width: parent.width - 200
             height: parent.height
-            width: Math.min(parent.width - 300, carousel.contentWidth)
-            anchors.horizontalCenter: parent.horizontalCenter
+            
+            orientation: ListView.Horizontal
+            property real cardSkew: 35
+            spacing: -cardSkew + 5 
 
-            ListView {
-                id: carousel
-                anchors.fill: parent
-                orientation: ListView.Horizontal
-                spacing: 4 
-                model: wallpaperModel
-                
-                interactive: true
-                boundsBehavior: Flickable.StopAtBounds
-                
-                cacheBuffer: 2000 
-                
-                focus: true 
-                keyNavigationEnabled: true
-                highlightMoveDuration: 200
+            model: wallpaperModel
+            focus: true
+            clip: true
+            interactive: true 
 
-                property bool isKeyboardNavigating: false
+            highlightRangeMode: ListView.ApplyRange
+            highlightMoveDuration: 200
+
+            property int hoveredIndex: -1
+
+            Keys.onLeftPressed: if (currentIndex > 0) currentIndex--;
+            Keys.onRightPressed: if (currentIndex < count - 1) currentIndex++;
+            Keys.onEscapePressed: wallpaperWindow.active = false
+
+            WheelHandler {
+                onWheel: (event) => {
+                    if (event.angleDelta.y > 0 || event.angleDelta.x > 0) {
+                        carousel.currentIndex = Math.max(0, carousel.currentIndex - 1);
+                    } else if (event.angleDelta.y < 0 || event.angleDelta.x < 0) {
+                        carousel.currentIndex = Math.min(carousel.count - 1, carousel.currentIndex + 1);
+                    }
+                }
+            }
+
+            delegate: Item {
+                id: delegateRoot
+                height: carousel.height
+                
+                property bool isFocused: ListView.isCurrentItem
+                property bool isActiveTarget: carousel.hoveredIndex !== -1 ? (carousel.hoveredIndex === index) : isFocused
+                
+                // 🎯 Expands the card width to a full 16:9 ratio, plus the necessary padding to account for the slant
+                width: isActiveTarget ? (carousel.height * 0.85 * 1.77 + carousel.cardSkew) : 180 
+                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+
+                z: isActiveTarget ? 10 : 1 
+
+                property string pathStr: String(filePath).toLowerCase()
+                property bool isVideo: pathStr.endsWith(".mp4") || pathStr.endsWith(".webm")
+                property string fileName: String(filePath).split('/').pop()
+                property string thumbDir: Quickshell.env("HOME") + "/.cache/quickshell_thumbs"
+                property string thumbFile: thumbDir + "/" + fileName + ".jpg"
+                property string thumbUrl: "file://" + thumbFile
+                property bool thumbReady: false
+                
+                Process {
+                    running: delegateRoot.isVideo
+                    command: [
+                        "bash", "-c", 
+                        "mkdir -p '" + thumbDir + "' && if [ ! -f '" + thumbFile + "' ]; then ffmpeg -y -i '" + filePath + "' -ss 00:00:00.100 -vframes 1 -vf 'scale=450:-1' -q:v 2 '" + thumbFile + "' >/dev/null 2>&1; fi"
+                    ]
+                    onExited: delegateRoot.thumbReady = true
+                }
 
                 MouseArea {
                     anchors.fill: parent
-                    onWheel: (wheel) => {
-                        let dampening = 0.7;
-                        let delta = wheel.angleDelta.y || wheel.angleDelta.x;
-                        carousel.contentX -= (delta * dampening);
-                    }
-                }
-
-                Timer {
-                    id: hoverBlockTimer
-                    interval: 400 
-                    onTriggered: carousel.isKeyboardNavigating = false
-                }
-
-                Keys.onPressed: (event) => {
-                    if (event.key === Qt.Key_Escape) {
-                        wallpaperWindow.active = false;
-                        event.accepted = true;
-                        return;
-                    }
-                    if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
-                        isKeyboardNavigating = true;
-                        hoverBlockTimer.restart();
-                        event.accepted = false; 
-                    }
-                }
-
-                delegate: Item {
-                    id: delegateRoot
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor 
                     
-                    width: isFocused ? 200 : 140
-                    height: carousel.height
+                    onEntered: carousel.hoveredIndex = index
+                    onExited: if (carousel.hoveredIndex === index) carousel.hoveredIndex = -1
                     
-                    property bool isFocused: ListView.isCurrentItem
-                    property bool loadHeavyMedia: false 
+                    onClicked: wallpaperBackend.apply(filePath)
+                }
+                
+                Keys.onReturnPressed: if (isFocused) wallpaperBackend.apply(filePath)
 
-                    property string pathStr: String(filePath).toLowerCase()
-                    property bool isVideo: pathStr.endsWith(".mp4") || pathStr.endsWith(".webm")
-                    property bool isGif: pathStr.endsWith(".gif")
-                    property bool isStaticImage: !isVideo && !isGif
-
-                    // 🎯 Video Thumbnail Generator Properties
-                    property string fileName: String(filePath).split('/').pop()
-                    property string thumbDir: Quickshell.env("HOME") + "/.cache/quickshell_thumbs"
-                    property string thumbFile: thumbDir + "/" + fileName + ".jpg"
-                    property string thumbUrl: "file://" + thumbFile
-                    property bool thumbReady: false
-
-                    // 🎯 Async Frame Extractor
-                    // Silently generates a lightweight 300px jpeg of the video if one doesn't exist
-                    Process {
-                        id: thumbGen
-                        running: delegateRoot.isVideo
-                        command: [
-                            "bash", "-c", 
-                            "mkdir -p '" + thumbDir + "' && " +
-                            "if [ ! -f '" + thumbFile + "' ]; then " +
-                            // Grabs a frame at 0.1s (avoids pure black 0.0s frames)
-                            "ffmpeg -y -i '" + filePath + "' -ss 00:00:00.100 -vframes 1 -vf 'scale=300:-1' -q:v 2 '" + thumbFile + "' >/dev/null 2>&1; " +
-                            "fi"
-                        ]
-                        onExited: {
-                            // Tell the Image component the file is on the disk and ready to read
-                            delegateRoot.thumbReady = true;
-                        }
-                    }
-
-                    z: isFocused ? 10 : 1
-
-                    Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
-
-                    Timer {
-                        id: mediaDebounce
-                        interval: 150 
-                        running: isFocused
-                        onTriggered: loadHeavyMedia = true
-                    }
-
-                    onIsFocusedChanged: {
-                        if (!isFocused) {
-                            loadHeavyMedia = false;
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor 
-                        
-                        onEntered: {
-                            if (!carousel.isKeyboardNavigating) {
-                                carousel.currentIndex = index;
-                            }
-                        }
-                        
-                        onClicked: {
-                            carousel.currentIndex = index;
-                            wallpaperBackend.apply(filePath);
-                        }
-                    }
-
-                    Keys.onReturnPressed: if (isFocused) wallpaperBackend.apply(filePath)
-                    Keys.onSpacePressed: if (isFocused) wallpaperBackend.apply(filePath)
+                Item {
+                    anchors.centerIn: parent
+                    width: parent.width 
+                    height: parent.height * 0.85 
+                    
+                    scale: delegateRoot.isActiveTarget ? 1.05 : 0.95
+                    Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
 
                     Item {
-                        id: slantedCard
-                        anchors.centerIn: parent
-                        height: parent.height * 0.9
-                        width: parent.width
-                        clip: true 
-
-                        scale: isFocused ? 1.25 : 0.95
-                        Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack; easing.overshoot: 1.3 } }
-
-                        transform: Matrix4x4 {
-                            matrix: Qt.matrix4x4(
-                                1.0, -0.16,  0.0,  0.0,  
-                                0.0,  1.0,  0.0,  0.0,
-                                0.0,  0.0,  1.0,  0.0,
-                                0.0,  0.0,  0.0,  1.0
-                            )
-                        }
-
-                        Item {
-                            anchors.centerIn: parent
-                            width: parent.width * 1.5
-                            height: parent.height
-
-                            Image {
-                                anchors.fill: parent
-                                // 🎯 Show static image, OR the generated thumbnail if it's a video
-                                source: delegateRoot.isStaticImage ? fileUrl : (delegateRoot.thumbReady ? delegateRoot.thumbUrl : "")
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true 
-                                sourceSize: Qt.size(300, 320) 
-                                cache: true
-                                // 🎯 Always visible so the video Loader seamlessly plays over the top of it
-                                visible: delegateRoot.isStaticImage || delegateRoot.thumbReady
-                            }
-
-                            Loader {
-                                anchors.fill: parent
-                                active: delegateRoot.loadHeavyMedia && delegateRoot.isGif
-                                sourceComponent: Component {
-                                    AnimatedImage {
-                                        source: fileUrl
-                                        fillMode: Image.PreserveAspectCrop
-                                    }
-                                }
-                            }
-
-                            Loader {
-                                anchors.fill: parent
-                                active: delegateRoot.loadHeavyMedia && delegateRoot.isVideo
-                                sourceComponent: Component {
-                                    Video {
-                                        source: fileUrl
-                                        fillMode: VideoOutput.PreserveAspectCrop
-                                        loops: MediaPlayer.Infinite
-                                        autoPlay: true 
-                                        muted: true
-                                    }
-                                }
+                        id: cardMask
+                        anchors.fill: parent
+                        visible: false 
+                        layer.enabled: true
+                        layer.smooth: true
+                        
+                        Shape {
+                            id: slantyShape 
+                            anchors.fill: parent
+                            antialiasing: true
+                            preferredRendererType: Shape.CurveRenderer
+                            
+                            property real r: 12 
+                            // 🎯 Reverted the animation; this strictly enforces the permanent parallelogram shape
+                            property real sk: carousel.cardSkew
+                            
+                            ShapePath {
+                                fillColor: "white"
+                                strokeColor: "transparent"
+                                startX: slantyShape.sk + slantyShape.r; startY: 0
+                                PathLine { x: slantyShape.width - slantyShape.r; y: 0 }
+                                PathQuad { x: slantyShape.width - (slantyShape.r * 0.2); y: slantyShape.r; controlX: slantyShape.width; controlY: 0 }
+                                PathLine { x: slantyShape.width - slantyShape.sk + (slantyShape.r * 0.2); y: slantyShape.height - slantyShape.r }
+                                PathQuad { x: slantyShape.width - slantyShape.sk - slantyShape.r; y: slantyShape.height; controlX: slantyShape.width - slantyShape.sk; controlY: slantyShape.height }
+                                PathLine { x: slantyShape.r; y: slantyShape.height }
+                                PathQuad { x: (slantyShape.r * 0.2); y: slantyShape.height - slantyShape.r; controlX: 0; controlY: slantyShape.height }
+                                PathLine { x: slantyShape.sk - (slantyShape.r * 0.2); y: slantyShape.r }
+                                PathQuad { x: slantyShape.sk + slantyShape.r; y: 0; controlX: slantyShape.sk; controlY: 0 }
                             }
                         }
                     }
-                }               
+
+                    Item {
+                        anchors.fill: parent
+                        
+                        Image {
+                            anchors.fill: parent
+                            source: delegateRoot.isVideo ? (delegateRoot.thumbReady ? delegateRoot.thumbUrl : "") : fileUrl
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true 
+                            sourceSize: Qt.size(450, 450) 
+                            cache: true
+                        }
+
+                        Loader {
+                            anchors.fill: parent
+                            active: delegateRoot.isVideo && delegateRoot.isActiveTarget
+                            sourceComponent: Component {
+                                Video {
+                                    anchors.fill: parent
+                                    source: fileUrl
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    loops: MediaPlayer.Infinite
+                                    muted: true
+                                    Component.onCompleted: play()
+                                }
+                            }
+                        }
+
+                        layer.enabled: true
+                        layer.smooth: true
+                        layer.effect: MultiEffect {
+                            maskEnabled: true
+                            maskSource: cardMask
+                            maskThresholdMin: 0.3 
+                            maskSpreadAtMin: 0.3
+                        }
+                    }
+                }
             }
         }
     }
