@@ -23,10 +23,13 @@ Item {
     property real maxCardWidth: 340
     property real maxCardHeight: 440
 
+    property real baseLayoutHeight: 100 
+    property real calculatedHeight: baseLayoutHeight + (deviceModel.count > 0 ? (deviceModel.count * 54) : 0)
+
     implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.round(maxCardHeight)
+    implicitHeight: Math.min(Math.round(calculatedHeight), Math.round(maxCardHeight))
     width: Math.round(maxCardWidth)
-    height: Math.round(maxCardHeight)
+    height: implicitHeight
 
     x: {
         if (rootShell.barPosition === "top") return Screen.width - width - 10;
@@ -392,8 +395,8 @@ Item {
         barPosition: rootShell.barPosition
         backgroundColor: rootShell.colorBackground
         
-        targetWidth: bluetoothRoot.maxCardWidth
-        targetHeight: bluetoothRoot.maxCardHeight
+        targetWidth: bluetoothRoot.width
+        targetHeight: bluetoothRoot.height
         
         radiusValue: bluetoothRoot.radiusValue
         wingSize: bluetoothRoot.wingSize
