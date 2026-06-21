@@ -37,6 +37,8 @@ Scope {
     // 📸 Changed from 'string' to 'color' to prevent hex parsing failures
     property color colorText: themeProvider.textPrimary
     property color colorSubtext: themeProvider.textSub
+    property var matugenPreviews: themeProvider.schemePreviews
+    property int matugenPreviewTick: themeProvider.previewUpdateTick
     property color colorClose: "#f38ba8" 
     property string shellFont: "Rubik"
 
