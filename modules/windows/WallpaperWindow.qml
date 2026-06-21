@@ -17,6 +17,8 @@ PanelWindow {
     property string currentWallpaperPath: ""
     property string currentScheme: "scheme-tonal-spot"
 
+    signal applyFinished()
+
     WlrLayershell.namespace: "quickshell-wallpaper"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: active ? WlrLayershell.OnDemand : WlrLayershell.None
@@ -42,6 +44,11 @@ PanelWindow {
     Process {
         id: wallpaperBackend
         running: false
+
+        // 🎯 Emit the signal when the bash script finishes
+        onExited: {
+            wallpaperWindow.applyFinished();
+        }
 
         function triggerBackendRun(filePath, activeOnly) {
             let ext = filePath.split('.').pop().toLowerCase();
@@ -83,22 +90,12 @@ PanelWindow {
     function apply(filePath, activeOnly = false, customScheme = "") {
         if (filePath && filePath !== "") currentWallpaperPath = filePath;
         if (customScheme !== "") currentScheme = customScheme;
-        
+            
         if (!currentWallpaperPath || currentWallpaperPath === "") {
             currentWallpaperPath = carousel.currentFilePath;
         }
 
         wallpaperBackend.triggerBackendRun(currentWallpaperPath, activeOnly);
-    }
-
-    Process {
-        id: matugenRunner
-        running: false
-        property string targetFile: ""
-        command: [
-            "sh", "-c", 
-            "matugen image \"" + targetFile + "\" -t scheme-tonal-spot --prefer=saturation --json hex > \"" + rootShell.matugenFilePath + "\" && sync"
-        ]
     }
 
     Item {
