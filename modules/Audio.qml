@@ -73,7 +73,7 @@ Item {
         id: audioEventStream
         command: [
             "sh", "-c",
-            "pw-mon | stdbuf -oL grep --line-buffered -E \"changed|sinks\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
+            "pactl subscribe | grep --line-buffered \"Event 'change' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
         ]
         running: true
 
@@ -85,6 +85,7 @@ Item {
                 let isNowMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
                 let volVal = parseFloat(parts[1]);
+                
                 if (!isNaN(volVal) && !mainSlider.pressed && !toggleMuteProc.running) {
                     if (Math.abs(audioRoot.currentVolume - volVal) > 0.001 || audioRoot.isMuted !== isNowMuted) {
                         audioRoot.currentVolume = volVal;
