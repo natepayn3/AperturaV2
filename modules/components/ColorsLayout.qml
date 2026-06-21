@@ -27,9 +27,10 @@ Item {
             id: cardBtn
             property string schemeId: ""
             property string schemeLabel: ""
-            
-            property var customPalette: [] 
-            
+            property var customPalette: {
+                let tick = shellTarget ? shellTarget.matugenPreviewTick : 0;
+                return shellTarget && shellTarget.matugenPreviews ? (shellTarget.matugenPreviews[schemeId] || []) : [];
+            }
             Layout.fillWidth: true
             Layout.preferredHeight: 60
             flat: true
@@ -74,10 +75,15 @@ Item {
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     spacing: 12
                     
-                    visible: settingsWindow.matugenScheme === schemeId || cardBtn.customPalette.length > 0
+                    // 🎯 If the palette is empty, we show a loading state (or just keep it visible)
+                    visible: true
+                    opacity: settingsWindow.matugenScheme === schemeId ? 1.0 : 0.4
                     
                     Repeater {
-                        model: cardBtn.customPalette.length > 0 ? cardBtn.customPalette : [themeAccent, themeBorder, themeText]
+                        // 🎯 If empty, provide a "placeholder" so the row doesn't collapse
+                        model: cardBtn.customPalette.length > 0 
+                             ? cardBtn.customPalette 
+                             : [themeText, themeText, themeText] // 3 gray placeholders
                         
                         RowLayout {
                             spacing: 4
@@ -86,13 +92,13 @@ Item {
                                 width: 14
                                 height: 14
                                 radius: 4
-                                color: modelData
+                                color: cardBtn.customPalette.length > 0 ? modelData : Qt.rgba(1, 1, 1, 0.1)
                                 border.color: Qt.rgba(1, 1, 1, 0.2)
                                 border.width: 1
                             }
                             
                             Text {
-                                text: String(modelData).substring(0, 7).toUpperCase()
+                                text: cardBtn.customPalette.length > 0 ? String(modelData).substring(0, 7).toUpperCase() : "..."
                                 font.family: "monospace"
                                 font.pixelSize: 10
                                 color: themeText
