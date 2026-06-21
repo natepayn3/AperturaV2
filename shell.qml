@@ -31,10 +31,10 @@ Scope {
     property color colorAccent: themeProvider.accent
     property string matugenFilePath: themeProvider.matugenFilePath
 
-    // Rest of your static styling strings
-    property string colorText: "#cdd6f4"
-    property string colorSubtext: "#a6adc8"
-    property string colorClose: "#f38ba8"
+    // Point these to the provider instead of hardcoding strings
+    property string colorText: themeProvider.textPrimary
+    property string colorSubtext: themeProvider.textSub
+    property string colorClose: "#f38ba8" 
     property string shellFont: "Rubik"
 
     // --- Window Layout & State Management ---
@@ -273,6 +273,13 @@ Scope {
     IpcHandler { target: "launcher"; function toggle(): void { if (globalAppLauncherPreview) globalAppLauncherPreview.active = !globalAppLauncherPreview.active; } }
     IpcHandler { target: "audio"; function updateVolume(): void { if (globalAudioPreview && globalAudioPreview.cardRef) globalAudioPreview.cardRef.showOsd(); } }
     IpcHandler { target: "wallpaper"; function toggle(): void { if (globalWallpaperPreview) globalWallpaperPreview.active = !globalWallpaperPreview.active; } }
+
+    IpcHandler { 
+        target: "shutter"; 
+        function toggle(): void { 
+            Config.saveSetting("shutterMode", !Config.shutterMode); 
+        } 
+    }
 
     SettingsApp { id: settingsAppInstance; shellTarget: rootShell }
 
