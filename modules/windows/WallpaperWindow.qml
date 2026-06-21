@@ -107,7 +107,7 @@ PanelWindow {
         property real radiusValue: 24
         property real wingSize: 14
 
-        width: parent.width - 120 
+        width: Math.min(parent.width - 500, parent.width - 60)
         height: wallpaperWindow.active ? 480 : 0
         
         x: {
