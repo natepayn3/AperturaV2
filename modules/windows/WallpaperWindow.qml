@@ -14,10 +14,25 @@ PanelWindow {
     property bool active: false
     required property var rootShell
 
-    property string currentWallpaperPath: ""
+    // 🎯 Dynamically bind to the active path or fallback to avoid empty execution
+    property string currentWallpaperPath: rootShell && rootShell.wallpaperRef ? rootShell.wallpaperRef.currentWallpaperPath : ""
     property string currentScheme: "scheme-tonal-spot"
 
     signal applyFinished()
+
+    // 🎯 Run the preview generation on startup as soon as shell values resolve
+    Component.onCompleted: {
+        let timer = Qt.createQmlObject("import QtQuick; Timer {}", wallpaperWindow);
+        timer.interval = 500; // Give shell settings a brief window to load from JSON
+        timer.triggered.connect(() => {
+            if (currentWallpaperPath && currentWallpaperPath !== "") {
+                // Silently populate the preview cache file for the active wallpaper
+                wallpaperBackend.triggerBackendRun(currentWallpaperPath, false);
+            }
+            timer.destroy();
+        });
+        timer.start();
+    }
 
     WlrLayershell.namespace: "quickshell-wallpaper"
     WlrLayershell.layer: WlrLayer.Top
@@ -45,12 +60,17 @@ PanelWindow {
         id: wallpaperBackend
         running: false
 
-        // 🎯 Emit the signal when the bash script finishes
         onExited: {
             wallpaperWindow.applyFinished();
         }
 
         function triggerBackendRun(filePath, activeOnly) {
+            // Check for safe execution targets
+            if (!filePath || filePath === "") {
+                filePath = carousel.currentFilePath || "";
+                if (filePath === "") return; // Halt if no target is available
+            }
+
             let ext = filePath.split('.').pop().toLowerCase();
             let sockPath = "/run/user/$(id -u)/${WAYLAND_DISPLAY:-wayland-1}-awww-daemon.sock";
             
@@ -79,7 +99,20 @@ PanelWindow {
             
             script += "mkdir -p \"$(dirname '" + outPath + "')\" && ";
             script += "matugen image '" + matugenTarget + "' -t " + wallpaperWindow.currentScheme + " --prefer=saturation --json hex > '" + outPath + ".tmp' && ";
-            script += "mv '" + outPath + ".tmp' '" + outPath + "' && sync";
+            script += "mv '" + outPath + ".tmp' '" + outPath + "' && sync; ";
+
+            let previewPath = Quickshell.env("HOME") + "/.cache/matugen-previews.json";
+            let schemes = ["tonal-spot", "expressive", "fruit-salad", "rainbow", "neutral", "monochrome"];
+            
+            script += "( mkdir -p ~/.cache && jq -n ";
+            for (let i=0; i < schemes.length; i++) {
+                script += "--argjson s" + i + " \"$(matugen image '" + matugenTarget + "' -t scheme-" + schemes[i] + " --prefer=saturation --json hex 2>/dev/null || echo '{}')\" ";
+            }
+            script += "'{";
+            for (let i=0; i < schemes.length; i++) {
+                script += "\"scheme-" + schemes[i] + "\": $s" + i + (i < schemes.length - 1 ? ", " : "");
+            }
+            script += "}' > '" + previewPath + "' ) & ";
 
             command = ["bash", "-c", script];
             running = false;
@@ -90,7 +123,7 @@ PanelWindow {
     function apply(filePath, activeOnly = false, customScheme = "") {
         if (filePath && filePath !== "") currentWallpaperPath = filePath;
         if (customScheme !== "") currentScheme = customScheme;
-            
+        
         if (!currentWallpaperPath || currentWallpaperPath === "") {
             currentWallpaperPath = carousel.currentFilePath;
         }
