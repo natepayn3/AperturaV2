@@ -109,7 +109,7 @@ Item {
         ignoreUnknownSignals: true
         function onRawEvent(event) { 
             // Restarting the timer absorbs the spam of rapid raw events
-            if (previewRoot.active) jsonRefreshTimer.restart();
+            if (previewRoot.active) jsonRefreshTimer.restart(); 
         }
     }
 
@@ -121,8 +121,7 @@ Item {
             onTextChanged: {
                 let cleanText = text.trim();
                 if (!cleanText || cleanText === "[]") return;
-                try { previewRoot.liveClientJson = JSON.parse(cleanText);
-                } catch(e) {}
+                try { previewRoot.liveClientJson = JSON.parse(cleanText); } catch(e) {}
             }
         }
     }
@@ -167,13 +166,8 @@ Item {
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
-            anchors.margins: -1 // 🎯 Push visual boundary out 1px to absorb fractional gap
             color: rootShell.colorBackground
             z: 2
-            
-            // 🎯 Add a physical border in the background color to bleed the straight edges
-            border.width: 1
-            border.color: rootShell.colorBackground
             
             topLeftRadius: 0
             topRightRadius: rootShell.barPosition === "bottom" ? previewRoot.radiusValue : 0
@@ -184,7 +178,6 @@ Item {
         Item {
             id: borderClippingMask
             anchors.fill: parent
-            anchors.margins: -1
             clip: false 
             z: 4
 
@@ -210,7 +203,6 @@ Item {
 
         Item {
             anchors.fill: parent
-            anchors.margins: -1 // 🎯 Align the wing grid with the expanded main body
             visible: previewRoot.width > 30
             z: 2 
 
@@ -222,8 +214,7 @@ Item {
                     x: 0; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1 // 🎯 Anti-aliasing bleed
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -234,8 +225,7 @@ Item {
                     x: parent.width; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: 0; y: previewRoot.wingSize }
                         PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -252,8 +242,7 @@ Item {
                     x: 0; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -264,8 +253,7 @@ Item {
                     x: parent.width; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: 0; y: previewRoot.wingSize }
                         PathQuad { x: previewRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -283,8 +271,7 @@ Item {
                     x: 0; y: -previewRoot.wingSize
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -298,8 +285,7 @@ Item {
                     y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: 0; startY: 0
                         PathLine { x: previewRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: previewRoot.wingSize; controlX: 0; controlY: 0 }
@@ -316,8 +302,7 @@ Item {
                     x: -previewRoot.wingSize; y: 0
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
@@ -329,8 +314,7 @@ Item {
                     x: parent.width - previewRoot.wingSize; y: parent.height
                     width: previewRoot.wingSize; height: previewRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground;
-                        strokeColor: rootShell.colorBackground; strokeWidth: 1
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
                         startX: previewRoot.wingSize; startY: 0
                         PathLine { x: previewRoot.wingSize; y: previewRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: previewRoot.wingSize; controlY: 0 }
@@ -420,12 +404,14 @@ Item {
                             let mX = 0, mY = 0, mWidth = 1920, mHeight = 1080;
                             let wsObj = Hyprland.workspaces.values.find(w => w.id === previewRoot.workingWorkspace);
                             let targetMonitor = wsObj ? wsObj.monitor : Hyprland.activeMonitor;
+                            
                             if (targetMonitor) {
                                 let scale = targetMonitor.scale > 0 ? targetMonitor.scale : 1.0;
                                 mWidth = Math.round(targetMonitor.width / scale);
                                 mHeight = Math.round(targetMonitor.height / scale);
                                 mX = targetMonitor.x;
                                 mY = targetMonitor.y;
+                                
                                 let barThickness = 44;
                                 if (rootShell.barPosition === "left") { mX += barThickness; mWidth -= barThickness; }
                                 else if (rootShell.barPosition === "right") { mWidth -= barThickness; }
@@ -454,6 +440,7 @@ Item {
                         
                         if (spanX > 0 && Math.abs(spanX - normW) > 100) normW = spanX;
                         if (spanY > 0 && Math.abs(spanY - normH) > 100) normH = spanY;
+                        
                         return { "w": normW, "h": normH, "isVertical": verticalDetected, "originX": minX, "originY": minY };
                     }
 
@@ -465,7 +452,6 @@ Item {
                         model: viewportFrame.workspaceWindows
                         delegate: Rectangle {
                             id: windowDelegate
-                        
                             x: Math.round((modelData.at[0] - viewportFrame.calculatedBounds.originX) * viewportFrame.scaleX)
                             y: Math.round((modelData.at[1] - viewportFrame.calculatedBounds.originY) * viewportFrame.scaleY)
                             width: Math.max(4, Math.round(modelData.size[0] * viewportFrame.scaleX))
@@ -478,13 +464,14 @@ Item {
 
                             property var wlToplevel: {
                                 if (!modelData || !modelData.address) return null;
+                                
                                 let tracker = clientQueryProcess.running;
                                 let targetAddr = modelData.address.trim().toLowerCase();
 
                                 let match = Hyprland.toplevels.values.find(t => {
                                     if (!t.lastIpcObject || !t.lastIpcObject.address) return false;
                                     return t.lastIpcObject.address.trim().toLowerCase() === targetAddr;
-                                 });
+                                });
                                 if (match && match.wayland) return match.wayland;
                                 
                                 if (Hyprland.activeWorkspace) {
