@@ -5,6 +5,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import "components"
 
 Item {
     id: wifiRoot
@@ -12,7 +13,7 @@ Item {
     property string namespace: "quickshell-wifi-popup"
     property bool active: false
     
-    property bool isHovered: popupHoverArea.containsMouse || contentHoverHandler.hovered
+    property bool isHovered: cardWrapper.isHovered || contentHoverHandler.hovered
     
     property int hoverOriginX: 0
     property int hoverOriginY: 0
@@ -61,7 +62,7 @@ Item {
         let targetHeight = Quickshell.screen ? Quickshell.screen.height : Screen.height;
         switch (rootShell.barPosition) {
             case "bottom": return targetHeight - height - 46;
-            case "top":    return 46;                             
+            case "top":    return 46;                               
             case "left":   return targetHeight - height - 10;
             case "right":  return targetHeight - height - 10;
             default:       return hoverOriginY;
@@ -326,7 +327,6 @@ Item {
                 if (exitCode !== 0) {
                     wifiRoot.failedSsid = wifiRoot.connectingSsid;
                     
-                    // Safe, native execution without dynamic string compilation
                     if (attemptingSsid !== "" && !wifiRoot.knownNetworks[attemptingSsid]) {
                         cleanupFailedProc.command = ["nmcli", "connection", "delete", "id", attemptingSsid];
                         cleanupFailedProc.running = false;
@@ -391,176 +391,30 @@ Item {
     }
 
     // --- Visual Layout and Dynamic Springs ---
-    Item {
-        id: animatedGroup
+    AnimatedCard {
+        id: cardWrapper
         anchors.fill: parent
-
-        transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.BottomLeft
-            if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopRight
-            if (rootShell.barPosition === "bottom") return Item.BottomRight
-            return Item.Center
-        }
-
-        opacity: wifiRoot.active ? 1.0 : 0.0
-        scale: wifiRoot.active ? 1.0 : 0.0
-        x: wifiRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
-        y: wifiRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
         
-        visible: opacity > 0.01
-
-        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
-        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-
-        Rectangle {
-            id: cardMainBody
-            anchors.fill: parent
-            color: rootShell.colorBackground
-            z: 2
-            border.width: 0
-
-            topLeftRadius:     getCornerRadius("topLeft")
-            topRightRadius:    getCornerRadius("topRight")
-            bottomLeftRadius:  getCornerRadius("bottomLeft")
-            bottomRightRadius: getCornerRadius("bottomRight")
-
-            function getCornerRadius(corner) {
-                let pos = rootShell.barPosition;
-                let rad = wifiRoot.radiusValue;
-
-                if (pos === "top") return (corner === "bottomLeft") ? rad : 0;
-                if (pos === "bottom") return (corner === "topLeft") ? rad : 0;
-                if (pos === "left") return (corner === "topRight") ? rad : 0;
-                if (pos === "right") return (corner === "topLeft") ? rad : 0;
-                return rad;
-            }
-        }
-
-        // --- Geometric Corner Wing Anchors ---
-        Item {
-            anchors.fill: parent
-            visible: wifiRoot.width > 30
-            z: 2 
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "left"
-                Shape {
-                    x: 0; y: -wifiRoot.wingSize; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: 0; startY: wifiRoot.wingSize
-                        PathLine { x: wifiRoot.wingSize; y: wifiRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: wifiRoot.wingSize }
-                        PathLine { x: 0; y: wifiRoot.wingSize }
-                    }
-                }
-                Shape {
-                    rotation: -90; transformOrigin: Item.TopLeft
-                    x: parent.width; y: parent.height; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: 0; startY: 0
-                        PathLine { x: wifiRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: wifiRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "right"
-                Shape {
-                    x: parent.width - wifiRoot.wingSize; y: -wifiRoot.wingSize; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: wifiRoot.wingSize; startY: wifiRoot.wingSize
-                        PathLine { x: 0; y: wifiRoot.wingSize }
-                        PathQuad { x: wifiRoot.wingSize; y: 0; controlX: wifiRoot.wingSize; controlY: wifiRoot.wingSize }
-                        PathLine { x: wifiRoot.wingSize; y: wifiRoot.wingSize }
-                    }
-                }
-                Shape {
-                    rotation: 90; transformOrigin: Item.TopRight
-                    x: 0 - wifiRoot.wingSize; y: parent.height; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: wifiRoot.wingSize; startY: 0
-                        PathLine { x: 0; y: 0 }
-                        PathQuad { x: wifiRoot.wingSize; y: wifiRoot.wingSize; controlX: wifiRoot.wingSize; controlY: 0 }
-                        PathLine { x: wifiRoot.wingSize; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "top"
-                Shape {
-                    x: -wifiRoot.wingSize; y: 0; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: wifiRoot.wingSize; startY: 0
-                        PathLine { x: wifiRoot.wingSize; y: wifiRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: wifiRoot.wingSize; controlY: 0 }
-                        PathLine { x: wifiRoot.wingSize; y: 0 }
-                    }
-                }
-                Shape {
-                    x: parent.width - wifiRoot.wingSize; y: parent.height; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: wifiRoot.wingSize; startY: 0
-                        PathLine { x: wifiRoot.wingSize; y: wifiRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: wifiRoot.wingSize; controlY: 0 }
-                        PathLine { x: wifiRoot.wingSize; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "bottom"
-                Shape {
-                    x: parent.width - wifiRoot.wingSize; y: -wifiRoot.wingSize; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: wifiRoot.wingSize; startY: wifiRoot.wingSize
-                        PathLine { x: 0; y: wifiRoot.wingSize }
-                        PathQuad { x: wifiRoot.wingSize; y: 0; controlX: wifiRoot.wingSize; controlY: wifiRoot.wingSize }
-                        PathLine { x: wifiRoot.wingSize; y: wifiRoot.wingSize }
-                    }
-                }
-                Shape {
-                    rotation: 180; transformOrigin: Item.TopLeft
-                    x: parent.width - maxCardWidth; y: parent.height; width: wifiRoot.wingSize; height: wifiRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"
-                        startX: 0; startY: 0
-                        PathLine { x: wifiRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: wifiRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-        }
-
-        MouseArea { 
-            id: popupHoverArea
-            anchors.fill: parent
-            hoverEnabled: true
-            z: 1 
-            onPressed: (mouse) => mouse.accepted = true 
-        }
+        active: wifiRoot.active
+        barPosition: rootShell.barPosition
+        backgroundColor: rootShell.colorBackground
+        
+        targetWidth: wifiRoot.width
+        targetHeight: wifiRoot.height
+        
+        radiusValue: wifiRoot.radiusValue
+        wingSize: wifiRoot.wingSize
 
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
             z: 5
+            
+            // Retaining your click-sink behavior to prevent touches passing through to the desktop
+            MouseArea { 
+                anchors.fill: parent
+                onPressed: (mouse) => mouse.accepted = true 
+            }
 
             HoverHandler { id: contentHoverHandler }
 
