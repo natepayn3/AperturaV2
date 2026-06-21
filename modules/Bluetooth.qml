@@ -53,6 +53,16 @@ Item {
     
     property string activeStatusText: isScanning ? "Scanning..." : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
     
+    onIsPoweredChanged: {
+        if (isPowered && active) {
+            // Cycle the state to force a completely new execution
+            deviceFetcher.running = false; 
+            deviceFetcher.running = true;
+        } else if (!isPowered) {
+            deviceModel.clear();
+        }
+    }
+
     ListModel {
         id: deviceModel
     }
@@ -77,18 +87,56 @@ Item {
         }
     }
 
+    Timer {
+        id: liveScanTimer
+        interval: 2000
+        repeat: true
+        // Automatically starts/stops based on your existing scanning state variable
+        running: bluetoothRoot.isScanning 
+        
+        onTriggered: {
+            // Prevent process overlapping if a fetch takes longer than 1.5s
+            if (!deviceFetcher.running) {
+                deviceFetcher.running = true;
+            }
+        }
+    }
+
     // --- Unified Bluetooth Session (Event Listener) ---
     Process {
         id: bluetoothSession
-        command: ["/usr/bin/bluetoothctl"]
+        command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
         running: bluetoothRoot.active
+        
+        // Track state to prevent O(N^2) parsing loop lockups
+        property int lastProcessedIndex: 0
+        property string lineBuffer: ""
+
+        onRunningChanged: {
+            if (!running) {
+                lastProcessedIndex = 0;
+                lineBuffer = "";
+            }
+        }
         
         stdout: StdioCollector {
             onTextChanged: {
-                let cleaned = this.text.trim();
-                // Rely entirely on stdout streams to manage device state changes instead of timers
-                if (cleaned.includes("[CHG]") || cleaned.includes("Device")) {
-                    handleBluetoothEvent(cleaned);
+                // 1. Extract only the new delta 
+                let newChunk = this.text.substring(bluetoothSession.lastProcessedIndex);
+                bluetoothSession.lastProcessedIndex = this.text.length;
+                
+                bluetoothSession.lineBuffer += newChunk;
+                
+                // 2. Split by newline, leaving any incomplete trailing chunk in the buffer
+                let lines = bluetoothSession.lineBuffer.split("\n");
+                bluetoothSession.lineBuffer = lines.pop(); 
+                
+                let completeLines = lines.join("\n");
+                
+                if (completeLines.length > 0) {
+                    // 3. Strip all invisible ANSI color/formatting codes
+                    let cleanText = completeLines.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+                    handleBluetoothEvent(cleanText);
                 }
             }
         }
@@ -100,13 +148,23 @@ Item {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                if (bluetoothRoot.isLocked) {
-                    stateFetcher.running = false;
-                    return;
-                }
                 let textLines = this.text.split("\n");
+                
                 bluetoothRoot.isPowered = textLines.some(l => l.includes("Powered: yes"));
-                bluetoothRoot.isScanning = textLines.some(l => l.includes("Discovering: yes"));
+                
+                // Read actual hardware state
+                let hardwareScanning = textLines.some(l => l.includes("Discovering: yes"));
+                
+                if (hardwareScanning && !bluetoothRoot.isScanning) {
+                    // Sync the UI to the hardware and ensure it doesn't run forever
+                    bluetoothRoot.isScanning = true;
+                    scanDurationTimer.restart(); 
+                } else if (!hardwareScanning) {
+                    // Safely drop the state once hardware confirms it has stopped
+                    bluetoothRoot.isScanning = false;
+                }
+                
+                bluetoothRoot.isToggling = false; 
                 stateFetcher.running = false;
             }
         }
@@ -167,7 +225,6 @@ Item {
         }
     }
 
-    Process { id: togglePowerProc; running: false; onRunningChanged: { if (!running) stateFetcher.running = true; } }
     Process { id: deviceActionProc; running: false }
 
     Timer {
@@ -177,25 +234,54 @@ Item {
         onTriggered: {
             bluetoothRoot.isScanning = false;
             bluetoothSession.write("scan off\n");
-            Qt.callLater(() => { stateFetcher.running = true; }, 1000);
+            
+            // Give BlueZ time to actually shut down the radio search
+            Qt.callLater(() => { stateFetcher.running = true; }, 2500);
         }
     }
 
     function triggerScan() {
-        deviceModel.clear();
-        deviceFetcher.running = true;
-        bluetoothSession.write("agent on\n");
-        bluetoothSession.write("default-agent\n");
-        bluetoothSession.write("scan on\n");
-
-        scanDurationTimer.restart();
-        bluetoothRoot.isScanning = true;
+        if (bluetoothRoot.isScanning) {
+            // Halt the timer so it doesn't fire the auto-kill later
+            scanDurationTimer.stop();
+            
+            // Immediately drop the UI state
+            bluetoothRoot.isScanning = false;
+            
+            // Tell BlueZ to abort
+            bluetoothSession.write("scan off\n");
+            
+            // Force a clean state sync after a short cooldown 
+            Qt.callLater(() => { stateFetcher.running = true; }, 1000);
+        } else {
+            // Engage new scan
+            bluetoothRoot.isScanning = true;
+            bluetoothSession.write("scan on\n");
+            scanDurationTimer.restart();
+        }
     }
 
+    property bool isToggling: false
+
     function togglePower() {
-        let cmd = bluetoothRoot.isPowered ? "power off\n" : "power on\n";
-        bluetoothSession.write(cmd);
-        Qt.callLater(() => { stateFetcher.running = true; }, 1000);
+        if (isToggling) return;
+        isToggling = true;
+
+        let targetState = !bluetoothRoot.isPowered;
+        // Optimistic UI update
+        bluetoothRoot.isPowered = targetState;
+        
+        bluetoothSession.write(targetState ? "power on\n" : "power off\n");
+        
+        // Failsafe: Release the lock after 1 second regardless of event feedback
+        // This prevents the UI from getting "stuck" if an event is missed
+        unlockTimer.restart();
+    }
+
+    Timer {
+        id: unlockTimer
+        interval: 1000
+        onTriggered: isToggling = false
     }
 
     function handleDeviceClick(mac, isConnected) {
@@ -211,38 +297,43 @@ Item {
 
     function handleBluetoothEvent(text) { 
         let lines = text.split("\n");
-        let modelChanged = false;
-
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
-            let match = line.match(/Device\s+([0-9A-Fa-f:]{17})\s+(.*)/);
-            if (match) {
-                let mac = match[1];
-                let desc = match[2].trim();
-                let found = false;
 
-                for (let j = 0; j < deviceModel.count; j++) {
-                    if (deviceModel.get(j).mac === mac) {
-                        found = true;
-                        if (desc !== "" && !desc.startsWith("RSSI") && deviceModel.get(j).name !== desc) {
-                            deviceModel.setProperty(j, "name", desc);
-                            modelChanged = true;
-                        }
-                        if (line.includes("[CHG]") && line.includes("Connected: yes")) { deviceModel.setProperty(j, "connected", true); modelChanged = true; }
-                        if (line.includes("[CHG]") && line.includes("Connected: no")) { deviceModel.setProperty(j, "connected", false); modelChanged = true; }
-                        if (line.includes("[CHG]") && line.includes("Paired: yes")) { deviceModel.setProperty(j, "paired", true); modelChanged = true; }
-                        break;
+            // 1. LIVE DISCOVERY: Catch new devices instantly
+            if (line.includes("[NEW] Device")) {
+                let match = line.match(/Device\s+([0-9A-Fa-f:]{17})\s+(.*)/);
+                if (match) {
+                    let mac = match[1];
+                    let name = match[2].trim();
+                    
+                    // Only add if not already in the list
+                    let exists = false;
+                    for (let j = 0; j < deviceModel.count; j++) {
+                        if (deviceModel.get(j).mac === mac) { exists = true; break; }
+                    }
+                    
+                    if (!exists) {
+                        deviceModel.append({ mac: mac, name: name, connected: false, paired: false });
                     }
                 }
+            }
 
-                if (!found && desc !== "" && !desc.startsWith("RSSI")) {
-                    deviceModel.append({ mac: mac, name: desc, connected: false, paired: false });
-                    modelChanged = true;
+            // 2. STATUS UPDATES: Catch connection/pairing changes
+            if (line.includes("[CHG]")) {
+                let match = line.match(/Device\s+([0-9A-Fa-f:]{17})/);
+                if (match) {
+                    let mac = match[1];
+                    for (let j = 0; j < deviceModel.count; j++) {
+                        if (deviceModel.get(j).mac === mac) {
+                            if (line.includes("Connected: yes")) deviceModel.setProperty(j, "connected", true);
+                            if (line.includes("Connected: no")) deviceModel.setProperty(j, "connected", false);
+                            if (line.includes("Paired: yes")) deviceModel.setProperty(j, "paired", true);
+                            break;
+                        }
+                    }
                 }
             }
-        }
-        if (modelChanged) {
-            sortDeviceModel();
         }
     }
 
@@ -605,26 +696,33 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        Switch {
-                            id: powerSwitch
-                            checked: bluetoothRoot.isPowered
+                        Item {
                             implicitWidth: 42; implicitHeight: 24
                             Layout.alignment: Qt.AlignVCenter
-                            onClicked: bluetoothRoot.togglePower()
                             
-                            indicator: Rectangle {
-                                width: powerSwitch.implicitWidth; height: powerSwitch.implicitHeight; radius: 12
-                                color: powerSwitch.checked ? rootShell.colorAccent : "transparent"
-                                border.color: powerSwitch.checked ? rootShell.colorAccent : rootShell.colorBorder
+                            // The visual track
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 12
+                                color: bluetoothRoot.isPowered ? "#ffffff" : "transparent"
+                                border.color: bluetoothRoot.isPowered ? "#ffffff" : rootShell.colorBorder
                                 border.width: 2
 
+                                // The sliding handle
                                 Rectangle {
-                                    x: powerSwitch.checked ? parent.width - width - 4 : 4
+                                    x: bluetoothRoot.isPowered ? parent.width - width - 4 : 4
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 14; height: 14; radius: 7
-                                    color: powerSwitch.checked ? rootShell.colorBackground : rootShell.colorSubtext
+                                    color: bluetoothRoot.isPowered ? rootShell.colorBackground : rootShell.colorSubtext
                                     Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
                                 }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: !bluetoothRoot.isToggling
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: bluetoothRoot.togglePower()
                             }
                         }
                     }
