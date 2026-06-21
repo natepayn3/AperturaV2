@@ -5,6 +5,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import "components"
 
 Item {
     id: bluetoothRoot
@@ -13,7 +14,8 @@ Item {
     property string namespace: "quickshell-bluetooth-popup"
     property bool active: false
     
-    property bool isHovered: popupHoverArea.containsMouse || contentHoverHandler.hovered
+    // Updated to bind to the new AnimatedCard wrapper
+    property bool isHovered: cardWrapper.isHovered || contentHoverHandler.hovered
     
     property int hoverOriginX: 0
     property int hoverOriginY: 0
@@ -55,7 +57,6 @@ Item {
     
     onIsPoweredChanged: {
         if (isPowered && active) {
-            // Cycle the state to force a completely new execution
             deviceFetcher.running = false; 
             deviceFetcher.running = true;
         } else if (!isPowered) {
@@ -87,56 +88,17 @@ Item {
         }
     }
 
-    Timer {
-        id: liveScanTimer
-        interval: 2000
-        repeat: true
-        // Automatically starts/stops based on your existing scanning state variable
-        running: bluetoothRoot.isScanning 
-        
-        onTriggered: {
-            // Prevent process overlapping if a fetch takes longer than 1.5s
-            if (!deviceFetcher.running) {
-                deviceFetcher.running = true;
-            }
-        }
-    }
-
     // --- Unified Bluetooth Session (Event Listener) ---
     Process {
         id: bluetoothSession
         command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
         running: bluetoothRoot.active
         
-        // Track state to prevent O(N^2) parsing loop lockups
-        property int lastProcessedIndex: 0
-        property string lineBuffer: ""
-
-        onRunningChanged: {
-            if (!running) {
-                lastProcessedIndex = 0;
-                lineBuffer = "";
-            }
-        }
-        
         stdout: StdioCollector {
             onTextChanged: {
-                // 1. Extract only the new delta 
-                let newChunk = this.text.substring(bluetoothSession.lastProcessedIndex);
-                bluetoothSession.lastProcessedIndex = this.text.length;
-                
-                bluetoothSession.lineBuffer += newChunk;
-                
-                // 2. Split by newline, leaving any incomplete trailing chunk in the buffer
-                let lines = bluetoothSession.lineBuffer.split("\n");
-                bluetoothSession.lineBuffer = lines.pop(); 
-                
-                let completeLines = lines.join("\n");
-                
-                if (completeLines.length > 0) {
-                    // 3. Strip all invisible ANSI color/formatting codes
-                    let cleanText = completeLines.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
-                    handleBluetoothEvent(cleanText);
+                let cleaned = this.text.trim();
+                if (cleaned.includes("[CHG]") || cleaned.includes("Device")) {
+                    handleBluetoothEvent(cleaned);
                 }
             }
         }
@@ -155,12 +117,11 @@ Item {
                 // Read actual hardware state
                 let hardwareScanning = textLines.some(l => l.includes("Discovering: yes"));
                 
+                // Mitigate BlueZ race condition by checking against UI intent
                 if (hardwareScanning && !bluetoothRoot.isScanning) {
-                    // Sync the UI to the hardware and ensure it doesn't run forever
                     bluetoothRoot.isScanning = true;
                     scanDurationTimer.restart(); 
                 } else if (!hardwareScanning) {
-                    // Safely drop the state once hardware confirms it has stopped
                     bluetoothRoot.isScanning = false;
                 }
                 
@@ -172,7 +133,6 @@ Item {
 
     Process {
         id: deviceFetcher
-        // This is a heavy process, so it will now ONLY run once when the widget opens
         command: [
             "/bin/bash", 
             "-c", 
@@ -225,36 +185,41 @@ Item {
         }
     }
 
+    // Replaces BlueZ TTY failure by forcing manual CLI checks during scan
+    Timer {
+        id: liveScanTimer
+        interval: 1500
+        repeat: true
+        running: bluetoothRoot.isScanning 
+        onTriggered: {
+            if (!deviceFetcher.running) {
+                deviceFetcher.running = true;
+            }
+        }
+    }
+
     Process { id: deviceActionProc; running: false }
 
     Timer {
         id: scanDurationTimer
-        interval: 10000
+        interval: 5000
         repeat: false
         onTriggered: {
             bluetoothRoot.isScanning = false;
             bluetoothSession.write("scan off\n");
-            
-            // Give BlueZ time to actually shut down the radio search
+            // Extended 2.5s delay allows BlueZ hardware to completely halt
             Qt.callLater(() => { stateFetcher.running = true; }, 2500);
         }
     }
 
+    // Converted to Play/Stop toggle
     function triggerScan() {
         if (bluetoothRoot.isScanning) {
-            // Halt the timer so it doesn't fire the auto-kill later
             scanDurationTimer.stop();
-            
-            // Immediately drop the UI state
             bluetoothRoot.isScanning = false;
-            
-            // Tell BlueZ to abort
             bluetoothSession.write("scan off\n");
-            
-            // Force a clean state sync after a short cooldown 
             Qt.callLater(() => { stateFetcher.running = true; }, 1000);
         } else {
-            // Engage new scan
             bluetoothRoot.isScanning = true;
             bluetoothSession.write("scan on\n");
             scanDurationTimer.restart();
@@ -268,13 +233,9 @@ Item {
         isToggling = true;
 
         let targetState = !bluetoothRoot.isPowered;
-        // Optimistic UI update
         bluetoothRoot.isPowered = targetState;
         
         bluetoothSession.write(targetState ? "power on\n" : "power off\n");
-        
-        // Failsafe: Release the lock after 1 second regardless of event feedback
-        // This prevents the UI from getting "stuck" if an event is missed
         unlockTimer.restart();
     }
 
@@ -300,14 +261,12 @@ Item {
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
 
-            // 1. LIVE DISCOVERY: Catch new devices instantly
             if (line.includes("[NEW] Device")) {
                 let match = line.match(/Device\s+([0-9A-Fa-f:]{17})\s+(.*)/);
                 if (match) {
                     let mac = match[1];
                     let name = match[2].trim();
                     
-                    // Only add if not already in the list
                     let exists = false;
                     for (let j = 0; j < deviceModel.count; j++) {
                         if (deviceModel.get(j).mac === mac) { exists = true; break; }
@@ -319,7 +278,6 @@ Item {
                 }
             }
 
-            // 2. STATUS UPDATES: Catch connection/pairing changes
             if (line.includes("[CHG]")) {
                 let match = line.match(/Device\s+([0-9A-Fa-f:]{17})/);
                 if (match) {
@@ -350,187 +308,24 @@ Item {
     onActiveChanged: {
         if (active) {
             stateFetcher.running = true;
-            // Bootstraps initial state once, then leaves updates to the dbus stream
             deviceFetcher.running = true; 
         }
     }
 
     // --- Visuals & Animations ---
-    Item {
-        id: animatedGroup
+    AnimatedCard {
+        id: cardWrapper
         anchors.fill: parent
-
-        transformOrigin: {
-            if (rootShell.barPosition === "left") return Item.BottomLeft
-            if (rootShell.barPosition === "right") return Item.BottomRight
-            if (rootShell.barPosition === "top") return Item.TopRight
-            if (rootShell.barPosition === "bottom") return Item.BottomRight
-            return Item.Center
-        }
-
-        opacity: bluetoothRoot.active ? 1.0 : 0.0
-        scale: bluetoothRoot.active ? 1.0 : 0.0
-        x: bluetoothRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
-        y: bluetoothRoot.active ? 0 : (rootShell.barPosition === "top" ? -40 : 40)
         
-        visible: opacity > 0.01
-
-        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.InOutQuad } }
-        Behavior on scale { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-
-        Rectangle {
-            id: cardMainBody
-            anchors.fill: parent
-            color: rootShell.colorBackground
-            z: 2
-            border.width: 0
-
-            topLeftRadius:     getCornerRadius("topLeft")
-            topRightRadius:    getCornerRadius("topRight")
-            bottomLeftRadius:  getCornerRadius("bottomLeft")
-            bottomRightRadius: getCornerRadius("bottomRight")
-
-            function getCornerRadius(corner) {
-                let pos = rootShell.barPosition;
-                let rad = bluetoothRoot.radiusValue;
-
-                if (pos === "top") return (corner === "bottomLeft") ? rad : 0;
-                if (pos === "bottom") return (corner === "topLeft") ? rad : 0;
-                if (pos === "left") return (corner === "topRight") ? rad : 0;
-                if (pos === "right") return (corner === "topLeft") ? rad : 0;
-                return rad;
-            }
-        }
-
-        Item {
-            anchors.fill: parent
-            visible: bluetoothRoot.width > 30
-            z: 2 
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "left"
-                
-                Shape {
-                    x: 0; y: -bluetoothRoot.wingSize
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: bluetoothRoot.wingSize
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: bluetoothRoot.wingSize }
-                        PathLine { x: 0; y: bluetoothRoot.wingSize }
-                    }
-                }
-                
-                Shape {
-                    rotation: -90
-                    transformOrigin: Item.TopLeft
-                    x: parent.width; y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: bluetoothRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "right"
-
-                Shape {
-                    x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: bluetoothRoot.wingSize
-                        PathLine { x: 0; y: bluetoothRoot.wingSize }
-                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                    }
-                }
-
-                Shape {
-                    rotation: 90
-                    transformOrigin: Item.TopRight
-                    x: 0 - bluetoothRoot.wingSize; y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: 0
-                        PathLine { x: 0; y: 0 }
-                        PathQuad { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize; controlX: bluetoothRoot.wingSize; controlY: 0 }
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                    }
-                }
-            }
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "top"
-
-                Shape {
-                    x: -bluetoothRoot.wingSize; y: 0
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: 0 }
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                    }
-                }
-                
-                Shape {
-                    x: parent.width - bluetoothRoot.wingSize; y: parent.height
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "bottom"
-                
-                Shape {
-                    x: parent.width - bluetoothRoot.wingSize; y: -bluetoothRoot.wingSize
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: bluetoothRoot.wingSize; startY: bluetoothRoot.wingSize
-                        PathLine { x: 0; y: bluetoothRoot.wingSize }
-                        PathQuad { x: bluetoothRoot.wingSize; y: 0; controlX: bluetoothRoot.wingSize; controlY: bluetoothRoot.wingSize }
-                        PathLine { x: bluetoothRoot.wingSize; y: bluetoothRoot.wingSize }
-                    }
-                }
-                
-                Shape {
-                    rotation: 180 
-                    transformOrigin: Item.TopLeft
-                    x: parent.width - maxCardWidth; y: parent.height 
-                    width: bluetoothRoot.wingSize; height: bluetoothRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: bluetoothRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: bluetoothRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-        }
-
-        MouseArea { id: popupHoverArea; anchors.fill: parent; hoverEnabled: true; z: 1 }
+        active: bluetoothRoot.active
+        barPosition: rootShell.barPosition
+        backgroundColor: rootShell.colorBackground
+        
+        targetWidth: bluetoothRoot.maxCardWidth
+        targetHeight: bluetoothRoot.maxCardHeight
+        
+        radiusValue: bluetoothRoot.radiusValue
+        wingSize: bluetoothRoot.wingSize
 
         Item {
             id: layoutContentWrapper
@@ -700,7 +495,6 @@ Item {
                             implicitWidth: 42; implicitHeight: 24
                             Layout.alignment: Qt.AlignVCenter
                             
-                            // The visual track
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 12
@@ -708,7 +502,6 @@ Item {
                                 border.color: bluetoothRoot.isPowered ? "#ffffff" : rootShell.colorBorder
                                 border.width: 2
 
-                                // The sliding handle
                                 Rectangle {
                                     x: bluetoothRoot.isPowered ? parent.width - width - 4 : 4
                                     anchors.verticalCenter: parent.verticalCenter
