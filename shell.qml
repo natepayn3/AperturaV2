@@ -23,7 +23,10 @@ Scope {
     readonly property var wallpaperRef: globalWallpaperPreview 
 
     // --- Modular Theme Provider Integration ---
-    MatugenProvider { id: themeProvider }
+    MatugenProvider { 
+        id: themeProvider 
+        isShutterMode: Config.shutterMode // 📸 Safely inject the singleton state here
+    }
 
     // Colors automatically link to the provider changes
     property color colorBackground: themeProvider.background
@@ -31,10 +34,10 @@ Scope {
     property color colorAccent: themeProvider.accent
     property string matugenFilePath: themeProvider.matugenFilePath
 
-    // Point these to the provider instead of hardcoding strings
-    property string colorText: themeProvider.textPrimary
-    property string colorSubtext: themeProvider.textSub
-    property string colorClose: "#f38ba8" 
+    // 📸 Changed from 'string' to 'color' to prevent hex parsing failures
+    property color colorText: themeProvider.textPrimary
+    property color colorSubtext: themeProvider.textSub
+    property color colorClose: "#f38ba8" 
     property string shellFont: "Rubik"
 
     // --- Window Layout & State Management ---
@@ -378,6 +381,13 @@ Scope {
                 globalWifiPreview.wifiActive = true; showWifiAnim.restart();
                 if (globalWifiPreview.cardRef) globalWifiPreview.cardRef.forceActiveFocus();
             }
+        }
+    }
+
+    Connections {
+        target: globalWallpaperPreview 
+        function onApplyFinished() {
+            themeProvider.reloadColors();
         }
     }
 
