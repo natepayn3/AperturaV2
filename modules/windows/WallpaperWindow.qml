@@ -20,18 +20,35 @@ PanelWindow {
 
     signal applyFinished()
 
-    // 🎯 Run the preview generation on startup as soon as shell values resolve
-    Component.onCompleted: {
-        let timer = Qt.createQmlObject("import QtQuick; Timer {}", wallpaperWindow);
-        timer.interval = 500; // Give shell settings a brief window to load from JSON
-        timer.triggered.connect(() => {
+    // 🎯 Declarative startup delay to let shell settings load
+    Timer {
+        id: startupDelayTimer
+        interval: 500
+        running: false
+        repeat: false
+        onTriggered: {
             if (currentWallpaperPath && currentWallpaperPath !== "") {
-                // Silently populate the preview cache file for the active wallpaper
+                cacheCheckProc.running = true;
+            }
+        }
+    }
+
+    Process {
+        id: cacheCheckProc
+        running: false
+        command: ["bash", "-c", "test -f '" + Quickshell.env("HOME") + "/.cache/matugen-previews.json'"]
+        
+        // Explicitly catch the parameter emitted by the signal
+        onExited: (exitCode) => {
+            if (exitCode !== 0) {
                 wallpaperBackend.triggerBackendRun(currentWallpaperPath, false);
             }
-            timer.destroy();
-        });
-        timer.start();
+        }
+    }
+
+    // Trigger the sequence on load
+    Component.onCompleted: {
+        startupDelayTimer.start();
     }
 
     WlrLayershell.namespace: "quickshell-wallpaper"
@@ -387,7 +404,8 @@ PanelWindow {
                             property bool thumbReady: false
                             
                             Process {
-                                running: delegateRoot.isVideo
+                                // Restrict execution to the actively focused item
+                                running: delegateRoot.isVideo && delegateRoot.isActiveTarget
                                 command: [
                                     "bash", "-c", 
                                     "mkdir -p '" + thumbDir + "' && if [ ! -f '" + thumbFile + "' ]; then ffmpeg -y -i '" + filePath + "' -ss 00:00:00.100 -vframes 1 -vf 'scale=450:-1' -q:v 2 '" + thumbFile + "' >/dev/null 2>&1; fi"
