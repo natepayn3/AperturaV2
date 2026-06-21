@@ -9,6 +9,7 @@ QtObject {
     property string position: "left"
     property bool floating: true
     property int animationsDuration: 300
+    property bool shutterMode: false // Toggles the solid obsidian/white theme
 
     readonly property bool isVertical: position === "left" || position === "right"
     
@@ -26,6 +27,7 @@ QtObject {
             if (parsed.position !== undefined) position = parsed.position;
             if (parsed.floating !== undefined) floating = parsed.floating;
             if (parsed.animationsDuration !== undefined) animationsDuration = parsed.animationsDuration;
+            if (parsed.shutterMode !== undefined) shutterMode = parsed.shutterMode;
         } catch (e) {
             applyDefaults();
         }
@@ -36,7 +38,8 @@ QtObject {
         let updatePayload = {
             "position": configEngine.position,
             "floating": configEngine.floating,
-            "animationsDuration": configEngine.animationsDuration
+            "animationsDuration": configEngine.animationsDuration,
+            "shutterMode": configEngine.shutterMode
         };
         
         // Write directly to the dynamic path; parent directory is guaranteed to exist
@@ -48,11 +51,12 @@ QtObject {
         position = "left";
         floating = true;
         animationsDuration = 300;
+        shutterMode = false;
     }
 
     property Process initProcess: Process {
         // Check for file existence in the dynamic path and generate defaults if missing
-        command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300}' > " + configEngine.configFilePath + " || true"]
+        command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300,\"shutterMode\":false}' > " + configEngine.configFilePath + " || true"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
