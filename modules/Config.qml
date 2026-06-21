@@ -7,13 +7,13 @@ QtObject {
     id: configEngine
 
     property string position: "left"
-    property bool floating: true
+    property string currentWallpaper: ""
+    property string matugenScheme: "scheme-tonal-spot"
     property int animationsDuration: 300
-    // 🎯 Declare the missing property with a default value
+    property bool floating: true
     property bool shutterMode: false
 
     readonly property bool isVertical: position === "left" || position === "right"
-    
     readonly property string basePath: Qt.resolvedUrl(".").toString().replace("file://", "").trim()
     readonly property string configFilePath: basePath + "shell_settings.json"
 
@@ -27,8 +27,9 @@ QtObject {
             if (parsed.position !== undefined) position = parsed.position;
             if (parsed.floating !== undefined) floating = parsed.floating;
             if (parsed.animationsDuration !== undefined) animationsDuration = parsed.animationsDuration;
-            // 🎯 Add it to the parser
             if (parsed.shutterMode !== undefined) shutterMode = parsed.shutterMode;
+            if (parsed.currentWallpaper !== undefined) currentWallpaper = parsed.currentWallpaper;
+            if (parsed.matugenScheme !== undefined) matugenScheme = parsed.matugenScheme;
         } catch (e) {
             applyDefaults();
         }
@@ -40,10 +41,10 @@ QtObject {
             "position": configEngine.position,
             "floating": configEngine.floating,
             "animationsDuration": configEngine.animationsDuration,
-            // 🎯 Include it in the save payload
-            "shutterMode": configEngine.shutterMode
+            "shutterMode": configEngine.shutterMode,
+            "currentWallpaper": configEngine.currentWallpaper,
+            "matugenScheme": configEngine.matugenScheme
         };
-        
         writeProcess.command = ["bash", "-c", "echo '" + JSON.stringify(updatePayload) + "' > " + configFilePath];
         writeProcess.running = true;
     }
@@ -52,13 +53,13 @@ QtObject {
         position = "left";
         floating = true;
         animationsDuration = 300;
-        // 🎯 Add to defaults
-        shutterMode = false; 
+        shutterMode = false;
+        currentWallpaper = "";
+        matugenScheme = "scheme-tonal-spot";
     }
 
     property Process initProcess: Process {
-        // 🎯 Inject shutterMode into the fallback JSON generation string
-        command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300,\"shutterMode\":false}' > " + configEngine.configFilePath + " || true"]
+        command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300,\"shutterMode\":false,\"currentWallpaper\":\"\",\"matugenScheme\":\"scheme-tonal-spot\"}' > " + configEngine.configFilePath + " || true"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
