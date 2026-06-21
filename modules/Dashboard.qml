@@ -55,7 +55,6 @@ Item {
     property string mediaArtist: "---"
     property string mediaStatus: "Stopped"
     property string mediaArtUrl: ""
-    
 
     property bool wifiAvailable: false
     property bool wifiActive: false
@@ -127,13 +126,15 @@ Item {
 
     Timer {
         id: weatherTimer
-        interval: 900000; running: true; repeat: true; triggeredOnStart: true
+        interval: 900000;
+        running: true; repeat: true; triggeredOnStart: true
         onTriggered: weatherFetcher.running = true
     }
 
     Timer {
         id: sysStatsTimer
-        interval: 5000; running: false; repeat: true
+        interval: 5000;
+        running: false; repeat: true
         onTriggered: {
             cpuStatReader.reload();
             memInfoReader.reload();
@@ -151,7 +152,7 @@ Item {
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].startsWith("MemTotal:")) total = parseInt(lines[i].replace(/\D/g, ''));
                 if (lines[i].startsWith("MemAvailable:")) avail = parseInt(lines[i].replace(/\D/g, ''));
-                if (total && avail) break; 
+                if (total && avail) break;
             }
             if (total > 0) dashboardRoot.sysRam = (total - avail) / total;
         }
@@ -171,11 +172,9 @@ Item {
                 let iowait = parseInt(parts[5]) || 0;
                 let irq = parseInt(parts[6]) || 0;
                 let softirq = parseInt(parts[7]) || 0;
-
                 let total = user + nice + system + idle + iowait + irq + softirq;
                 let totalDelta = total - dashboardRoot.lastCpuTotal;
                 let idleDelta = idle - dashboardRoot.lastCpuIdle;
-
                 if (totalDelta > 0) dashboardRoot.sysCpu = (totalDelta - idleDelta) / totalDelta;
                 dashboardRoot.lastCpuTotal = total;
                 dashboardRoot.lastCpuIdle = idle;
@@ -252,7 +251,6 @@ Item {
             onRead: (data) => {
                 try {
                     let parsed = JSON.parse(data.trim());
-                    
                     // Trap the "Stopped" status to nuke the metadata
                     if (parsed.status === "Stopped") {
                         dashboardRoot.mediaTitle = "Not Playing";
@@ -354,7 +352,6 @@ Item {
         z: 1
         HoverHandler {
             id: dashHover
-            // 🎯 FIX: Add an OR condition for slider interaction
             onHoveredChanged: {
                 if (hovered) {
                     rootShell.dashboardRef.cancelDismiss();
@@ -384,11 +381,10 @@ Item {
 
         HoverHandler {
             id: bridgeHover
-            // 🎯 FIX: Only request dismiss if NOT hovering over the dashboard card itself
             onHoveredChanged: {
                 if (hovered) {
                     rootShell.dashboardRef.cancelDismiss();
-                } else if (!dashHover.hovered) { // Only dismiss if we aren't hovering the card either
+                } else if (!dashHover.hovered) {
                     rootShell.dashboardRef.requestDismiss();
                 }
             }
@@ -413,8 +409,14 @@ Item {
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
+            anchors.margins: -1 // 🎯 Push visual boundary out 1px to absorb fractional subpixel gap
             color: rootShell.colorBackground
             z: 2
+
+            // 🎯 Add physical border mirroring the background to absorb scaling artifacts
+            border.width: 1
+            border.color: rootShell.colorBackground
+
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
             bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
@@ -423,6 +425,7 @@ Item {
 
         Item {
             anchors.fill: parent
+            anchors.margins: -1 // 🎯 Force alignment matching the expanded body
             z: 3
             visible: dashboardRoot.width > 30
 
@@ -434,7 +437,8 @@ Item {
                     x: 0; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1 // 🎯 Anti-aliasing bleed
                         startX: 0; startY: dashboardRoot.wingSize
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: 0; controlY: dashboardRoot.wingSize }
@@ -445,7 +449,8 @@ Item {
                     x: 0; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 }
@@ -461,7 +466,8 @@ Item {
                     x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: dashboardRoot.wingSize
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
@@ -472,7 +478,8 @@ Item {
                     x: parent.width - dashboardRoot.wingSize; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
@@ -489,7 +496,8 @@ Item {
                     x: -dashboardRoot.wingSize; y: 0
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: dashboardRoot.wingSize; y: 0 }
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
@@ -500,7 +508,8 @@ Item {
                     x: parent.width; y: 0
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: dashboardRoot.wingSize; y: 0 } 
                         PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 } 
@@ -516,7 +525,8 @@ Item {
                     x: -dashboardRoot.wingSize; y: parent.height - dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: dashboardRoot.wingSize; startY: 0
                         PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
                         PathLine { x: 0; y: dashboardRoot.wingSize } 
@@ -527,7 +537,8 @@ Item {
                     x: parent.width; y: parent.height - dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground;
+                        strokeColor: rootShell.colorBackground; strokeWidth: 1
                         startX: 0; startY: 0
                         PathQuad { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize; controlX: 0; controlY: dashboardRoot.wingSize }
                         PathLine { x: 0; y: dashboardRoot.wingSize } 
@@ -561,7 +572,7 @@ Item {
                     // --- Left / Top: Time / Date / Weather ---
                     ColumnLayout {
                         Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignLeft) : Qt.AlignHCenter
-                        Layout.fillWidth: true // Pushes the rings perfectly to the right edge
+                        Layout.fillWidth: true 
                         spacing: 4
 
                         RowLayout {
@@ -608,8 +619,6 @@ Item {
                     // --- Right / Bottom: Systems Rings ---
                     RowLayout {
                         Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignRight) : Qt.AlignHCenter
-                        
-                        // 🎯 CRITICAL: Protects the rings from being squished by the Time column
                         Layout.minimumWidth: implicitWidth 
                         spacing: 16
 
@@ -620,7 +629,7 @@ Item {
                     }
                 }
 
-                // Toggle Grid (Responds dynamically to isHorizontal flag)
+                // Toggle Grid
                 GridLayout {
                     columns: dashboardRoot.isHorizontal ? 4 : 2
                     rowSpacing: 12
@@ -681,7 +690,7 @@ Item {
                     }
                 }
 
-                // Quick Action Utilities - Symmetrical Dual Sliding Layout
+                // Quick Action Utilities
                 Item {
                     id: utilitiesWrapper
                     Layout.fillWidth: true
@@ -738,7 +747,7 @@ Item {
                         }
                     }
 
-                    // Layer 2: Absolute-Positioned Slide Tray Overlay
+                    // Layer 2: Slide Tray Overlay
                     Item {
                         id: slideOverlay
                         anchors.top: parent.top
@@ -840,10 +849,9 @@ Item {
                     }
                 }
 
-                // --- Lower Section: Media & Notifications ---
+                // Lower Section: Media & Notifications
                 GridLayout {
                     Layout.fillWidth: true
-                    
                     columns: dashboardRoot.isHorizontal ? 2 : 1
                     rowSpacing: 16
                     columnSpacing: 16
@@ -852,10 +860,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0     
                         Layout.preferredWidth: 0   
-                        
-                        // 🎯 Floats the card in the middle of the row's total height
                         Layout.alignment: Qt.AlignVCenter 
-                        // (Removed Layout.fillHeight so it doesn't stretch to match the tray)
                         
                         onPlayPauseClicked: {
                             mediaControlProc.command = ["playerctl", "play-pause"]
@@ -873,7 +878,6 @@ Item {
 
                     NotificationCenter {
                         Layout.fillWidth: true
-                        // 🎯 CRITICAL: Forces a strict 50/50 split and stops grid overflow
                         Layout.minimumWidth: 0     
                         Layout.preferredWidth: 0   
                         Layout.alignment: Qt.AlignTop
@@ -881,7 +885,6 @@ Item {
                     }
                 }
 
-                // Absorbs all remaining vertical dead space, pushing everything else cleanly to the top
                 Item { Layout.fillHeight: true }
             }
         }
