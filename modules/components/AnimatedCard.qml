@@ -43,9 +43,13 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        anchors.margins: -1
         color: cardRoot.backgroundColor
         z: 2
-        border.width: 0
+        
+        // 🎯 Force a physical pixel bleed on the main body
+        border.width: 1
+        border.color: cardRoot.backgroundColor
 
         topLeftRadius:     getCornerRadius("topLeft")
         topRightRadius:    getCornerRadius("topRight")
@@ -63,6 +67,7 @@ Item {
 
     Item {
         anchors.fill: parent
+        anchors.margins: -1
         visible: cardRoot.width > 30
         z: 2 
 
