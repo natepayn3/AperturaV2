@@ -8,15 +8,19 @@ Item {
     property var shellTarget: null
     property var settingsWindow: null
 
-    // 🎯 Define the expected color properties locally
     property color themeBorder: "transparent"
     property color themeAccent: "transparent"
     property color themeText: "transparent"
 
-    Grid {
+    Component.onCompleted: {
+        if (shellTarget && shellTarget.currentScheme) {
+            settingsWindow.matugenScheme = shellTarget.currentScheme;
+        }
+    }
+
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 10
-        columns: 2
         spacing: 12
 
         component ProfileCard : Button {
@@ -24,20 +28,22 @@ Item {
             property string schemeId: ""
             property string schemeLabel: ""
             
-            width: (parent.width - 12) / 2
-            height: 60
+            property var customPalette: [] 
+            
+            Layout.fillWidth: true
+            Layout.preferredHeight: 60
             flat: true
 
             background: Rectangle {
-                // 🎯 Reference the local properties directly
                 color: settingsWindow.matugenScheme === schemeId 
-                    ? themeBorder 
+                    ? Qt.rgba(themeBorder.r, themeBorder.g, themeBorder.b, 0.1) 
                     : (cardBtn.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
                 
                 border.color: settingsWindow.matugenScheme === schemeId 
                     ? themeAccent 
                     : (cardBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : "transparent")
-                border.width: 0
+                
+                border.width: settingsWindow.matugenScheme === schemeId ? 2 : 1
                 radius: 8
             }
 
@@ -63,6 +69,37 @@ Item {
                     color: themeText
                     verticalAlignment: Text.AlignVCenter
                 }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    spacing: 12
+                    
+                    visible: settingsWindow.matugenScheme === schemeId || cardBtn.customPalette.length > 0
+                    
+                    Repeater {
+                        model: cardBtn.customPalette.length > 0 ? cardBtn.customPalette : [themeAccent, themeBorder, themeText]
+                        
+                        RowLayout {
+                            spacing: 4
+                            
+                            Rectangle {
+                                width: 14
+                                height: 14
+                                radius: 4
+                                color: modelData
+                                border.color: Qt.rgba(1, 1, 1, 0.2)
+                                border.width: 1
+                            }
+                            
+                            Text {
+                                text: String(modelData).substring(0, 7).toUpperCase()
+                                font.family: "monospace"
+                                font.pixelSize: 10
+                                color: themeText
+                            }
+                        }
+                    }
+                }
             }
 
             onClicked: {
@@ -70,10 +107,8 @@ Item {
                 settingsWindow.pushUpdate();
                 
                 if (shellTarget && shellTarget.wallpaperRef) {
-                    // 🎯 Read the reliable root property we just exposed
+                    // Removed the assignment to currentScheme here to prevent QML execution halt
                     let activeWallpaper = shellTarget.wallpaperRef.currentWallpaperPath || "";
-                    
-                    // Force the apply pipeline using the new scheme layout ID
                     shellTarget.wallpaperRef.apply(activeWallpaper, false, schemeId);
                 }
             }
@@ -87,5 +122,7 @@ Item {
         ProfileCard { schemeId: "scheme-rainbow"; schemeLabel: "Rainbow" }
         ProfileCard { schemeId: "scheme-neutral"; schemeLabel: "Neutral" }
         ProfileCard { schemeId: "scheme-monochrome"; schemeLabel: "Monochrome" }
+        
+        Item { Layout.fillHeight: true }
     }
 }
