@@ -9,12 +9,12 @@ QtObject {
     property string position: "left"
     property bool floating: true
     property int animationsDuration: 300
-    property bool shutterMode: false // Toggles the solid obsidian/white theme
+    // 🎯 Declare the missing property with a default value
+    property bool shutterMode: false
 
     readonly property bool isVertical: position === "left" || position === "right"
     
-    // Dynamically resolve the directory this file is running from
-    readonly property string basePath: Qt.resolvedUrl(".").replace("file://", "").trim()
+    readonly property string basePath: Qt.resolvedUrl(".").toString().replace("file://", "").trim()
     readonly property string configFilePath: basePath + "shell_settings.json"
 
     function loadSettings() {
@@ -27,6 +27,7 @@ QtObject {
             if (parsed.position !== undefined) position = parsed.position;
             if (parsed.floating !== undefined) floating = parsed.floating;
             if (parsed.animationsDuration !== undefined) animationsDuration = parsed.animationsDuration;
+            // 🎯 Add it to the parser
             if (parsed.shutterMode !== undefined) shutterMode = parsed.shutterMode;
         } catch (e) {
             applyDefaults();
@@ -39,10 +40,10 @@ QtObject {
             "position": configEngine.position,
             "floating": configEngine.floating,
             "animationsDuration": configEngine.animationsDuration,
+            // 🎯 Include it in the save payload
             "shutterMode": configEngine.shutterMode
         };
         
-        // Write directly to the dynamic path; parent directory is guaranteed to exist
         writeProcess.command = ["bash", "-c", "echo '" + JSON.stringify(updatePayload) + "' > " + configFilePath];
         writeProcess.running = true;
     }
@@ -51,11 +52,12 @@ QtObject {
         position = "left";
         floating = true;
         animationsDuration = 300;
-        shutterMode = false;
+        // 🎯 Add to defaults
+        shutterMode = false; 
     }
 
     property Process initProcess: Process {
-        // Check for file existence in the dynamic path and generate defaults if missing
+        // 🎯 Inject shutterMode into the fallback JSON generation string
         command: ["bash", "-c", "[ ! -f " + configEngine.configFilePath + " ] && echo '{\"position\":\"left\",\"floating\":true,\"animationsDuration\":300,\"shutterMode\":false}' > " + configEngine.configFilePath + " || true"]
         running: true
         stdout: StdioCollector {
