@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Shapes
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
@@ -13,13 +12,11 @@ Item {
     property string namespace: "quickshell-wifi-popup"
     property bool active: false
     
-    property bool isHovered: cardWrapper.isHovered || contentHoverHandler.hovered
+    // Pass this through to AnimatedCard
+    property bool isHovered: popupCard.isHovered || contentHoverHandler.hovered
     
     property int hoverOriginX: 0
     property int hoverOriginY: 0
-
-    property real radiusValue: 12
-    property real wingSize: 14
 
     property real maxCardWidth: 340
     property real maxCardHeight: 440
@@ -49,6 +46,7 @@ Item {
     
     Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
+    // Position mathematics remain native to the item container
     x: {
         let targetWidth = Quickshell.screen ? Quickshell.screen.width : Screen.width;
         if (rootShell.barPosition === "top") return targetWidth - width - 10;
@@ -62,7 +60,7 @@ Item {
         let targetHeight = Quickshell.screen ? Quickshell.screen.height : Screen.height;
         switch (rootShell.barPosition) {
             case "bottom": return targetHeight - height - 46;
-            case "top":    return 46;                               
+            case "top":    return 46;                             
             case "left":   return targetHeight - height - 10;
             case "right":  return targetHeight - height - 10;
             default:       return hoverOriginY;
@@ -390,31 +388,19 @@ Item {
         fetchStatusProc.running = true;
     }
 
-    // --- Visual Layout and Dynamic Springs ---
+    // 🎯 Use the new AnimatedCard Component to handle the visual container
     AnimatedCard {
-        id: cardWrapper
+        id: popupCard
         anchors.fill: parent
-        
         active: wifiRoot.active
         barPosition: rootShell.barPosition
         backgroundColor: rootShell.colorBackground
         
-        targetWidth: wifiRoot.width
-        targetHeight: wifiRoot.height
-        
-        radiusValue: wifiRoot.radiusValue
-        wingSize: wifiRoot.wingSize
-
+        // 🎯 Internal Layout
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
             z: 5
-            
-            // Retaining your click-sink behavior to prevent touches passing through to the desktop
-            MouseArea { 
-                anchors.fill: parent
-                onPressed: (mouse) => mouse.accepted = true 
-            }
 
             HoverHandler { id: contentHoverHandler }
 
@@ -478,7 +464,6 @@ Item {
                                             Layout.fillWidth: true
                                         }
 
-                                        // Inline Security Badge: Displayed directly to the right of the text when expanded
                                         Text {
                                             text: model.securityType
                                             color: rootShell.colorSubtext
