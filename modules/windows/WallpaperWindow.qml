@@ -25,10 +25,8 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     
-    // Bind visibility to the height animation so it closes smoothly
     visible: active || animatedGroup.height > 1
 
-    // Background click-to-dismiss
     MouseArea {
         anchors.fill: parent
         onClicked: wallpaperWindow.active = false
@@ -103,7 +101,6 @@ PanelWindow {
         ]
     }
 
-    // 🎯 --- THE POP-OUT CARD ---
     Item {
         id: animatedGroup
         
@@ -111,13 +108,8 @@ PanelWindow {
         property real wingSize: 14
 
         width: parent.width - 120 
-        
-        // 🎯 Animate height instead of scale/opacity to "expand upward"
         height: wallpaperWindow.active ? 480 : 0
         
-        // No clip here so wings can bleed outside the border!
-
-        // Centers the card horizontally
         x: {
             if (rootShell.barPosition === "left") {
                 return 46 + Math.round((parent.width - 46 - width) / 2);
@@ -128,16 +120,13 @@ PanelWindow {
             return Math.round((parent.width - width) / 2);
         }
 
-        // Anchors the absolute bottom of the container to the bar/10px buffer
         y: {
             let bottomOffset = (rootShell.barPosition === "bottom") ? 46 : 10;
             return parent.height - height - bottomOffset;
         }
 
-        // 🎯 Smooth physical stretch
         Behavior on height { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
 
-        // The background of the card that stretches physically
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
@@ -150,7 +139,6 @@ PanelWindow {
             bottomRightRadius: 0
         }
 
-        // Bottom Bar Wings - Physically bound to the window height
         Item {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -158,11 +146,7 @@ PanelWindow {
             height: parent.height
             z: 3
             
-            // 🎯 Locked at 0 while the window is tall. 
-            // ONLY slides down during the exact final 14 pixels of the animation.
             y: Math.max(0, animatedGroup.wingSize - animatedGroup.height)
-            
-            // Instantly despawns when the window finishes closing
             visible: animatedGroup.height > 0.1
 
             Shape {
@@ -189,14 +173,11 @@ PanelWindow {
             }
         }
 
-        // 🎯 --- CAROUSEL CONTENT ---
-        // Dedicated clipping wrapper that perfectly matches the animated height
         Item {
             anchors.fill: parent
-            clip: true // 🎯 Moved clip here so ONLY the inner content gets chopped during the slide
+            clip: true 
             z: 5
 
-            // The fixed-height anchor that prevents the UI from squashing
             Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -219,9 +200,9 @@ PanelWindow {
                                 return;
                             }
                             if (direction === -1) {
-                                carousel.currentIndex = Math.max(0, carousel.currentIndex - 1);
+                                carousel.decrementCurrentIndex();
                             } else if (direction === 1) {
-                                carousel.currentIndex = Math.min(carousel.count - 1, carousel.currentIndex + 1);
+                                carousel.incrementCurrentIndex();
                             }
                         }
                     }
@@ -260,28 +241,41 @@ PanelWindow {
                         }
                     }
 
-                    ListView {
+                    PathView {
                         id: carousel
                         anchors.centerIn: parent
                         width: parent.width - 200 
                         height: parent.height
                         clip: false 
-                        orientation: ListView.Horizontal
-                        property real cardSkew: 35
-                        spacing: -cardSkew + 5 
-                        cacheBuffer: 3000
-
-                        leftMargin: width / 2 - 90
-                        rightMargin: width / 2 - 90
 
                         model: wallpaperModel
                         focus: true
                         interactive: true 
 
-                        preferredHighlightBegin: width / 2 - 90
-                        preferredHighlightEnd: width / 2 + 90
-                        highlightRangeMode: ListView.StrictlyEnforceRange
+                        property int modelCount: wallpaperModel.count
+                        property real cardSkew: 35
+                        property real itemSpacing: 180 - cardSkew + 5
+                        
+                        property int maxVisible: Math.ceil(width / itemSpacing) + 4
+                        property int dynamicItemCount: Math.min(Math.max(1, modelCount), maxVisible)
+                        
+                        pathItemCount: dynamicItemCount
+                        
+                        property real currentPathLength: dynamicItemCount * itemSpacing
+
+                        preferredHighlightBegin: 0.5
+                        preferredHighlightEnd: 0.5
+                        highlightRangeMode: PathView.StrictlyEnforceRange
                         highlightMoveDuration: 200
+
+                        path: Path {
+                            startX: carousel.width / 2 - carousel.currentPathLength / 2
+                            startY: carousel.height / 2
+                            PathLine { 
+                                x: carousel.width / 2 + carousel.currentPathLength / 2
+                                y: carousel.height / 2 
+                            }
+                        }
 
                         property string currentFilePath: ""
                         Keys.onReturnPressed: wallpaperWindow.apply(currentFilePath, event.modifiers & Qt.ControlModifier)
@@ -297,21 +291,21 @@ PanelWindow {
                         Keys.onLeftPressed: {
                             carousel.isKeyboarding = true;
                             carousel.hoveredIndex = -1; 
-                            if (currentIndex > 0) currentIndex--;
+                            carousel.decrementCurrentIndex();
                         }
                         Keys.onRightPressed: {
                             carousel.isKeyboarding = true;
                             carousel.hoveredIndex = -1; 
-                            if (currentIndex < count - 1) currentIndex++;
+                            carousel.incrementCurrentIndex();
                         }
 
                         WheelHandler {
                             onWheel: (event) => {
                                 carousel.isKeyboarding = false;
                                 if (event.angleDelta.y > 0 || event.angleDelta.x > 0) {
-                                    carousel.currentIndex = Math.max(0, carousel.currentIndex - 1);
+                                    carousel.decrementCurrentIndex();
                                 } else if (event.angleDelta.y < 0 || event.angleDelta.x < 0) {
-                                    carousel.currentIndex = Math.min(carousel.count - 1, carousel.currentIndex + 1);
+                                    carousel.incrementCurrentIndex();
                                 }
                             }
                         }
@@ -324,15 +318,30 @@ PanelWindow {
                             width: 180 
                             height: carousel.height
                             
-                            property bool isFocused: ListView.isCurrentItem
+                            property bool isFocused: PathView.isCurrentItem
                             property bool isActiveTarget: carousel.activeIndex === index
                         
                             onIsFocusedChanged: if (isFocused) carousel.currentFilePath = filePath;
                             Component.onCompleted: if (isFocused) carousel.currentFilePath = filePath;
                             
                             property real targetXShift: {
-                                if (index < carousel.activeIndex) return -(carousel.extraWidth / 2);
-                                if (index > carousel.activeIndex) return (carousel.extraWidth / 2);
+                                if (carousel.activeIndex === -1 || carousel.modelCount === 0) return 0;
+                                if (index === carousel.activeIndex) return 0;
+                                
+                                let cCount = carousel.modelCount;
+                                
+                                let getNorm = (idx) => {
+                                    let n = idx - carousel.currentIndex;
+                                    while (n > cCount / 2) n -= cCount;
+                                    while (n < -cCount / 2) n += cCount;
+                                    return n;
+                                };
+
+                                let normIndex = getNorm(index);
+                                let normActive = getNorm(carousel.activeIndex);
+
+                                if (normIndex < normActive) return -(carousel.extraWidth / 2);
+                                if (normIndex > normActive) return (carousel.extraWidth / 2);
                                 return 0;
                             }
 
@@ -368,9 +377,8 @@ PanelWindow {
                                 scale: delegateRoot.isActiveTarget ? 1.05 : 0.95
                                 Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
 
-                                property real relX: delegateRoot.x - carousel.contentX
-                                property real visualX: relX + x
-                                property bool isFullyVisible: visualX >= -5 && (visualX + width) <= (carousel.width + 5)
+                                property real visualX: delegateRoot.x + visualContainer.x
+                                property bool isFullyVisible: visualX >= -300 && visualX <= carousel.width + 300
                                 
                                 opacity: isFullyVisible ? 1.0 : 0.0
                                 Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
