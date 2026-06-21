@@ -60,7 +60,6 @@ Item {
         // --- Font Example Preview Area ---
         Rectangle {
             Layout.fillWidth: true
-            // FIX: Shrunk preferredHeight from 80 to 66 to instantly strip the dead space
             Layout.preferredHeight: 66
             
             color: Qt.rgba(0, 0, 0, 0.15)
@@ -68,15 +67,13 @@ Item {
             border.width: 1
             radius: 12
 
-            // FIX: Changed from plain Column to ColumnLayout for layout constraint alignment
             ColumnLayout {
                 anchors.fill: parent
-                // Padded side margins out to 14 while tightening top/bottom layout boundaries to 10
                 anchors.leftMargin: 14
                 anchors.rightMargin: 14
                 anchors.topMargin: 10
                 anchors.bottomMargin: 10
-                spacing: 2 // Tightened label spacing slightly to sit perfectly centered
+                spacing: 2 
 
                 Text {
                     text: "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz"
@@ -84,7 +81,7 @@ Item {
                     font.pixelSize: 14
                     color: shellTarget ? shellTarget.colorText : "#cdd6f4"
                     elide: Text.ElideRight
-                    Layout.fillWidth: true // Leverages layout stretching constraints natively
+                    Layout.fillWidth: true 
                 }
 
                 Text {
@@ -150,10 +147,17 @@ Item {
                         }
                     }
 
+                    // 🎯 FIX: Styled with the exact same hover/active micro-interactions from ColorsLayout
                     background: Rectangle {
                         color: fontDelegate.highlighted
-                            ? (shellTarget ? shellTarget.colorBorder : "#313244") 
+                            ? (shellTarget ? Qt.rgba(shellTarget.colorBorder.r, shellTarget.colorBorder.g, shellTarget.colorBorder.b, 0.15) : Qt.rgba(1, 1, 1, 0.08)) 
                             : (fontDelegate.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
+                        
+                        border.color: fontDelegate.highlighted
+                            ? (shellTarget ? shellTarget.colorAccent : "#89b4fa") 
+                            : (fontDelegate.hovered ? Qt.rgba(1, 1, 1, 0.2) : "transparent")
+                        
+                        border.width: fontDelegate.highlighted ? 2 : 1
                         radius: 8
                     }
 
