@@ -144,6 +144,8 @@ PanelWindow {
                     if (rootShell.dashboardRef.dashboardActive) {
                         rootShell.dashboardRef.cancelDismiss();
                     } else {
+                        // Force Wayland to map the window to this specific output
+                        rootShell.dashboardRef.screen = targetScreen; 
                         rootShell.dashboardRef.showDashboard();
                     }
                 }
