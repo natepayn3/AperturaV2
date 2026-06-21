@@ -316,8 +316,6 @@ Scope {
                                 CategoryButton { categoryName: "Font" }
                                 CategoryButton { categoryName: "Colors" }
                                 CategoryButton { categoryName: "VPN" }
-                                CategoryButton { categoryName: "Modules" }
-                                CategoryButton { categoryName: "Behavior" }
                             }
                         }
 
@@ -408,19 +406,6 @@ Scope {
                                     visible: settingsWindow.activeCategory === "VPN"
                                     shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
-                                }
-                                
-                                Loader {
-                                    anchors.fill: parent
-                                    active: settingsWindow.activeCategory !== "Layout" && settingsWindow.activeCategory !== "Font" && settingsWindow.activeCategory !== "Colors" && settingsWindow.activeCategory !== "VPN"
-                                    sourceComponent: Component {
-                                        Text { 
-                                            text: "Configuration for " + settingsWindow.activeCategory + " is coming soon."
-                                            font.family: settingsWindow.selectedFont; font.pixelSize: 18
-                                            color: settingsModuleRoot.themeSubtext
-                                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                        }
-                                    }
                                 }
                             }
                         }
