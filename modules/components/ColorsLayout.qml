@@ -12,22 +12,20 @@ Item {
     property color themeAccent: "transparent"
     property color themeText: "transparent"
 
-    Component.onCompleted: {
-        if (shellTarget && shellTarget.currentScheme) {
-            settingsWindow.matugenScheme = shellTarget.currentScheme;
-        }
+    Binding {
+        target: settingsWindow
+        property: "matugenScheme"
+        value: shellTarget && shellTarget.wallpaperRef ? shellTarget.wallpaperRef.currentScheme : "scheme-tonal-spot"
     }
 
     ScrollView {
         id: scrollContainer
         anchors.fill: parent
         clip: true
-        
         topPadding: 0
         leftPadding: 10
         rightPadding: 10
         bottomPadding: 16
-        
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
@@ -51,11 +49,9 @@ Item {
                     color: settingsWindow.matugenScheme === schemeId 
                         ? Qt.rgba(themeBorder.r, themeBorder.g, themeBorder.b, 0.1) 
                         : (cardBtn.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-                    
                     border.color: settingsWindow.matugenScheme === schemeId 
                         ? themeAccent 
                         : (cardBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : "transparent")
-                    
                     border.width: settingsWindow.matugenScheme === schemeId ? 2 : 1
                     radius: 8
                 }
@@ -66,7 +62,6 @@ Item {
                     anchors.rightMargin: 14
                     spacing: 12
 
-                    // 🎯 FIX: Wrapped inside a strict layout-bounding item box to prevent ligature width tracking
                     Item {
                         Layout.preferredWidth: 24
                         Layout.fillHeight: true
@@ -127,7 +122,6 @@ Item {
                 onClicked: {
                     settingsWindow.matugenScheme = schemeId;
                     settingsWindow.pushUpdate();
-                    
                     if (shellTarget && shellTarget.wallpaperRef) {
                         let activeWallpaper = shellTarget.wallpaperRef.currentWallpaperPath || "";
                         shellTarget.wallpaperRef.apply(activeWallpaper, false, schemeId);
@@ -137,7 +131,6 @@ Item {
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
 
-            // --- Shutter Mode Toggle Button ---
             Button {
                 id: shutterBtn
                 Layout.fillWidth: false
@@ -145,18 +138,15 @@ Item {
                 Layout.preferredHeight: 48
                 Layout.alignment: Qt.AlignLeft
                 flat: true
-                
                 readonly property bool isActive: shellTarget ? shellTarget.shutterModeActive : false
 
                 background: Rectangle {
                     color: shutterBtn.isActive 
                         ? Qt.rgba(themeAccent.r, themeAccent.g, themeAccent.b, 0.08)
                         : (shutterBtn.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-                    
                     border.color: shutterBtn.isActive ? themeAccent : (shutterBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : "transparent")
                     border.width: shutterBtn.isActive ? 2 : 1
                     radius: 8
-                    
                     Behavior on color { ColorAnimation { duration: 150 } }
                     Behavior on border.color { ColorAnimation { duration: 150 } }
                 }
@@ -167,7 +157,6 @@ Item {
                     anchors.rightMargin: 14
                     spacing: 12
 
-                    // 🎯 FIX: Isolated container box matching ProfileCard layout sizing exactly
                     Item {
                         Layout.preferredWidth: 24
                         Layout.fillHeight: true
@@ -185,7 +174,7 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0 
-                        Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter // 🎯 FIX: Force the column container left
+                        Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
 
                         Text {
                             text: "Shutter Mode"
@@ -193,8 +182,8 @@ Item {
                             font.pixelSize: 13
                             font.bold: true
                             color: themeText
-                            Layout.fillWidth: true               // 🎯 FIX: Stretch text bounding box
-                            horizontalAlignment: Text.AlignLeft  // 🎯 FIX: Snap text to the left edge
+                            Layout.fillWidth: true               
+                            horizontalAlignment: Text.AlignLeft  
                         }
                         
                         Text {
@@ -203,8 +192,8 @@ Item {
                             font.pixelSize: 10
                             color: themeText
                             opacity: shutterBtn.isActive ? 0.6 : 0.4
-                            Layout.fillWidth: true               // 🎯 FIX: Stretch text bounding box
-                            horizontalAlignment: Text.AlignLeft  // 🎯 FIX: Snap text to the left edge
+                            Layout.fillWidth: true               
+                            horizontalAlignment: Text.AlignLeft  
                         }
                     }
                     
@@ -239,7 +228,6 @@ Item {
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
 
-            // --- Scheme Profile Cards ---
             ProfileCard { schemeId: "scheme-tonal-spot"; schemeLabel: "Tonal Spot" }
             ProfileCard { schemeId: "scheme-expressive"; schemeLabel: "Expressive" }
             ProfileCard { schemeId: "scheme-fruit-salad"; schemeLabel: "Fruit Salad" }
