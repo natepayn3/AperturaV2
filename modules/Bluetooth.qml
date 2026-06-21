@@ -14,9 +14,6 @@ Item {
     property string namespace: "quickshell-bluetooth-popup"
     property bool active: false
     
-    // Updated to bind to the new AnimatedCard wrapper
-    property bool isHovered: cardWrapper.isHovered || contentHoverHandler.hovered
-    
     property int hoverOriginX: 0
     property int hoverOriginY: 0
 
@@ -56,16 +53,23 @@ Item {
     property string activeStatusText: isScanning ? "Scanning..." : (isPowered ? "Bluetooth is ON" : "Bluetooth is OFF")
     
     onIsPoweredChanged: {
-        if (isPowered && active) {
-            deviceFetcher.running = false; 
-            deviceFetcher.running = true;
-        } else if (!isPowered) {
-            deviceModel.clear();
-        }
+        syncDevices();
     }
 
     ListModel {
         id: deviceModel
+    }
+
+    function syncDevices() {
+        if (!active) return;
+        
+        if (isPowered) {
+            if (!deviceFetcher.running) {
+                deviceFetcher.running = true;
+            }
+        } else {
+            deviceModel.clear();
+        }
     }
 
     function sortDeviceModel() {
@@ -94,11 +98,35 @@ Item {
         command: ["/usr/bin/stdbuf", "-oL", "/usr/bin/bluetoothctl"]
         running: bluetoothRoot.active
         
+        // Track state to prevent O(N^2) parsing loop lockups
+        property int lastProcessedIndex: 0
+        property string lineBuffer: ""
+
+        onRunningChanged: {
+            if (!running) {
+                lastProcessedIndex = 0;
+                lineBuffer = "";
+            }
+        }
+        
         stdout: StdioCollector {
             onTextChanged: {
-                let cleaned = this.text.trim();
-                if (cleaned.includes("[CHG]") || cleaned.includes("Device")) {
-                    handleBluetoothEvent(cleaned);
+                // Extract only the new delta 
+                let newChunk = this.text.substring(bluetoothSession.lastProcessedIndex);
+                bluetoothSession.lastProcessedIndex = this.text.length;
+                
+                bluetoothSession.lineBuffer += newChunk;
+                
+                // Split by newline, leaving any incomplete trailing chunk in the buffer
+                let lines = bluetoothSession.lineBuffer.split("\n");
+                bluetoothSession.lineBuffer = lines.pop(); 
+                
+                let completeLines = lines.join("\n");
+                
+                if (completeLines.length > 0) {
+                    // Strip all invisible ANSI color/formatting codes
+                    let cleanText = completeLines.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+                    handleBluetoothEvent(cleanText);
                 }
             }
         }
@@ -112,17 +140,22 @@ Item {
             onStreamFinished: {
                 let textLines = this.text.split("\n");
                 
-                bluetoothRoot.isPowered = textLines.some(l => l.includes("Powered: yes"));
-                
-                // Read actual hardware state
+                let isNowPowered = textLines.some(l => l.includes("Powered: yes"));
                 let hardwareScanning = textLines.some(l => l.includes("Discovering: yes"));
                 
-                // Mitigate BlueZ race condition by checking against UI intent
                 if (hardwareScanning && !bluetoothRoot.isScanning) {
                     bluetoothRoot.isScanning = true;
                     scanDurationTimer.restart(); 
                 } else if (!hardwareScanning) {
                     bluetoothRoot.isScanning = false;
+                }
+                
+                // If power changed, onIsPoweredChanged will automatically trigger syncDevices()
+                if (bluetoothRoot.isPowered !== isNowPowered) {
+                    bluetoothRoot.isPowered = isNowPowered;
+                } else {
+                    // If power didn't change (e.g. standard open), explicitly trigger the fetch
+                    bluetoothRoot.syncDevices();
                 }
                 
                 bluetoothRoot.isToggling = false; 
@@ -198,7 +231,29 @@ Item {
         }
     }
 
-    Process { id: deviceActionProc; running: false }
+    Process {
+        id: deviceActionProc
+        running: false
+        
+        function act(mode, mac) {
+            if (mode === "pair") {
+                // Trust must be established before pairing headless
+                command = ["/bin/bash", "-c", "bluetoothctl trust " + mac + " && bluetoothctl pair " + mac];
+            } else {
+                command = ["bluetoothctl", mode, mac];
+            }
+            // Reset and fire the blocking process
+            running = false;
+            running = true;
+        }
+        
+        onRunningChanged: {
+            // The exact millisecond BlueZ exits with a success/fail state, force a hard UI refresh
+            if (!running && bluetoothRoot.active) {
+                bluetoothRoot.syncDevices();
+            }
+        }
+    }
 
     Timer {
         id: scanDurationTimer
@@ -246,20 +301,29 @@ Item {
     }
 
     function handleDeviceClick(mac, isConnected) {
-        let mode = isConnected ? "disconnect" : "connect";
-        bluetoothSession.write(mode + " " + mac + "\n");
-        Qt.callLater(() => { stateFetcher.running = true; }, 500);
+        deviceActionProc.act(isConnected ? "disconnect" : "connect", mac);
     }
 
     function pairDevice(mac) {
-        bluetoothSession.write("trust " + mac + "\n");
-        bluetoothSession.write("pair " + mac + "\n");
+        deviceActionProc.act("pair", mac);
+    }
+
+    function removeDevice(mac) {
+        deviceActionProc.act("remove", mac);
     }
 
     function handleBluetoothEvent(text) { 
         let lines = text.split("\n");
+        let listNeedsSorting = false;
+
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
+
+            // Safety net: Catch explicit command success messages that suppress [CHG] logs
+            if (line.includes("Pairing successful") || line.includes("Connection successful")) {
+                bluetoothRoot.syncDevices();
+                continue;
+            }
 
             if (line.includes("[NEW] Device")) {
                 let match = line.match(/Device\s+([0-9A-Fa-f:]{17})\s+(.*)/);
@@ -284,31 +348,38 @@ Item {
                     let mac = match[1];
                     for (let j = 0; j < deviceModel.count; j++) {
                         if (deviceModel.get(j).mac === mac) {
-                            if (line.includes("Connected: yes")) deviceModel.setProperty(j, "connected", true);
-                            if (line.includes("Connected: no")) deviceModel.setProperty(j, "connected", false);
-                            if (line.includes("Paired: yes")) deviceModel.setProperty(j, "paired", true);
+                            
+                            if (line.includes("Connected: yes") && !deviceModel.get(j).connected) {
+                                deviceModel.setProperty(j, "connected", true);
+                                listNeedsSorting = true;
+                            }
+                            if (line.includes("Connected: no") && deviceModel.get(j).connected) {
+                                deviceModel.setProperty(j, "connected", false);
+                                listNeedsSorting = true;
+                            }
+                            if (line.includes("Paired: yes") && !deviceModel.get(j).paired) {
+                                deviceModel.setProperty(j, "paired", true);
+                                listNeedsSorting = true;
+                            }
                             break;
                         }
                     }
                 }
             }
         }
-    }
-
-    function removeDevice(mac) {
-        bluetoothSession.write("remove " + mac + "\n");
-        for (let i = 0; i < deviceModel.count; i++) {
-            if (deviceModel.get(i).mac === mac) {
-                deviceModel.remove(i);
-                break;
-            }
+        
+        // Immediately snap newly connected/paired devices to the top of the UI
+        if (listNeedsSorting) {
+            sortDeviceModel();
         }
     }
 
     onActiveChanged: {
         if (active) {
             stateFetcher.running = true;
-            deviceFetcher.running = true; 
+        } else {
+            // Safely spin down processes when hiding
+            deviceFetcher.running = false;
         }
     }
 
