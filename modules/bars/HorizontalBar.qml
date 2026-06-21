@@ -145,6 +145,8 @@ PanelWindow {
                         if (rootShell.dashboardRef.dashboardActive) {
                             rootShell.dashboardRef.cancelDismiss();
                         } else {
+                            // 🎯 FIX: Force Wayland output mapping on hover enter
+                            rootShell.dashboardRef.screen = targetScreen; 
                             rootShell.dashboardRef.showDashboard();
                         }
                     }
@@ -162,6 +164,8 @@ PanelWindow {
                         if (rootShell.dashboardRef.dashboardActive) {
                             rootShell.dashboardRef.forceDismiss();
                         } else {
+                            // 🎯 FIX: Force Wayland output mapping on manual fallback click
+                            rootShell.dashboardRef.screen = targetScreen; 
                             rootShell.dashboardRef.showDashboard();
                         }
                     }
