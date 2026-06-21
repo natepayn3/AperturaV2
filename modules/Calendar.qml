@@ -84,6 +84,7 @@ Item {
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
+            anchors.margins: -1 
             color: rootShell.colorBackground
             z: 2
             
@@ -99,6 +100,7 @@ Item {
         // --- Wings Component ---
         Item {
             anchors.fill: parent
+            anchors.margins: -1
             visible: calendarRoot.width > 30
             z: 2 
 
@@ -110,7 +112,7 @@ Item {
                     x: 0; y: parent.height
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: calendarRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
@@ -121,7 +123,7 @@ Item {
                     x: parent.width; y: 0
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: 0; y: calendarRoot.wingSize }
                         PathQuad { x: calendarRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -138,7 +140,7 @@ Item {
                     x: 0; y: parent.height
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: calendarRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
@@ -149,7 +151,7 @@ Item {
                     x: parent.width; y: 0
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: 0; y: calendarRoot.wingSize }
                         PathQuad { x: calendarRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
@@ -166,7 +168,7 @@ Item {
                     x: 0; y: -calendarRoot.wingSize
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: calendarRoot.wingSize
                         PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: 0; controlY: calendarRoot.wingSize }
@@ -180,7 +182,7 @@ Item {
                     y: parent.height
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: 0; startY: 0
                         PathLine { x: calendarRoot.wingSize; y: 0 }
                         PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
@@ -197,7 +199,7 @@ Item {
                     x: -calendarRoot.wingSize; y: 0
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: calendarRoot.wingSize; startY: 0
                         PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: calendarRoot.wingSize; controlY: 0 }
@@ -209,7 +211,7 @@ Item {
                     x: parent.width - calendarRoot.wingSize; y: parent.height
                     width: calendarRoot.wingSize; height: calendarRoot.wingSize
                     ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
+                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
                         startX: calendarRoot.wingSize; startY: 0
                         PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
                         PathQuad { x: 0; y: 0; controlX: calendarRoot.wingSize; controlY: 0 }
@@ -281,47 +283,69 @@ Item {
                     }
                 }
 
-                // The Calendar Grid
-                StackLayout {
-                    id: calendarDisplayStack
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    currentIndex: calendarRoot.currentMonthOffsetIndex
-                    
-                    Repeater {
-                        model: 101
-                        delegate: Item {
-                            readonly property int currentVirtualOffset: index - 50
-                            readonly property int resolvedMonthPosition: calendarRoot.baseDate.getMonth() + currentVirtualOffset
-                            readonly property date loopCalculatedDate: new Date(calendarRoot.baseDate.getFullYear(), resolvedMonthPosition, 1)
+                // --- The Calendar Grid ---
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 4
 
-                            MonthGrid {
-                                id: grid
+                    // 1. Day of week headers (S M T W T F S)
+                    DayOfWeekRow {
+                        id: weekRow 
+                        Layout.fillWidth: true
+                        font.family: rootShell.shellFont
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        
+                        delegate: Text {
+                            text: model.shortName
+                            // Reference the explicit ID instead of parent
+                            font: weekRow.font 
+                            color: rootShell.colorSubtext
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    // 2. Single dynamic MonthGrid 
+                    MonthGrid {
+                        id: grid
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        
+                        // Bind directly to the offset target date instead of stacking 101 grids
+                        month: calendarRoot.viewerTargetDate.getMonth()
+                        year: calendarRoot.viewerTargetDate.getFullYear()
+                        
+                        font.family: rootShell.shellFont
+                        font.pixelSize: 13
+                        
+                        delegate: Item {
+                            implicitWidth: 36; implicitHeight: 36
+                            
+                            readonly property bool isToday: model.day === calendarRoot.currentDateTime.getDate() && 
+                                                            model.month === calendarRoot.currentDateTime.getMonth() && 
+                                                            model.year === calendarRoot.currentDateTime.getFullYear()
+                            
+                            Rectangle { 
                                 anchors.fill: parent
-                                month: parent.loopCalculatedDate.getMonth()
-                                year: parent.loopCalculatedDate.getFullYear()
-                                font.family: rootShell.shellFont; font.pixelSize: 13
-                                
-                                delegate: Item {
-                                    implicitWidth: 36; implicitHeight: 36
-                                    readonly property bool isToday: model.day === calendarRoot.currentDateTime.getDate() && model.month === calendarRoot.currentDateTime.getMonth() && model.year === calendarRoot.currentDateTime.getFullYear()
-                                    
-                                    Rectangle { 
-                                        anchors.fill: parent; anchors.margins: 2; radius: 6
-                                        color: parent.isToday ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.2) : "transparent"
-                                        border.width: parent.isToday ? 1 : 0
-                                        border.color: rootShell.colorAccent
-                                    }
-                                    
-                                    Text { 
-                                        anchors.centerIn: parent
-                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                        opacity: model.month === grid.month ? 1.0 : 0.3
-                                        text: model.day
-                                        color: parent.isToday ? rootShell.colorAccent : "#ffffff"
-                                        font.family: grid.font.family; font.pixelSize: grid.font.pixelSize
-                                        font.weight: parent.isToday ? Font.Bold : Font.Normal
-                                    }
-                                }
+                                anchors.margins: 2; radius: 6
+                                color: parent.isToday ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.2) : "transparent"
+                                border.width: parent.isToday ? 1 : 0
+                                border.color: rootShell.colorAccent
+                            }
+                            
+                            Text { 
+                                anchors.centerIn: parent
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                // Dim days from the previous/next overlapping months
+                                opacity: model.month === grid.month ? 1.0 : 0.3
+                                text: model.day
+                                color: parent.isToday ? rootShell.colorAccent : "#ffffff"
+                                font.family: grid.font.family
+                                font.pixelSize: grid.font.pixelSize
+                                font.weight: parent.isToday ? Font.Bold : Font.Normal
                             }
                         }
                     }
