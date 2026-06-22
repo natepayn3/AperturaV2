@@ -406,14 +406,13 @@ Item {
         Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
         Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
 
-        // 🎯 FIX: Main Body placed ON TOP with physical margins over the wings
+        // 🎯 FIX 1: Main Body ON TOP with NO negative margins (Wayland handles the outer corners)
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
-            anchors.margins: -1 // Expands out to cover Wayland gaps
             color: rootShell.colorBackground
-            border.width: 0 // Explicitly remove any borders
-            z: 3 // Higher Z-Index than wings
+            border.width: 0 
+            z: 3 
             
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
@@ -421,36 +420,38 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
         }
 
+        // 🎯 FIX 2: Wings underneath (Z:2), no rotation, tucked 1px inside the main body
         Item {
             anchors.fill: parent
-            anchors.margins: -1
-            z: 2 // Render UNDER the main body
+            z: 2 
             visible: dashboardRoot.width > 30
 
             // --- Vertical Wings ---
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "left"
-                Shape {
-                    x: 0; y: -dashboardRoot.wingSize
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: dashboardRoot.wingSize
-                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: dashboardRoot.wingSize }
-                        PathLine { x: 0; y: dashboardRoot.wingSize }
+
+                // Top Wing (Tucked DOWN 1px) - Bite at Top-Left
+                Item { 
+                    rotation: 90
+                    x: 0; y: -dashboardRoot.wingSize + 1
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 3); y: -(dashboardRoot.wingSize * 3) 
                     }
                 }
-                Shape {
-                    x: 0; y: parent.height
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
+
+                // Bottom Wing (Tucked UP 1px) - Bite at Bottom-Left
+                Item { 
+                    rotation: -90
+                    x: 0; y: parent.height - 1
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 3); y: -(dashboardRoot.wingSize * 2) 
                     }
                 }
             }
@@ -458,26 +459,28 @@ Item {
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
-                Shape {
-                    x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: dashboardRoot.wingSize
-                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize }
+
+                // Top Wing (Tucked DOWN 1px) - Bite at Top-Right
+                Item { 
+                    rotation: -90
+                    x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize + 1
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 2); y: -(dashboardRoot.wingSize * 3) 
                     }
                 }
-                Shape {
-                    x: parent.width - dashboardRoot.wingSize; y: parent.height
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 }
+
+                // Bottom Wing (Tucked UP 1px) - Bite at Bottom-Right
+                Item { 
+                    rotation: 90
+                    x: parent.width - dashboardRoot.wingSize; y: parent.height - 1
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 2); y: -(dashboardRoot.wingSize * 2) 
                     }
                 }
             }
@@ -486,26 +489,28 @@ Item {
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "top"
-                Shape {
-                    x: -dashboardRoot.wingSize; y: 0
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: dashboardRoot.wingSize; y: 0 }
-                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
-                        PathQuad { x: 0; y: 0; controlX: dashboardRoot.wingSize; controlY: 0 } 
+
+                // Left Wing (Tucked RIGHT 1px) - Bite at Top-Left
+                Item { 
+                    rotation: -90
+                    x: -dashboardRoot.wingSize + 1; y: 0
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 3); y: -(dashboardRoot.wingSize * 3) 
                     }
                 }
-                Shape {
-                    x: parent.width; y: 0
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathLine { x: dashboardRoot.wingSize; y: 0 } 
-                        PathQuad { x: 0; y: dashboardRoot.wingSize; controlX: 0; controlY: 0 } 
-                        PathLine { x: 0; y: 0 } 
+
+                // Right Wing (Tucked LEFT 1px) - Bite at Top-Right
+                Item { 
+                    rotation: 90
+                    x: parent.width - 1; y: 0
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 2); y: -(dashboardRoot.wingSize * 3) 
                     }
                 }
             }
@@ -513,26 +518,28 @@ Item {
             Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "bottom"
-                Shape {
-                    x: -dashboardRoot.wingSize; y: parent.height - dashboardRoot.wingSize
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: dashboardRoot.wingSize; startY: 0
-                        PathLine { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize } 
-                        PathLine { x: 0; y: dashboardRoot.wingSize } 
-                        PathQuad { x: dashboardRoot.wingSize; y: 0; controlX: dashboardRoot.wingSize; controlY: dashboardRoot.wingSize } 
+
+                // Left Wing (Tucked RIGHT 1px) - Bite at Bottom-Left
+                Item { 
+                    rotation: 90
+                    x: -dashboardRoot.wingSize + 1; y: parent.height - dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 3); y: -(dashboardRoot.wingSize * 2) 
                     }
                 }
-                Shape {
-                    x: parent.width; y: parent.height - dashboardRoot.wingSize
-                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 0
-                        startX: 0; startY: 0
-                        PathQuad { x: dashboardRoot.wingSize; y: dashboardRoot.wingSize; controlX: 0; controlY: dashboardRoot.wingSize }
-                        PathLine { x: 0; y: dashboardRoot.wingSize } 
-                        PathLine { x: 0; y: 0 } 
+
+                // Right Wing (Tucked LEFT 1px) - Bite at Bottom-Right
+                Item { 
+                    rotation: -90
+                    x: parent.width - 1; y: parent.height - dashboardRoot.wingSize
+                    width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
+                    Rectangle {
+                        width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
+                        color: "transparent"; border.color: rootShell.colorBackground; border.width: dashboardRoot.wingSize * 2
+                        x: -(dashboardRoot.wingSize * 2); y: -(dashboardRoot.wingSize * 2) 
                     }
                 }
             }
