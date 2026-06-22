@@ -627,9 +627,10 @@ Item {
                     columns: dashboardRoot.isHorizontal ? 4 : 2
                     rowSpacing: 12
                     columnSpacing: 12
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
 
                     ToggleSwitch {
+                        Layout.fillWidth: true
                         label: "Wi-Fi"
                         iconName: !dashboardRoot.wifiAvailable ? "wifi_off" : "wifi"
                         checked: dashboardRoot.wifiActive
@@ -642,6 +643,7 @@ Item {
                     }
 
                     ToggleSwitch {
+                        Layout.fillWidth: true
                         label: "Bluetooth"
                         iconName: "bluetooth"
                         checked: dashboardRoot.btActive
@@ -653,6 +655,7 @@ Item {
                     }
 
                     ToggleSwitch {
+                        Layout.fillWidth: true
                         label: "Focus"
                         iconName: "do_not_disturb_on"
                         checked: dashboardRoot.dndActive
@@ -670,6 +673,7 @@ Item {
                     }
 
                     ToggleSwitch {
+                        Layout.fillWidth: true
                         label: "Caffeine"
                         iconName: "local_cafe"
                         checked: dashboardRoot.caffeineActive
