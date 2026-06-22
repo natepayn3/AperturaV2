@@ -32,7 +32,7 @@ Scope {
     property color colorClose: "#f38ba8" 
     property string matugenFilePath: themeProvider.matugenFilePath
     property var matugenPreviews: themeProvider.schemePreviews
-    property int matugenPreviewTick: themeProvider.previewUpdateTick
+    property int matugenPreviewTick: (themeProvider && themeProvider.previewUpdateTick !== undefined) ? themeProvider.previewUpdateTick : 0
     property string shellFont: "Rubik"
 
     property string barPosition: "left"
@@ -54,8 +54,11 @@ Scope {
     property real launcherProgress: 0.0
     property real bluetoothProgress: 0.0
     property real audioProgress: 0.0
+    property real batteryProgress: 0.0
     property real wifiProgress: 0.0
     property real dashboardProgress: 0.0
+
+    property var batteryRef: globalBatteryPreview
 
     property int hoveredIndicatorWorkspace: -1
 
@@ -433,6 +436,7 @@ Scope {
     CalendarWindow  { id: globalCalendarPreview; rootShell: rootShell }
     DashboardWindow { id: globalDashboardPreview; rootShell: rootShell }
     AudioWindow     { id: globalAudioPreview; rootShell: rootShell }
+    BatteryWindow { id: globalBatteryPreview; rootShell: rootShell }
     BluetoothWindow { id: globalBluetoothPreview; rootShell: rootShell }
     WifiWindow      { id: globalWifiPreview; rootShell: rootShell }
     WallpaperWindow { id: globalWallpaperPreview; rootShell: rootShell } 
