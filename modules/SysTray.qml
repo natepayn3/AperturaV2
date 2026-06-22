@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io 
-import Qt.labs.folderlistmodel // 🎯 Required for the preloader to scan the directory
+import Qt.labs.folderlistmodel
 
 Item {
     id: sysTrayContainer
@@ -55,9 +55,8 @@ Item {
         }
     }
 
-    // 🎯 Global Headless Image Preloader (Force-Load Edition)
     Item {
-        visible: false // We can safely hide this again
+        visible: false
 
         FolderListModel {
             id: globalWallpaperModel
@@ -71,7 +70,6 @@ Item {
             
             delegate: Loader {
                 active: index < 15 
-                
                 sourceComponent: Component {
                     Image {
                         property string pathStr: String(filePath).toLowerCase()
@@ -79,12 +77,7 @@ Item {
                         
                         source: isStatic ? fileUrl : ""
                         sourceSize: Qt.size(300, 320) 
-                        
-                        // 🎯 MATCH THE RENDERER: Ensure cache key is identical
                         fillMode: Image.PreserveAspectCrop 
-                        
-                        // 🎯 THE FIX: Force QML to block and decode this immediately on boot. 
-                        // It overrides all visual optimizations and culling.
                         asynchronous: false 
                     }
                 }
@@ -140,7 +133,6 @@ Item {
             Item {
                 id: collapsibleGroup
                 property bool shouldBeVisible: sysTrayContainer.drawerOpen
-                
                 clip: true 
                 
                 width: sysTrayContainer.isVertical ? 24 : (shouldBeVisible ? inlineHardwareLayout.implicitWidth : 0)
@@ -176,7 +168,6 @@ Item {
                             onClicked: {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.bluetoothRef) {
                                     let popupWindow = sysTrayContainer.shellTarget.bluetoothRef;
-                                    
                                     if (popupWindow.bluetoothActive) {
                                         popupWindow.forceDismiss();
                                     } else {
@@ -213,7 +204,6 @@ Item {
                             onClicked: {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.audioRef) {
                                     let popupWindow = sysTrayContainer.shellTarget.audioRef;
-                                    
                                     if (popupWindow.audioActive) {
                                         popupWindow.forceDismiss();
                                     } else {
@@ -251,7 +241,6 @@ Item {
                             onClicked: {
                                 if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.wifiRef) {
                                     let popupWindow = sysTrayContainer.shellTarget.wifiRef;
-                                    
                                     if (popupWindow.wifiActive) {
                                         popupWindow.forceDismiss();
                                     } else {
@@ -273,10 +262,54 @@ Item {
                         visible: batteryHardwareCheck.hasBattery
 
                         Text {
-                            anchors.centerIn: parent; text: "battery_android_frame_full"; font.family: "Material Symbols Outlined"; font.pixelSize: 16
-                            color: sysTrayContainer.shellTarget ? sysTrayContainer.shellTarget.colorText : "#ffffff"
+                            anchors.centerIn: parent
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 16
+                            
+                            // 🎯 Dynamically calculate the custom frame variant directly in the tray
+                            text: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.batteryRef) {
+                                    let bat = sysTrayContainer.shellTarget.batteryRef;
+                                    if (bat.isCharging) return "battery_android_frame_bolt";
+                                    if (bat.capacity >= 95) return "battery_android_frame_full";
+                                    if (bat.capacity >= 80) return "battery_android_frame_6";
+                                    if (bat.capacity >= 65) return "battery_android_frame_5";
+                                    if (bat.capacity >= 50) return "battery_android_frame_4";
+                                    if (bat.capacity >= 35) return "battery_android_frame_3";
+                                    if (bat.capacity >= 20) return "battery_android_frame_2";
+                                    return "battery_android_frame_1";
+                                }
+                                return "battery_android_frame_full"; // Clean default fallback state
+                            }
+                            
+                            color: (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.batteryRef && sysTrayContainer.shellTarget.batteryRef.active)
+                                ? sysTrayContainer.shellTarget.colorAccent
+                                : sysTrayContainer.shellTarget.colorText
                         }
-                        MouseArea { id: batteryMouse; anchors.fill: parent; hoverEnabled: true }
+
+                        MouseArea { 
+                            id: batteryMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: {
+                                if (sysTrayContainer.shellTarget && sysTrayContainer.shellTarget.batteryRef) {
+                                    let popupWindow = sysTrayContainer.shellTarget.batteryRef;
+                                    if (popupWindow.active) {
+                                        popupWindow.forceDismiss();
+                                    } else {
+                                        let globalPos = batteryIconWrapper.mapToItem(null, 0, 0);
+                                        popupWindow.hoverOriginX = globalPos.x;
+                                        popupWindow.hoverOriginY = globalPos.y;
+                                        if (sysTrayContainer.parentBarWindow) {
+                                            popupWindow.screen = sysTrayContainer.parentBarWindow.screen;
+                                        }
+                                        popupWindow.showBattery();
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Rectangle {
