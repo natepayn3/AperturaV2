@@ -28,7 +28,7 @@ Item {
         bottomPadding: 16
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-
+        
         ColumnLayout {
             width: scrollContainer.availableWidth
             spacing: 8 
@@ -37,10 +37,10 @@ Item {
                 id: cardBtn
                 property string schemeId: ""
                 property string schemeLabel: ""
-                property var customPalette: {
-                    let tick = shellTarget ? shellTarget.matugenPreviewTick : 0;
-                    return shellTarget && shellTarget.matugenPreviews ? (shellTarget.matugenPreviews[schemeId] || []) : [];
-                }
+ 
+                property var customPalette: shellTarget && shellTarget.matugenPreviews && shellTarget.matugenPreviewTick >= 0 ? 
+                    (shellTarget.matugenPreviews[schemeId] || []) : []
+
                 Layout.fillWidth: true
                 Layout.preferredHeight: 48 
                 flat: true
@@ -103,6 +103,7 @@ Item {
                                     width: 12 
                                     height: 12
                                     radius: 3
+                                    // QML handles string injection correctly here
                                     color: cardBtn.customPalette.length > 0 ? modelData : Qt.rgba(1, 1, 1, 0.1)
                                     border.color: Qt.rgba(1, 1, 1, 0.2)
                                     border.width: 1
@@ -185,7 +186,7 @@ Item {
                             Layout.fillWidth: true               
                             horizontalAlignment: Text.AlignLeft  
                         }
-                        
+            
                         Text {
                             text: shutterBtn.isActive ? "Transparency OFF" : "Transparency ON"
                             font.family: settingsWindow ? settingsWindow.selectedFont : "sans"
