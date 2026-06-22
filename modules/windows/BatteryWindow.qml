@@ -10,6 +10,11 @@ PanelWindow {
     property bool active: false
     readonly property var cardRef: innerBatteryCard
 
+    // 🎯 FIX: Route property inquiries from SysTray straight down to the inner card state
+    property alias capacity: innerBatteryCard.capacity
+    property alias isCharging: innerBatteryCard.isCharging
+    property alias batteryIcon: innerBatteryCard.batteryIcon
+
     screen: Quickshell.screens[0] 
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "quickshell-battery-preview"
