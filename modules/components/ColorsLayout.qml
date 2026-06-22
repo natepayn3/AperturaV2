@@ -31,7 +31,7 @@ Item {
         
         ColumnLayout {
             width: scrollContainer.availableWidth
-            spacing: 8 
+            spacing: 12 
 
             component ProfileCard : Button {
                 id: cardBtn
@@ -42,7 +42,7 @@ Item {
                     (shellTarget.matugenPreviews[schemeId] || []) : []
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: 48 
+                Layout.preferredHeight: 48
                 flat: true
 
                 background: Rectangle {
@@ -58,19 +58,19 @@ Item {
 
                 contentItem: RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
-                    spacing: 12
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 14
 
                     Item {
-                        Layout.preferredWidth: 24
+                        Layout.preferredWidth: 26
                         Layout.fillHeight: true
 
                         Text {
                             anchors.centerIn: parent
                             text: "palette"
                             font.family: "Material Symbols Outlined"
-                            font.pixelSize: 20 
+                            font.pixelSize: 22 
                             color: settingsWindow.matugenScheme === schemeId ? themeAccent : themeText
                         }
                     }
@@ -79,7 +79,7 @@ Item {
                         Layout.fillWidth: true
                         text: schemeLabel
                         font.family: settingsWindow.selectedFont
-                        font.pixelSize: 13
+                        font.pixelSize: 15
                         font.bold: true
                         color: themeText
                         verticalAlignment: Text.AlignVCenter
@@ -87,7 +87,7 @@ Item {
 
                     RowLayout {
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                        spacing: 10
+                        spacing: 12
                         visible: true
                         opacity: settingsWindow.matugenScheme === schemeId ? 1.0 : 0.4
                         
@@ -97,13 +97,12 @@ Item {
                                  : [themeText, themeText, themeText]
                             
                             RowLayout {
-                                spacing: 4
+                                spacing: 6
                                 
                                 Rectangle {
-                                    width: 12 
-                                    height: 12
-                                    radius: 3
-                                    // QML handles string injection correctly here
+                                    width: 14 
+                                    height: 14
+                                    radius: 4
                                     color: cardBtn.customPalette.length > 0 ? modelData : Qt.rgba(1, 1, 1, 0.1)
                                     border.color: Qt.rgba(1, 1, 1, 0.2)
                                     border.width: 1
@@ -112,7 +111,7 @@ Item {
                                 Text {
                                     text: cardBtn.customPalette.length > 0 ? String(modelData).substring(0, 7).toUpperCase() : "..."
                                     font.family: "monospace"
-                                    font.pixelSize: 9
+                                    font.pixelSize: 11
                                     color: themeText
                                 }
                             }
@@ -135,8 +134,8 @@ Item {
             Button {
                 id: shutterBtn
                 Layout.fillWidth: false
-                Layout.preferredWidth: 220
-                Layout.preferredHeight: 48
+                Layout.preferredWidth: 240
+                Layout.preferredHeight: 56
                 Layout.alignment: Qt.AlignLeft
                 flat: true
                 readonly property bool isActive: shellTarget ? shellTarget.shutterModeActive : false
@@ -154,19 +153,19 @@ Item {
 
                 contentItem: RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
-                    spacing: 12
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 14
 
                     Item {
-                        Layout.preferredWidth: 24
+                        Layout.preferredWidth: 26
                         Layout.fillHeight: true
 
                         Text {
                             anchors.centerIn: parent
                             text: shutterBtn.isActive ? "control_camera" : "camera"
                             font.family: "Material Symbols Outlined"
-                            font.pixelSize: 20
+                            font.pixelSize: 22
                             color: shutterBtn.isActive ? themeAccent : themeText
                             Behavior on color { ColorAnimation { duration: 150 } }
                         }
@@ -180,7 +179,7 @@ Item {
                         Text {
                             text: "Shutter Mode"
                             font.family: settingsWindow ? settingsWindow.selectedFont : "sans"
-                            font.pixelSize: 13
+                            font.pixelSize: 15
                             font.bold: true
                             color: themeText
                             Layout.fillWidth: true               
@@ -190,7 +189,7 @@ Item {
                         Text {
                             text: shutterBtn.isActive ? "Transparency OFF" : "Transparency ON"
                             font.family: settingsWindow ? settingsWindow.selectedFont : "sans"
-                            font.pixelSize: 10
+                            font.pixelSize: 11
                             color: themeText
                             opacity: shutterBtn.isActive ? 0.6 : 0.4
                             Layout.fillWidth: true               
@@ -199,9 +198,9 @@ Item {
                     }
                     
                     Rectangle {
-                        width: 18
-                        height: 18
-                        radius: 5
+                        width: 20
+                        height: 20
+                        radius: 6
                         color: shutterBtn.isActive ? themeAccent : "transparent"
                         border.color: shutterBtn.isActive ? themeAccent : Qt.rgba(themeText.r, themeText.g, themeText.b, 0.3)
                         border.width: shutterBtn.isActive ? 0 : 1
@@ -211,7 +210,7 @@ Item {
                         Text {
                             text: "done"
                             font.family: "Material Symbols Outlined"
-                            font.pixelSize: 12
+                            font.pixelSize: 14
                             font.bold: true
                             color: "#0B0F19"
                             anchors.centerIn: parent
