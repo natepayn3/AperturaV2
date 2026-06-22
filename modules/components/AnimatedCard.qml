@@ -84,13 +84,21 @@ Item {
                 }
             }
 
-            Item { 
-                rotation: -90; transformOrigin: Item.TopLeft
-                x: parent.width; y: parent.height
+            // --- Bottom-Left Wing ---
+            Item {
+                // Position the clipping container at the bottom-left of your main card
+                x: parent.width; y: parent.height - cardRoot.wingSize
                 width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+
                 Rectangle {
-                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
-                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    // The circle is larger than the clip area; shift it to show only the corner arc
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6
+                    radius: cardRoot.wingSize * 3
+                    color: "transparent"
+                    border.color: cardRoot.backgroundColor
+                    border.width: cardRoot.wingSize * 2
+                    
+                    // Offset to align the circle's border with the corner
                     x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3) 
                 }
             }
@@ -139,7 +147,7 @@ Item {
             }
             
             Item { 
-                x: parent.width - cardRoot.wingSize - 2; y: parent.height 
+                x: parent.width - cardRoot.wingSize; y: parent.height 
                 width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
