@@ -253,7 +253,6 @@ Item {
                 try {
                     let parsed = JSON.parse(data.trim());
                     
-                    // Trap the "Stopped" status to nuke the metadata
                     if (parsed.status === "Stopped") {
                         dashboardRoot.mediaTitle = "Not Playing";
                         dashboardRoot.mediaArtist = "---";
@@ -354,7 +353,6 @@ Item {
         z: 1
         HoverHandler {
             id: dashHover
-            // 🎯 FIX: Add an OR condition for slider interaction
             onHoveredChanged: {
                 if (hovered) {
                     rootShell.dashboardRef.cancelDismiss();
@@ -365,7 +363,6 @@ Item {
         }
     }
 
-    // Explicitly positioned hover bridge (no anchors)
     Item {
         width: dashboardRoot.isHorizontal ? 120 : 46
         height: dashboardRoot.isHorizontal ? 46 : 120 
@@ -384,11 +381,10 @@ Item {
 
         HoverHandler {
             id: bridgeHover
-            // 🎯 FIX: Only request dismiss if NOT hovering over the dashboard card itself
             onHoveredChanged: {
                 if (hovered) {
                     rootShell.dashboardRef.cancelDismiss();
-                } else if (!dashHover.hovered) { // Only dismiss if we aren't hovering the card either
+                } else if (!dashHover.hovered) {
                     rootShell.dashboardRef.requestDismiss();
                 }
             }
@@ -410,11 +406,15 @@ Item {
         Behavior on x { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
         Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
 
+        // 🎯 FIX: Main Body placed ON TOP with physical margins over the wings
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
+            anchors.margins: -1 // Expands out to cover Wayland gaps
             color: rootShell.colorBackground
-            z: 2
+            border.width: 0 // Explicitly remove any borders
+            z: 3 // Higher Z-Index than wings
+            
             topLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
             topRightRadius: (rootShell.barPosition === "right" || rootShell.barPosition === "top") ? 0 : dashboardRoot.radiusValue
             bottomLeftRadius: (rootShell.barPosition === "left" || rootShell.barPosition === "bottom") ? 0 : dashboardRoot.radiusValue
@@ -423,7 +423,8 @@ Item {
 
         Item {
             anchors.fill: parent
-            z: 3
+            anchors.margins: -1
+            z: 2 // Render UNDER the main body
             visible: dashboardRoot.width > 30
 
             // --- Vertical Wings ---
@@ -551,17 +552,15 @@ Item {
                 anchors.right: parent.right
                 spacing: 16
 
-                // Top Header Section: Time/Weather & System Rings
                 GridLayout {
                     Layout.fillWidth: true
                     columns: dashboardRoot.isHorizontal ? 2 : 1
                     rowSpacing: 24
                     columnSpacing: 16
 
-                    // --- Left / Top: Time / Date / Weather ---
                     ColumnLayout {
                         Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignLeft) : Qt.AlignHCenter
-                        Layout.fillWidth: true // Pushes the rings perfectly to the right edge
+                        Layout.fillWidth: true 
                         spacing: 4
 
                         RowLayout {
@@ -605,11 +604,8 @@ Item {
                         }
                     }
 
-                    // --- Right / Bottom: Systems Rings ---
                     RowLayout {
                         Layout.alignment: dashboardRoot.isHorizontal ? (Qt.AlignVCenter | Qt.AlignRight) : Qt.AlignHCenter
-                        
-                        // 🎯 CRITICAL: Protects the rings from being squished by the Time column
                         Layout.minimumWidth: implicitWidth 
                         spacing: 16
 
@@ -620,7 +616,6 @@ Item {
                     }
                 }
 
-                // Toggle Grid (Responds dynamically to isHorizontal flag)
                 GridLayout {
                     columns: dashboardRoot.isHorizontal ? 4 : 2
                     rowSpacing: 12
@@ -681,7 +676,6 @@ Item {
                     }
                 }
 
-                // Quick Action Utilities - Symmetrical Dual Sliding Layout
                 Item {
                     id: utilitiesWrapper
                     Layout.fillWidth: true
@@ -691,7 +685,6 @@ Item {
                     property bool menuExpanded: false
                     onVisibleChanged: { if (!visible) menuExpanded = false; }
 
-                    // Layer 1: Static Baseline Buttons
                     RowLayout {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -738,7 +731,6 @@ Item {
                         }
                     }
 
-                    // Layer 2: Absolute-Positioned Slide Tray Overlay
                     Item {
                         id: slideOverlay
                         anchors.top: parent.top
@@ -800,7 +792,6 @@ Item {
                     }
                 }
 
-                // Sliders Control Area
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 0
                     
@@ -840,7 +831,6 @@ Item {
                     }
                 }
 
-                // --- Lower Section: Media & Notifications ---
                 GridLayout {
                     Layout.fillWidth: true
                     
@@ -852,10 +842,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0     
                         Layout.preferredWidth: 0   
-                        
-                        // 🎯 Floats the card in the middle of the row's total height
                         Layout.alignment: Qt.AlignVCenter 
-                        // (Removed Layout.fillHeight so it doesn't stretch to match the tray)
                         
                         onPlayPauseClicked: {
                             mediaControlProc.command = ["playerctl", "play-pause"]
@@ -873,7 +860,6 @@ Item {
 
                     NotificationCenter {
                         Layout.fillWidth: true
-                        // 🎯 CRITICAL: Forces a strict 50/50 split and stops grid overflow
                         Layout.minimumWidth: 0     
                         Layout.preferredWidth: 0   
                         Layout.alignment: Qt.AlignTop
@@ -881,7 +867,6 @@ Item {
                     }
                 }
 
-                // Absorbs all remaining vertical dead space, pushing everything else cleanly to the top
                 Item { Layout.fillHeight: true }
             }
         }
