@@ -407,7 +407,9 @@ Item {
         implicitHeight: 48
         color: "transparent"
         
-        visible: true
+        // 🎯 FIX: Bind surface mapping directly to whether the OSD is active.
+        // This eliminates the transparent "dead space" overlay blocking input when hidden.
+        visible: hardwareOsdTimer.running
 
         anchors { bottom: true }
         margins { bottom: 120 }
@@ -416,9 +418,7 @@ Item {
             id: pillBackground
             anchors.fill: parent
             
-            opacity: hardwareOsdTimer.running ? 1.0 : 0.0
-            Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.InOutQuad } }
-
+            // The opacity behavior can now be removed or simplified since visible handles mapping
             color: rootShell.colorBackground
             radius: 12
 
