@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Shapes
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
@@ -11,7 +10,6 @@ Item {
 
     property string namespace: "quickshell-calendar-popup"
 
-    // Trigger this from your Bar's Clock component
     property bool active: false
     
     property int hoverOriginX: 0
@@ -21,7 +19,7 @@ Item {
     property real wingSize: 14
 
     property real maxCardWidth: 340
-    property real maxCardHeight: 370 // 🎯 Adjusted default height since the weather card is gone
+    property real maxCardHeight: 370
 
     implicitWidth: Math.round(maxCardWidth)
     implicitHeight: Math.round(maxCardHeight)
@@ -31,31 +29,30 @@ Item {
     x: rootShell.barPosition === "right" ? hoverOriginX + (maxCardWidth - width - 2) : hoverOriginX
     y: rootShell.barPosition === "bottom" ? hoverOriginY + (maxCardHeight - height) : hoverOriginY
 
-    // --- State Properties ---
     property date currentDateTime: new Date()
     readonly property date baseDate: new Date()
     property int currentMonthOffsetIndex: 50
     property date viewerTargetDate: new Date()
 
-    // --- Timers & Logic ---
     Timer {
-        interval: 60000; running: true; repeat: true
+        interval: 60000
+        running: true
+        repeat: true
         onTriggered: calendarRoot.currentDateTime = new Date()
     }
 
     function updateViewerDate() {
-        let monthOffset = calendarRoot.currentMonthOffsetIndex - 50;
-        calendarRoot.viewerTargetDate = new Date(calendarRoot.baseDate.getFullYear(), calendarRoot.baseDate.getMonth() + monthOffset, 1);
+        let monthOffset = calendarRoot.currentMonthOffsetIndex - 50
+        calendarRoot.viewerTargetDate = new Date(calendarRoot.baseDate.getFullYear(), calendarRoot.baseDate.getMonth() + monthOffset, 1)
     }
 
     onActiveChanged: {
         if (active) {
-            currentMonthOffsetIndex = 50;
-            updateViewerDate();
+            currentMonthOffsetIndex = 50
+            updateViewerDate()
         }
     }
 
-    // --- Visuals & Animations ---
     Item {
         id: animatedGroup
         anchors.fill: parent
@@ -68,7 +65,6 @@ Item {
             return Item.Center
         }
 
-        // --- Streamlined Fluid Behavior Hooks ---
         opacity: calendarRoot.active ? 1.0 : 0.0
         scale: calendarRoot.active ? 1.0 : 0.0
         x: calendarRoot.active ? 0 : (rootShell.barPosition === "right" ? 40 : -40)
@@ -97,7 +93,6 @@ Item {
             bottomRightRadius: (rootShell.barPosition === "top" || rootShell.barPosition === "left") ? calendarRoot.radiusValue : 0
         }
 
-        // --- Wings Component ---
         Item {
             anchors.fill: parent
             anchors.margins: -1
@@ -106,87 +101,43 @@ Item {
 
             Item {
                 anchors.fill: parent
-                visible: rootShell.barPosition === "top"
-
-                Shape {
-                    x: 0; y: parent.height
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: 0
-                        PathLine { x: calendarRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-                Shape {
-                    x: parent.width; y: 0
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: 0
-                        PathLine { x: 0; y: calendarRoot.wingSize }
-                        PathQuad { x: calendarRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
                 visible: rootShell.barPosition === "left"
 
-                Shape {
-                    x: 0; y: parent.height
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: 0
-                        PathLine { x: calendarRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-                Shape {
-                    x: parent.width; y: 0
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: 0
-                        PathLine { x: 0; y: calendarRoot.wingSize }
-                        PathQuad { x: calendarRoot.wingSize; y: 0; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-
-            Item {
-                anchors.fill: parent
-                visible: rootShell.barPosition === "bottom"
-
-                Shape {
-                    x: 0; y: -calendarRoot.wingSize
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: calendarRoot.wingSize
-                        PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: 0; controlY: calendarRoot.wingSize }
-                        PathLine { x: 0; y: calendarRoot.wingSize }
-                    }
-                }
-                Shape {
-                    rotation: -90
-                    transformOrigin: Item.TopLeft
+                Item { 
+                    rotation: 90
                     x: parent.width
+                    y: 1
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 2)
+                        y: -(calendarRoot.wingSize * 3) 
+                    }
+                }
+
+                Item {
+                    rotation: 90
+                    x: 1
                     y: parent.height
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: 0; startY: 0
-                        PathLine { x: calendarRoot.wingSize; y: 0 }
-                        PathQuad { x: 0; y: calendarRoot.wingSize; controlX: 0; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 2)
+                        y: -(calendarRoot.wingSize * 3) 
                     }
                 }
             }
@@ -195,33 +146,133 @@ Item {
                 anchors.fill: parent
                 visible: rootShell.barPosition === "right"
 
-                Shape {
-                    x: -calendarRoot.wingSize; y: 0
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: calendarRoot.wingSize; startY: 0
-                        PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: calendarRoot.wingSize; controlY: 0 }
-                        PathLine { x: calendarRoot.wingSize; y: 0 }
+                Item { 
+                    rotation: -90
+                    x: 0 - calendarRoot.wingSize
+                    y: 1
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 3)
+                        y: -(calendarRoot.wingSize * 3) 
+                    }
+                }
+
+                Item {
+                    transformOrigin: Item.TopRight
+                    x: parent.width - calendarRoot.wingSize - 1
+                    y: parent.height
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 3)
+                        y: -(calendarRoot.wingSize * 2) 
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "top"
+                
+                Item { 
+                    rotation: -90
+                    x: parent.width
+                    y: 1
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 3)
+                        y: -(calendarRoot.wingSize * 2) 
                     }
                 }
                 
-                Shape {
-                    x: parent.width - calendarRoot.wingSize; y: parent.height
-                    width: calendarRoot.wingSize; height: calendarRoot.wingSize
-                    ShapePath {
-                        fillColor: rootShell.colorBackground; strokeColor: "transparent"; strokeWidth: 1
-                        startX: calendarRoot.wingSize; startY: 0
-                        PathLine { x: calendarRoot.wingSize; y: calendarRoot.wingSize }
-                        PathQuad { x: 0; y: 0; controlX: calendarRoot.wingSize; controlY: 0 }
-                        PathLine { x: 0; y: 0 }
+                Item {
+                    rotation: -90
+                    x: 1
+                    y: parent.height 
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 3)
+                        y: -(calendarRoot.wingSize * 2) 
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: rootShell.barPosition === "bottom"
+
+                Item { 
+                    rotation: 90
+                    x: 0 //parent.width - calendarRoot.wingSize
+                    y: -calendarRoot.wingSize
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 3)
+                        y: -(calendarRoot.wingSize * 3) 
+                    }
+                }
+
+                Item { 
+                    rotation: -90
+                    transformOrigin: Item.TopLeft
+                    x: parent.width
+                    y: parent.height
+                    width: calendarRoot.wingSize
+                    height: calendarRoot.wingSize
+                    clip: true
+                    Rectangle {
+                        width: calendarRoot.wingSize * 6
+                        height: calendarRoot.wingSize * 6
+                        radius: calendarRoot.wingSize * 3
+                        color: "transparent"
+                        border.color: rootShell.colorBackground
+                        border.width: calendarRoot.wingSize * 2
+                        x: -(calendarRoot.wingSize * 2)
+                        y: -(calendarRoot.wingSize * 2) 
                     }
                 }
             }
         }
 
-        // --- Internal Content ---
         Item {
             id: layoutContentWrapper
             anchors.fill: parent
@@ -232,18 +283,20 @@ Item {
                 anchors.fill: parent
                 spacing: 12
 
-                // Month/Year Header
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     
-                    // Left Arrow
                     Rectangle {
-                        width: 28; height: 28; radius: 6
+                        width: 28
+                        height: 28
+                        radius: 6
                         color: prevMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
                         Text { 
-                            anchors.centerIn: parent; text: "chevron_left"
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 18
+                            anchors.centerIn: parent
+                            text: "chevron_left"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 18
                             color: rootShell.colorAccent
                         }
                         MouseArea { 
@@ -253,8 +306,8 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: { 
                                 if (calendarRoot.currentMonthOffsetIndex > 0) { 
-                                    calendarRoot.currentMonthOffsetIndex--; 
-                                    calendarRoot.updateViewerDate(); 
+                                    calendarRoot.currentMonthOffsetIndex--
+                                    calendarRoot.updateViewerDate() 
                                 } 
                             } 
                         }
@@ -263,33 +316,45 @@ Item {
                     Item { Layout.fillWidth: true }
                     Text { 
                         text: Qt.formatDateTime(calendarRoot.viewerTargetDate, "MMMM yyyy")
-                        font.family: rootShell.shellFont; font.pixelSize: 16; font.weight: Font.Bold
+                        font.family: rootShell.shellFont
+                        font.pixelSize: 16
+                        font.weight: Font.Bold
                         color: "#ffffff"
                     }
                     Item { Layout.fillWidth: true }
                     
                     Rectangle {
-                        width: 28; height: 28; radius: 6
+                        width: 28
+                        height: 28
+                        radius: 6
                         color: nextMouse.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
                         Text { 
-                            anchors.centerIn: parent; text: "chevron_right"
-                            font.family: "Material Symbols Outlined"; font.pixelSize: 18
+                            anchors.centerIn: parent
+                            text: "chevron_right"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 18
                             color: rootShell.colorAccent
                         }
                         MouseArea { 
-                            id: nextMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: { if (calendarRoot.currentMonthOffsetIndex < 100) { calendarRoot.currentMonthOffsetIndex++; calendarRoot.updateViewerDate(); } } 
+                            id: nextMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { 
+                                if (calendarRoot.currentMonthOffsetIndex < 100) { 
+                                    calendarRoot.currentMonthOffsetIndex++
+                                    calendarRoot.updateViewerDate() 
+                                } 
+                            } 
                         }
                     }
                 }
 
-                // --- The Calendar Grid ---
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     spacing: 4
 
-                    // 1. Day of week headers (S M T W T F S)
                     DayOfWeekRow {
                         id: weekRow 
                         Layout.fillWidth: true
@@ -299,7 +364,6 @@ Item {
                         
                         delegate: Text {
                             text: model.shortName
-                            // Reference the explicit ID instead of parent
                             font: weekRow.font 
                             color: rootShell.colorSubtext
                             horizontalAlignment: Text.AlignHCenter
@@ -307,13 +371,11 @@ Item {
                         }
                     }
 
-                    // 2. Single dynamic MonthGrid 
                     MonthGrid {
                         id: grid
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         
-                        // Bind directly to the offset target date instead of stacking 101 grids
                         month: calendarRoot.viewerTargetDate.getMonth()
                         year: calendarRoot.viewerTargetDate.getFullYear()
                         
@@ -321,15 +383,15 @@ Item {
                         font.pixelSize: 13
                         
                         delegate: Item {
-                            implicitWidth: 36; implicitHeight: 36
+                            implicitWidth: 36
+                            implicitHeight: 36
                             
-                            readonly property bool isToday: model.day === calendarRoot.currentDateTime.getDate() && 
-                                                            model.month === calendarRoot.currentDateTime.getMonth() && 
-                                                            model.year === calendarRoot.currentDateTime.getFullYear()
+                            readonly property bool isToday: model.day === calendarRoot.currentDateTime.getDate() && model.month === calendarRoot.currentDateTime.getMonth() && model.year === calendarRoot.currentDateTime.getFullYear()
                             
                             Rectangle { 
                                 anchors.fill: parent
-                                anchors.margins: 2; radius: 6
+                                anchors.margins: 2
+                                radius: 6
                                 color: parent.isToday ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.2) : "transparent"
                                 border.width: parent.isToday ? 1 : 0
                                 border.color: rootShell.colorAccent
@@ -339,7 +401,6 @@ Item {
                                 anchors.centerIn: parent
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
-                                // Dim days from the previous/next overlapping months
                                 opacity: model.month === grid.month ? 1.0 : 0.3
                                 text: model.day
                                 color: parent.isToday ? rootShell.colorAccent : "#ffffff"
