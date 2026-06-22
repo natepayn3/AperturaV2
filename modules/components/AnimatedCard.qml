@@ -1,10 +1,8 @@
 import QtQuick
-import QtQuick.Shapes
 
 Item {
     id: cardRoot
 
-    // 🎯 Use primitive values directly to bypass QML object-binding failures
     property string barPosition: "bottom"
     property color backgroundColor: "transparent"
     
@@ -18,8 +16,9 @@ Item {
     property alias isHovered: hoverArea.containsMouse
     default property alias content: innerContent.data
 
-    width: targetWidth
-    height: targetHeight
+    // 🎯 Use Math.round to force integer alignment with the Wayland compositor
+    width: Math.round(targetWidth)
+    height: Math.round(targetHeight)
 
     transformOrigin: {
         if (barPosition === "left") return Item.BottomLeft
@@ -43,14 +42,10 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -1
+        anchors.margins: -1 // 🦇 THE FIX: Bleeds the main body past the fractional Wayland edge
         color: cardRoot.backgroundColor
         z: 2
         
-        // 🎯 Force a physical pixel bleed on the main body
-        border.width: 1
-        border.color: cardRoot.backgroundColor
-
         topLeftRadius:     getCornerRadius("topLeft")
         topRightRadius:    getCornerRadius("topRight")
         bottomLeftRadius:  getCornerRadius("bottomLeft")
@@ -67,40 +62,118 @@ Item {
 
     Item {
         anchors.fill: parent
-        anchors.margins: -1
         visible: cardRoot.width > 30
-        z: 2 
+        z: 3 
 
         property real wingShift: Math.max(0, cardRoot.wingSize * (1 - (cardRoot.scale * 4)))
         x: (barPosition === "left") ? -wingShift : (barPosition === "right" ? wingShift : 0)
         y: (barPosition === "top") ? -wingShift : (barPosition === "bottom" ? wingShift : 0)
 
+        // --- Left Bar Wings ---
         Item {
             anchors.fill: parent
             visible: barPosition === "left"
-            Shape { x: 0; y: -cardRoot.wingSize; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: 0; startY: cardRoot.wingSize; PathLine { x: cardRoot.wingSize; y: cardRoot.wingSize } PathQuad { x: 0; y: 0; controlX: 0; controlY: cardRoot.wingSize } PathLine { x: 0; y: cardRoot.wingSize } } }
-            Shape { rotation: -90; transformOrigin: Item.TopLeft; x: parent.width; y: parent.height; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: 0; startY: 0; PathLine { x: cardRoot.wingSize; y: 0 } PathQuad { x: 0; y: cardRoot.wingSize; controlX: 0; controlY: 0 } PathLine { x: 0; y: 0 } } }
+
+            Item { 
+                x: 0; y: -cardRoot.wingSize
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3) 
+                }
+            }
+
+            Item { 
+                rotation: -90; transformOrigin: Item.TopLeft
+                x: parent.width; y: parent.height
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3) 
+                }
+            }
         }
 
+        // --- Right Bar Wings ---
         Item {
             anchors.fill: parent
             visible: barPosition === "right"
-            Shape { x: parent.width - cardRoot.wingSize; y: -cardRoot.wingSize; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: cardRoot.wingSize; startY: cardRoot.wingSize; PathLine { x: 0; y: cardRoot.wingSize } PathQuad { x: cardRoot.wingSize; y: 0; controlX: cardRoot.wingSize; controlY: cardRoot.wingSize } PathLine { x: cardRoot.wingSize; y: cardRoot.wingSize } } }
-            Shape { rotation: 90; transformOrigin: Item.TopRight; x: 0 - cardRoot.wingSize; y: parent.height; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: cardRoot.wingSize; startY: 0; PathLine { x: 0; y: 0 } PathQuad { x: cardRoot.wingSize; y: cardRoot.wingSize; controlX: cardRoot.wingSize; controlY: 0 } PathLine { x: cardRoot.wingSize; y: 0 } } }
+
+            Item { 
+                x: parent.width - cardRoot.wingSize; y: -cardRoot.wingSize
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3) 
+                }
+            }
+
+            Item { 
+                rotation: 90; transformOrigin: Item.TopRight
+                x: 0 - cardRoot.wingSize; y: parent.height
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                }
+            }
         }
 
+        // --- Top Bar Wings ---
         Item {
             anchors.fill: parent
             visible: barPosition === "top"
-            Shape { x: -cardRoot.wingSize; y: 0; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: cardRoot.wingSize; startY: 0; PathLine { x: cardRoot.wingSize; y: cardRoot.wingSize } PathQuad { x: 0; y: 0; controlX: cardRoot.wingSize; controlY: 0 } PathLine { x: cardRoot.wingSize; y: 0 } } }
-            Shape { x: parent.width - cardRoot.wingSize; y: parent.height; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: cardRoot.wingSize; startY: 0; PathLine { x: cardRoot.wingSize; y: cardRoot.wingSize } PathQuad { x: 0; y: 0; controlX: cardRoot.wingSize; controlY: 0 } PathLine { x: 0; y: 0 } } }
+            
+            Item { 
+                x: -cardRoot.wingSize; y: 0 
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                }
+            }
+            
+            Item { 
+                x: parent.width - cardRoot.wingSize - 2; y: parent.height 
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                }
+            }
         }
 
+        // --- Bottom Bar Wings ---
         Item {
             anchors.fill: parent
             visible: barPosition === "bottom" 
-            Shape { x: parent.width - cardRoot.wingSize; y: -cardRoot.wingSize; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: cardRoot.wingSize; startY: cardRoot.wingSize; PathLine { x: 0; y: cardRoot.wingSize } PathQuad { x: cardRoot.wingSize; y: 0; controlX: cardRoot.wingSize; controlY: cardRoot.wingSize } PathLine { x: cardRoot.wingSize; y: cardRoot.wingSize } } }
-            Shape { rotation: 180; transformOrigin: Item.TopLeft; x: 0; y: parent.height; width: cardRoot.wingSize; height: cardRoot.wingSize; ShapePath { fillColor: cardRoot.backgroundColor; strokeColor: "transparent"; strokeWidth: 0; startX: 0; startY: 0; PathLine { x: cardRoot.wingSize; y: 0 } PathQuad { x: 0; y: cardRoot.wingSize; controlX: 0; controlY: 0 } PathLine { x: 0; y: 0 } } }
+
+            Item { 
+                x: parent.width - cardRoot.wingSize; y: -cardRoot.wingSize
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3) 
+                }
+            }
+
+            Item { 
+                rotation: 180; transformOrigin: Item.TopLeft
+                x: 0; y: parent.height
+                width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
+                Rectangle {
+                    width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
+                    color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 2) 
+                }
+            }
         }
     }
 
