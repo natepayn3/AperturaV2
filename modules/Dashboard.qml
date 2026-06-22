@@ -434,7 +434,7 @@ Item {
                 // Top Wing (Tucked DOWN 1px) - Bite at Top-Left
                 Item { 
                     rotation: 90
-                    x: 0; y: -dashboardRoot.wingSize + 1
+                    x: 0; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -446,7 +446,7 @@ Item {
                 // Bottom Wing (Tucked UP 1px) - Bite at Bottom-Left
                 Item { 
                     rotation: -90
-                    x: 0; y: parent.height - 1
+                    x: 0; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -463,7 +463,7 @@ Item {
                 // Top Wing (Tucked DOWN 1px) - Bite at Top-Right
                 Item { 
                     rotation: -90
-                    x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize + 1
+                    x: parent.width - dashboardRoot.wingSize; y: -dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -475,7 +475,7 @@ Item {
                 // Bottom Wing (Tucked UP 1px) - Bite at Bottom-Right
                 Item { 
                     rotation: 90
-                    x: parent.width - dashboardRoot.wingSize; y: parent.height - 1
+                    x: parent.width - dashboardRoot.wingSize; y: parent.height
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -493,7 +493,7 @@ Item {
                 // Left Wing (Tucked RIGHT 1px) - Bite at Top-Left
                 Item { 
                     rotation: -90
-                    x: -dashboardRoot.wingSize + 1; y: 0
+                    x: -dashboardRoot.wingSize; y: 0
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -505,7 +505,7 @@ Item {
                 // Right Wing (Tucked LEFT 1px) - Bite at Top-Right
                 Item { 
                     rotation: 90
-                    x: parent.width - 1; y: 0
+                    x: parent.width; y: 0
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -522,7 +522,7 @@ Item {
                 // Left Wing (Tucked RIGHT 1px) - Bite at Bottom-Left
                 Item { 
                     rotation: 90
-                    x: -dashboardRoot.wingSize + 1; y: parent.height - dashboardRoot.wingSize
+                    x: -dashboardRoot.wingSize; y: parent.height - dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
@@ -534,7 +534,7 @@ Item {
                 // Right Wing (Tucked LEFT 1px) - Bite at Bottom-Right
                 Item { 
                     rotation: -90
-                    x: parent.width - 1; y: parent.height - dashboardRoot.wingSize
+                    x: parent.width; y: parent.height - dashboardRoot.wingSize
                     width: dashboardRoot.wingSize; height: dashboardRoot.wingSize; clip: true
                     Rectangle {
                         width: dashboardRoot.wingSize * 6; height: dashboardRoot.wingSize * 6; radius: dashboardRoot.wingSize * 3
