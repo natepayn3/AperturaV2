@@ -85,7 +85,6 @@ Item {
                 let isNowMuted = cleaned.includes("[MUTED]");
                 let parts = cleaned.split(" ");
                 let volVal = parseFloat(parts[1]);
-                
                 if (!isNaN(volVal) && !mainSlider.pressed && !toggleMuteProc.running) {
                     if (Math.abs(audioRoot.currentVolume - volVal) > 0.001 || audioRoot.isMuted !== isNowMuted) {
                         audioRoot.currentVolume = volVal;
@@ -220,7 +219,6 @@ Item {
         id: animatedGroup
         anchors.fill: parent
         
-        // 🎯 Pass the live properties down instead of the whole object
         barPosition: rootShell.barPosition
         backgroundColor: rootShell.colorBackground
         
@@ -240,6 +238,70 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 12
+
+                ListView {
+                    id: mainDeviceList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    model: sinkModel
+                    spacing: 6
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                    delegate: Item {
+                        width: mainDeviceList.width
+                        height: 48
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            
+                            color: model.isDefault 
+                                   ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
+                                   : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
+
+                            border.width: model.isDefault ? 1 : 0
+                            border.color: rootShell.colorAccent
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 16
+
+                                Text {
+                                    text: model.sinkName
+                                    color: "#ffffff"
+                                    font.family: rootShell.shellFont
+                                    font.pixelSize: 13
+                                    font.weight: model.isDefault ? Font.Bold : Font.Normal
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                
+                                Rectangle {
+                                    visible: model.isDefault
+                                    width: 8; height: 8; radius: 4
+                                    color: rootShell.colorAccent
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: itemMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: setDefaultSinkProc.switchSink(model.sinkId)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true;
+                    height: 1
+                    color: Qt.rgba(255,255,255,0.1)
+                }
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -331,70 +393,6 @@ Item {
                         horizontalAlignment: Text.AlignRight
                     }
                 }
-
-                Rectangle {
-                    Layout.fillWidth: true;
-                    height: 1
-                    color: Qt.rgba(255,255,255,0.1)
-                }
-
-                ListView {
-                    id: mainDeviceList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    model: sinkModel
-                    spacing: 6
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-                    delegate: Item {
-                        width: mainDeviceList.width
-                        height: 48
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 8
-                            
-                            color: model.isDefault 
-                                   ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
-                                   : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
-
-                            border.width: model.isDefault ? 1 : 0
-                            border.color: rootShell.colorAccent
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 16
-
-                                Text {
-                                    text: model.sinkName
-                                    color: "#ffffff"
-                                    font.family: rootShell.shellFont
-                                    font.pixelSize: 13
-                                    font.weight: model.isDefault ? Font.Bold : Font.Normal
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                
-                                Rectangle {
-                                    visible: model.isDefault
-                                    width: 8; height: 8; radius: 4
-                                    color: rootShell.colorAccent
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                            }
-
-                            MouseArea {
-                                id: itemMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: setDefaultSinkProc.switchSink(model.sinkId)
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -407,8 +405,6 @@ Item {
         implicitHeight: 48
         color: "transparent"
         
-        // 🎯 FIX: Bind surface mapping directly to whether the OSD is active.
-        // This eliminates the transparent "dead space" overlay blocking input when hidden.
         visible: hardwareOsdTimer.running
 
         anchors { bottom: true }
@@ -418,7 +414,6 @@ Item {
             id: pillBackground
             anchors.fill: parent
             
-            // The opacity behavior can now be removed or simplified since visible handles mapping
             color: rootShell.colorBackground
             radius: 12
 
