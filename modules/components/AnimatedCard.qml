@@ -16,17 +16,14 @@ Item {
     property alias isHovered: hoverArea.containsMouse
     default property alias content: innerContent.data
 
-    // 🎯 Use Math.round to force integer alignment with the Wayland compositor
-    width: Math.round(targetWidth)
-    height: Math.round(targetHeight)
+    width: targetWidth
+    height: targetHeight
 
-    transformOrigin: {
-        if (barPosition === "left") return Item.BottomLeft
-        if (barPosition === "right") return Item.BottomRight
-        if (barPosition === "top") return Item.TopRight
-        if (barPosition === "bottom") return Item.BottomRight
-        return Item.Center
-    }
+    // 🛠️ FIXED: Converted statement block into a declarative ternary chain to fix the engine crash
+    transformOrigin: barPosition === "left" ? Item.BottomLeft :
+                     barPosition === "right" ? Item.BottomRight :
+                     barPosition === "top" ? Item.TopRight :
+                     barPosition === "bottom" ? Item.BottomRight : Item.Center
 
     opacity: cardRoot.active ? 1.0 : 0.0
     scale: cardRoot.active ? 1.0 : 0.0
@@ -41,23 +38,24 @@ Item {
     Behavior on y { NumberAnimation { duration: 350; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
 
     Rectangle {
+        id: cardBody
         anchors.fill: parent
-        anchors.margins: 0
         color: cardRoot.backgroundColor
         z: 2
-        
-        topLeftRadius:     getCornerRadius("topLeft")
-        topRightRadius:    getCornerRadius("topRight")
-        bottomLeftRadius:  getCornerRadius("bottomLeft")
-        bottomRightRadius: getCornerRadius("bottomRight")
 
-        function getCornerRadius(corner) {
-            if (barPosition === "top") return (corner === "bottomLeft") ? radiusValue : 0;
-            if (barPosition === "bottom") return (corner === "topLeft") ? radiusValue : 0;
-            if (barPosition === "left") return (corner === "topRight") ? radiusValue : 0;
-            if (barPosition === "right") return (corner === "topLeft") ? radiusValue : 0;
-            return radiusValue;
-        }
+        layer.enabled: true
+        layer.samples: 4
+        
+        // 🎯 The Anti-Aliasing Buffer: 
+        // Forces edge blending to use your background color instead of transparent black
+        border.width: 1
+        border.color: Qt.rgba(cardRoot.backgroundColor.r, cardRoot.backgroundColor.g, cardRoot.backgroundColor.b, 0.0)
+        
+        // 🎯 Isolate rounding cleanly: only round the exposed top-right corner on the left bar layout
+        topLeftRadius:     (barPosition === "bottom" || barPosition === "right") ? Math.round(radiusValue) : 0
+        topRightRadius:    (barPosition === "left" || barPosition === "bottom") ? Math.round(radiusValue) : 0
+        bottomLeftRadius:  (barPosition === "top" || barPosition === "right") ? Math.round(radiusValue) : 0
+        bottomRightRadius: (barPosition === "top") ? Math.round(radiusValue) : 0
     }
 
     Item {
@@ -80,26 +78,22 @@ Item {
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3) 
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3)
                 }
             }
 
-            // --- Bottom-Left Wing ---
+            // --- Bottom-Right Wing ---
             Item {
-                // Position the clipping container at the bottom-left of your main card
                 x: parent.width; y: parent.height - cardRoot.wingSize
                 width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
 
                 Rectangle {
-                    // The circle is larger than the clip area; shift it to show only the corner arc
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6
                     radius: cardRoot.wingSize * 3
                     color: "transparent"
                     border.color: cardRoot.backgroundColor
                     border.width: cardRoot.wingSize * 2
-                    
-                    // Offset to align the circle's border with the corner
-                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3) 
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 3)
                 }
             }
         }
@@ -115,7 +109,7 @@ Item {
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3) 
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3)
                 }
             }
 
@@ -126,7 +120,7 @@ Item {
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2)
                 }
             }
         }
@@ -137,22 +131,22 @@ Item {
             visible: barPosition === "top"
             
             Item { 
-                x: -cardRoot.wingSize; y: 0 
+                x: -cardRoot.wingSize; y: 0
                 width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2)
                 }
             }
             
             Item { 
-                x: parent.width - cardRoot.wingSize; y: parent.height 
+                x: parent.width - cardRoot.wingSize; y: parent.height
                 width: cardRoot.wingSize; height: cardRoot.wingSize; clip: true
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2) 
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 2)
                 }
             }
         }
@@ -160,7 +154,7 @@ Item {
         // --- Bottom Bar Wings ---
         Item {
             anchors.fill: parent
-            visible: barPosition === "bottom" 
+            visible: barPosition === "bottom"
 
             Item { 
                 x: parent.width - cardRoot.wingSize; y: -cardRoot.wingSize
@@ -168,7 +162,7 @@ Item {
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3) 
+                    x: -(cardRoot.wingSize * 3); y: -(cardRoot.wingSize * 3)
                 }
             }
 
@@ -179,7 +173,7 @@ Item {
                 Rectangle {
                     width: cardRoot.wingSize * 6; height: cardRoot.wingSize * 6; radius: cardRoot.wingSize * 3
                     color: "transparent"; border.color: cardRoot.backgroundColor; border.width: cardRoot.wingSize * 2
-                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 2) 
+                    x: -(cardRoot.wingSize * 2); y: -(cardRoot.wingSize * 2)
                 }
             }
         }
