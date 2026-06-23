@@ -21,31 +21,43 @@ Item {
     property real radiusValue: 12
     property real wingSize: 14
 
+    // 📐 Scaling Factor Configuration
+    property real scaleFactor: rootShell.scale || 1.0
+
+    // 📐 Snap Functions
+    // ceil for size to prevent 1px clipping, floor for origins, toFixed to kill float drift
+    function snapSize(logicalValue) { 
+        return Number((Math.ceil(logicalValue * scaleFactor) / scaleFactor).toFixed(4)) 
+    }
+    function snapOrigin(logicalValue) { 
+        return Number((Math.floor(logicalValue * scaleFactor) / scaleFactor).toFixed(4)) 
+    }
+
     property real maxCardWidth: 340
     property real baseLayoutHeight: 140
     property real calculatedHeight: baseLayoutHeight + (sinkModel.count > 0 ? (sinkModel.count - 1) * 54 : 0)
     property real maxCardHeight: 300
 
-    implicitWidth: Math.round(maxCardWidth)
-    implicitHeight: Math.min(Math.round(calculatedHeight), Math.round(maxCardHeight))
-    width: Math.round(maxCardWidth)
+    implicitWidth: snapSize(maxCardWidth)
+    implicitHeight: Math.min(snapSize(calculatedHeight), snapSize(maxCardHeight))
+    width: implicitWidth
     height: implicitHeight
 
     x: {
-        if (rootShell.barPosition === "top") return Screen.width - width - 10;
-        if (rootShell.barPosition === "bottom") return Screen.width - width - 10;
-        if (rootShell.barPosition === "right") return Screen.width - width - 46;
-        if (rootShell.barPosition === "left") return 46; 
-        return hoverOriginX; 
+        if (rootShell.barPosition === "top") return snapOrigin(Screen.width - width - 10);
+        if (rootShell.barPosition === "bottom") return snapOrigin(Screen.width - width - 10);
+        if (rootShell.barPosition === "right") return snapOrigin(Screen.width - width - 46);
+        if (rootShell.barPosition === "left") return snapOrigin(46); 
+        return snapOrigin(hoverOriginX); 
     }
 
     y: {
         switch (rootShell.barPosition) {
-            case "bottom": return Screen.height - height - 46;
-            case "top":    return 46;                             
-            case "left":   return Screen.height - height - 10        
-            case "right":  return Screen.height - height - 10;
-            default:       return hoverOriginY;
+            case "bottom": return snapOrigin(Screen.height - height - 46);
+            case "top":    return snapOrigin(46);                             
+            case "left":   return snapOrigin(Screen.height - height - 10);   
+            case "right":  return snapOrigin(Screen.height - height - 10);
+            default:       return snapOrigin(hoverOriginY);
         }
     }
 
@@ -236,8 +248,8 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 16
-                spacing: 12
+                anchors.margins: snapSize(16)
+                spacing: snapSize(12)
 
                 ListView {
                     id: mainDeviceList
@@ -245,34 +257,34 @@ Item {
                     Layout.fillHeight: true
                     clip: true
                     model: sinkModel
-                    spacing: 6
+                    spacing: snapSize(6)
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                     delegate: Item {
                         width: mainDeviceList.width
-                        height: 48
+                        height: snapSize(48)
 
                         Rectangle {
                             anchors.fill: parent
-                            radius: 8
+                            radius: snapSize(8)
                             
                             color: model.isDefault 
                                    ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15) 
                                    : (itemMouse.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent")
 
-                            border.width: model.isDefault ? 1 : 0
+                            border.width: model.isDefault ? snapSize(1) : 0
                             border.color: rootShell.colorAccent
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 16
+                                anchors.leftMargin: snapSize(12)
+                                anchors.rightMargin: snapSize(16)
 
                                 Text {
                                     text: model.sinkName
                                     color: "#ffffff"
                                     font.family: rootShell.shellFont
-                                    font.pixelSize: 13
+                                    font.pixelSize: snapSize(13)
                                     font.weight: model.isDefault ? Font.Bold : Font.Normal
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -280,7 +292,9 @@ Item {
                                 
                                 Rectangle {
                                     visible: model.isDefault
-                                    width: 8; height: 8; radius: 4
+                                    width: snapSize(8)
+                                    height: snapSize(8)
+                                    radius: snapSize(4)
                                     color: rootShell.colorAccent
                                     Layout.alignment: Qt.AlignVCenter
                                 }
@@ -298,19 +312,19 @@ Item {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true;
-                    height: 1
+                    Layout.fillWidth: true
+                    height: snapSize(1)
                     color: Qt.rgba(255,255,255,0.1)
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 16
+                    spacing: snapSize(16)
                     
                     Rectangle {
-                        width: 32
-                        height: 32
-                        radius: 8
+                        width: snapSize(32)
+                        height: snapSize(32)
+                        radius: snapSize(8)
                         Layout.alignment: Qt.AlignVCenter
                         color: muteMouseArea.containsMouse ? Qt.rgba(255,255,255,0.05) : "transparent"
 
@@ -318,7 +332,7 @@ Item {
                             anchors.centerIn: parent
                             text: audioRoot.isMuted ? "volume_off" : "volume_up"
                             font.family: "Material Symbols Outlined"
-                            font.pixelSize: 24
+                            font.pixelSize: snapSize(24)
                             color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
                         }
 
@@ -328,13 +342,13 @@ Item {
                             hoverEnabled: true 
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                toggleMuteProc.running = false;
-                                toggleMuteProc.running = true;
-                                audioRoot.isMuted = !audioRoot.isMuted; 
+                                toggleMuteProc.running = false
+                                toggleMuteProc.running = true
+                                audioRoot.isMuted = !audioRoot.isMuted 
                                 
                                 Qt.callLater(() => {
-                                    hardwareOsdTimer.stop();
-                                    hardwareOsdTimer.restart();
+                                    hardwareOsdTimer.stop()
+                                    hardwareOsdTimer.restart()
                                 });
                             }
                         }
@@ -349,35 +363,35 @@ Item {
                         value: audioRoot.currentVolume
                         
                         onMoved: {
-                            audioRoot.currentVolume = value;
-                            if (audioRoot.isMuted) audioRoot.isMuted = false;
-                            setVolumeProc.setVol(value);
+                            audioRoot.currentVolume = value
+                            if (audioRoot.isMuted) audioRoot.isMuted = false
+                            setVolumeProc.setVol(value)
                         }
 
                         background: Rectangle {
                             x: mainSlider.leftPadding
                             y: mainSlider.topPadding + mainSlider.availableHeight / 2 - height / 2
-                            implicitWidth: 200
-                            implicitHeight: 4
+                            implicitWidth: snapSize(200)
+                            implicitHeight: snapSize(4)
                             width: mainSlider.availableWidth
                             height: implicitHeight
-                            radius: 2
+                            radius: snapSize(2)
                             color: Qt.rgba(255, 255, 255, 0.1)
 
                             Rectangle {
                                 width: mainSlider.visualPosition * parent.width
                                 height: parent.height
                                 color: audioRoot.isMuted ? "#666666" : rootShell.colorAccent
-                                radius: 2
+                                radius: snapSize(2)
                             }
                         }
 
                         handle: Rectangle {
                             x: mainSlider.leftPadding + mainSlider.visualPosition * (mainSlider.availableWidth - width)
                             y: mainSlider.topPadding + mainSlider.availableHeight / 2 - height / 2
-                            implicitWidth: 16
-                            implicitHeight: 16
-                            radius: 8 
+                            implicitWidth: snapSize(16)
+                            implicitHeight: snapSize(16)
+                            radius: snapSize(8) 
                             color: mainSlider.pressed ? Qt.lighter(rootShell.colorAccent, 1.2) : (audioRoot.isMuted ? "#999999" : rootShell.colorAccent)
                         }
                     }
@@ -385,11 +399,11 @@ Item {
                     Text {
                         text: Math.round(audioRoot.currentVolume * 100) + "%"
                         font.family: rootShell.shellFont
-                        font.pixelSize: 13
+                        font.pixelSize: snapSize(13)
                         font.weight: Font.Bold
                         color: audioRoot.isMuted ? "#999999" : "#ffffff"
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.minimumWidth: 36 
+                        Layout.minimumWidth: snapSize(36)
                         horizontalAlignment: Text.AlignRight
                     }
                 }
@@ -401,45 +415,43 @@ Item {
         id: volumePillWindow
         WlrLayershell.namespace: audioRoot.namespace
         exclusiveZone: 0 
-        implicitWidth: 260
-        implicitHeight: 48
+        implicitWidth: snapSize(260)
+        implicitHeight: snapSize(48)
         color: "transparent"
-        
         visible: hardwareOsdTimer.running
 
         anchors { bottom: true }
-        margins { bottom: 120 }
+        margins { bottom: snapSize(120) }
 
         Rectangle {
             id: pillBackground
             anchors.fill: parent
-            
             color: rootShell.colorBackground
-            radius: 12
+            radius: snapSize(12)
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 12
+                anchors.leftMargin: snapSize(16)
+                anchors.rightMargin: snapSize(16)
+                spacing: snapSize(12)
 
                 Text {
                     text: audioRoot.isMuted ? "volume_off" : "volume_up"
                     font.family: "Material Symbols Outlined"
-                    font.pixelSize: 20
+                    font.pixelSize: snapSize(20)
                     color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 4
-                    radius: 2
+                    height: snapSize(4)
+                    radius: snapSize(2)
                     color: Qt.rgba(255, 255, 255, 0.1)
 
                     Rectangle {
                         width: parent.width * audioRoot.currentVolume
                         height: parent.height
-                        radius: 2
+                        radius: snapSize(2)
                         color: audioRoot.isMuted ? "#666666" : rootShell.colorAccent
                         
                         Behavior on width { NumberAnimation { duration: 75; easing.type: Easing.OutQuad } }
@@ -449,10 +461,10 @@ Item {
                 Text {
                     text: Math.round(audioRoot.currentVolume * 100) + "%"
                     font.family: rootShell.shellFont
-                    font.pixelSize: 13
+                    font.pixelSize: snapSize(13)
                     font.weight: Font.Bold
                     color: audioRoot.isMuted ? "#999999" : "#ffffff"
-                    Layout.minimumWidth: 36 
+                    Layout.minimumWidth: snapSize(36)
                     horizontalAlignment: Text.AlignRight
                 }
             }
