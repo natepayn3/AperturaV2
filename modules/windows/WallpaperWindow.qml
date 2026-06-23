@@ -85,7 +85,7 @@ PanelWindow {
 
             let ext = filePath.split('.').pop().toLowerCase();
             let waylandDisplay = Quickshell.env("WAYLAND_DISPLAY") || "wayland-1";
-            let sockPath = "/run/user/(id -u)/" + waylandDisplay + "-awww-daemon.sock";
+            let sockPath = "/run/user/" + Quickshell.env("UID") + "/" + waylandDisplay + "-awww-daemon.sock";
             let script = "killall -q mpvpaper; ";
             script += "set TARGET_MON (hyprctl monitors -j | jq -r '.[] | select(.focused) | .name'); ";
             if (activeOnly) {
@@ -113,33 +113,6 @@ PanelWindow {
             script += "matugen image '" + matugenTarget + "' -t " + wallpaperWindow.currentScheme + " --prefer=saturation --json hex > '" + outPath + ".tmp'; ";
             script += "mv '" + outPath + ".tmp' '" + outPath + "'; sync;";
 
-            command = ["fish", "-c", script];
-            running = false;
-            running = true;
-        }
-    }
-
-    Process {
-        id: previewBackend
-        running: false
-        property string lastTarget: ""
-        
-        onExited: {
-            wallpaperWindow.applyFinished();
-        }
-        
-        function triggerPreviewRun() {
-            if (lastTarget === "") return;
-            let flatPath = Quickshell.env("HOME") + "/.cache/matugen-flat.txt";
-            
-            let script = "rm -f " + flatPath + ".tmp; " +
-                "for s in tonal-spot expressive fruit-salad rainbow neutral monochrome; " +
-                "  set res (matugen image '" + lastTarget + "' -t $s --json hex); " +
-                "  set p (echo $res | jq -r '.colors.primary'); " +
-                "  set o (echo $res | jq -r '.colors.outline'); " +
-                "  set b (echo $res | jq -r '.colors.background'); " +
-                "  echo \"scheme-$s $p $o $b\" >> " + flatPath + ".tmp; " +
-                "end; mv " + flatPath + ".tmp " + flatPath + "; sync;";
             command = ["fish", "-c", script];
             running = false;
             running = true;
@@ -175,14 +148,21 @@ PanelWindow {
             focus: true
             interactive: true
 
+            onOffsetChanged: {
+                let minOffset = 0;
+                let maxOffset = Math.max(0, modelCount - 1);
+                if (offset < minOffset) offset = minOffset;
+                else if (offset > maxOffset) offset = maxOffset;
+            }
+
             property int modelCount: wallpaperModel.count
-            property real baseItemWidth: 270
-            property real itemGap: -120
-            property real cardSkew: 130
-            property real radiusVal: 16
-            property real expandedWidth: 924
+            property real baseItemWidth: 260
+            property real itemGap: -140
+            property real cardSkew: 90
+            property real radiusVal: 12
+            property real expandedWidth: 880
             property real itemSpacing: baseItemWidth + itemGap
-            property int maxVisible: 12
+            property int maxVisible: 14
             property int dynamicItemCount: Math.min(Math.max(1, modelCount), maxVisible)
             
             pathItemCount: dynamicItemCount
@@ -191,7 +171,7 @@ PanelWindow {
             preferredHighlightBegin: 0.5
             preferredHighlightEnd: 0.5
             highlightRangeMode: PathView.StrictlyEnforceRange
-            highlightMoveDuration: 250
+            highlightMoveDuration: 280
 
             path: Path {
                 startX: carousel.width / 2 - carousel.currentPathLength / 2
@@ -277,16 +257,8 @@ PanelWindow {
                     id: visualContainer
                     anchors.fill: parent
                     
-                    scale: delegateRoot.isActiveTarget ? 1.0 : 0.9
-                    Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack } }
-
-                    layer.enabled: true
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: maskLoader.item
-                        maskThresholdMin: 0.5
-                        maskSpreadAtMin: 0.5
-                    }
+                    scale: delegateRoot.isActiveTarget ? 1.0 : 0.94
+                    Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
                     MouseArea {
                         anchors.fill: parent
@@ -299,51 +271,32 @@ PanelWindow {
                             mouse.accepted = true;
                         }
                     }
-                    
-                    Component {
-                        id: skewShapeComp
-                        Shape {
-                            id: slantyShape
-                            anchors.fill: parent
-                            antialiasing: true
-                            preferredRendererType: Shape.CurveRenderer
-                            
-                            property real r: carousel.radiusVal
-                            property real sk: carousel.cardSkew
-                            
-                            ShapePath {
-                                id: sPath
-                                startX: slantyShape.sk + slantyShape.r; startY: 0
-                                PathLine { x: slantyShape.width - slantyShape.r; y: 0 }
-                                PathQuad { x: slantyShape.width - (slantyShape.r * 0.2); y: slantyShape.r; controlX: slantyShape.width; controlY: 0 }
-                                PathLine { x: slantyShape.width - slantyShape.sk + (slantyShape.r * 0.2); y: slantyShape.height - slantyShape.r }
-                                PathQuad { x: slantyShape.width - slantyShape.sk - slantyShape.r; y: slantyShape.height; controlX: slantyShape.width - slantyShape.sk; controlY: slantyShape.height }
-                                PathLine { x: slantyShape.r; y: slantyShape.height }
-                                PathQuad { x: (slantyShape.r * 0.2); y: slantyShape.height - slantyShape.r; controlX: 0; controlY: slantyShape.height }
-                                PathLine { x: slantyShape.sk - (slantyShape.r * 0.2); y: slantyShape.r }
-                                PathQuad { x: slantyShape.sk + slantyShape.r; y: 0; controlX: slantyShape.sk; controlY: 0 }
-                            }
-                        }
-                    }
 
-                    Loader {
-                        id: maskLoader
-                        active: true
-                        sourceComponent: Shape {
-                            width: visualContainer.width; height: visualContainer.height
-                            layer.enabled: true
-                            ShapePath {
-                                fillColor: "white"; strokeColor: "transparent"
-                                startX: carousel.cardSkew + carousel.radiusVal; startY: 0
-                                PathLine { x: visualContainer.width - carousel.radiusVal; y: 0 }
-                                PathQuad { x: visualContainer.width - (carousel.radiusVal * 0.2); y: carousel.radiusVal; controlX: visualContainer.width; controlY: 0 }
-                                PathLine { x: visualContainer.width - carousel.cardSkew + (carousel.radiusVal * 0.2); y: visualContainer.height - carousel.radiusVal }
-                                PathQuad { x: visualContainer.width - carousel.cardSkew - carousel.radiusVal; y: visualContainer.height; controlX: visualContainer.width - carousel.cardSkew; controlY: visualContainer.height }
-                                PathLine { x: carousel.radiusVal; y: visualContainer.height }
-                                PathQuad { x: (carousel.radiusVal * 0.2); y: visualContainer.height - carousel.radiusVal; controlX: 0; controlY: visualContainer.height }
-                                PathLine { x: carousel.cardSkew - (carousel.radiusVal * 0.2); y: carousel.radiusVal }
-                                PathQuad { x: carousel.cardSkew + carousel.radiusVal; y: 0; controlX: carousel.cardSkew; controlY: 0 }
-                            }
+                    // Mask geometry source layer (instantiated directly with layer caching enabled)
+                    Shape {
+                        id: skewMaskShape
+                        anchors.fill: parent
+                        visible: false
+                        layer.enabled: true
+                        layer.smooth: true
+                        antialiasing: true
+                        preferredRendererType: Shape.CurveRenderer
+                        
+                        property real r: carousel.radiusVal
+                        property real sk: carousel.cardSkew
+                        
+                        ShapePath {
+                            fillColor: "white"
+                            strokeColor: "transparent"
+                            startX: skewMaskShape.sk + skewMaskShape.r; startY: 0
+                            PathLine { x: skewMaskShape.width - skewMaskShape.r; y: 0 }
+                            PathQuad { x: skewMaskShape.width; y: skewMaskShape.r; controlX: skewMaskShape.width; controlY: 0 }
+                            PathLine { x: skewMaskShape.width - skewMaskShape.sk; y: skewMaskShape.height - skewMaskShape.r }
+                            PathQuad { x: skewMaskShape.width - skewMaskShape.sk - skewMaskShape.r; y: skewMaskShape.height; controlX: skewMaskShape.width - skewMaskShape.sk; controlY: skewMaskShape.height }
+                            PathLine { x: skewMaskShape.r; y: skewMaskShape.height }
+                            PathQuad { x: 0; y: skewMaskShape.height - skewMaskShape.r; controlX: 0; controlY: skewMaskShape.height }
+                            PathLine { x: skewMaskShape.sk; y: skewMaskShape.r }
+                            PathQuad { x: skewMaskShape.sk + skewMaskShape.r; y: 0; controlX: skewMaskShape.sk; controlY: 0 }
                         }
                     }
 
@@ -379,9 +332,9 @@ PanelWindow {
                         anchors.fill: parent
                         source: vidLoader.active ? vidLoader.item : bgImg
                         maskEnabled: true
-                        maskSource: maskLoader.item
+                        maskSource: skewMaskShape
                         maskThresholdMin: 0.5
-                        maskSpreadAtMin: 0.5
+                        maskSpreadAtMin: 1.0
                     }
 
                     Loader {
@@ -406,12 +359,12 @@ PanelWindow {
                                         
                                         startX: glowOutline.sk + glowOutline.r; startY: 0
                                         PathLine { x: glowOutline.width - glowOutline.r; y: 0 }
-                                        PathQuad { x: glowOutline.width - (glowOutline.r * 0.2); y: glowOutline.r; controlX: glowOutline.width; controlY: 0 }
-                                        PathLine { x: glowOutline.width - glowOutline.sk + (glowOutline.r * 0.2); y: glowOutline.height - glowOutline.r }
+                                        PathQuad { x: glowOutline.width; y: glowOutline.r; controlX: glowOutline.width; controlY: 0 }
+                                        PathLine { x: glowOutline.width - glowOutline.sk; y: glowOutline.height - glowOutline.r }
                                         PathQuad { x: glowOutline.width - glowOutline.sk - glowOutline.r; y: glowOutline.height; controlX: glowOutline.width - glowOutline.sk; controlY: glowOutline.height }
                                         PathLine { x: glowOutline.r; y: glowOutline.height }
-                                        PathQuad { x: (glowOutline.r * 0.2); y: glowOutline.height - glowOutline.r; controlX: 0; controlY: glowOutline.height }
-                                        PathLine { x: glowOutline.sk - (glowOutline.r * 0.2); y: glowOutline.r }
+                                        PathQuad { x: 0; y: glowOutline.height - glowOutline.r; controlX: 0; controlY: glowOutline.height }
+                                        PathLine { x: glowOutline.sk; y: glowOutline.r }
                                         PathQuad { x: glowOutline.sk + glowOutline.r; y: 0; controlX: glowOutline.sk; controlY: 0 }
                                     }
                                 }
@@ -420,7 +373,7 @@ PanelWindow {
                                     source: glowOutline
                                     shadowEnabled: true
                                     shadowColor: rootShell.primaryColor ? Qt.color(rootShell.primaryColor) : "#ffffff"
-                                    shadowBlur: 0.8
+                                    shadowBlur: 0.6
                                     shadowVerticalOffset: 0
                                     shadowHorizontalOffset: 0
                                 }
