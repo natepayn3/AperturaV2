@@ -50,12 +50,10 @@ Item {
         // Forces edge blending to use your background color instead of transparent black
         border.width: 1
         border.color: Qt.rgba(cardRoot.backgroundColor.r, cardRoot.backgroundColor.g, cardRoot.backgroundColor.b, 0.0)
-        
-        // 🎯 Isolate rounding cleanly: only round the exposed top-right corner on the left bar layout
-        topLeftRadius:     (barPosition === "bottom" || barPosition === "right") ? Math.round(radiusValue) : 0
-        topRightRadius:    (barPosition === "left" || barPosition === "bottom") ? Math.round(radiusValue) : 0
-        bottomLeftRadius:  (barPosition === "top" || barPosition === "right") ? Math.round(radiusValue) : 0
-        bottomRightRadius: (barPosition === "top") ? Math.round(radiusValue) : 0
+        topLeftRadius:     (barPosition === "right" || barPosition === "bottom") ? Math.round(radiusValue) : 0
+        topRightRadius:    (barPosition === "left") ? Math.round(radiusValue) : 0
+        bottomLeftRadius:  (barPosition === "top") ? Math.round(radiusValue) : 0
+        bottomRightRadius: 0
     }
 
     Item {
