@@ -42,7 +42,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -1 // 🦇 THE FIX: Bleeds the main body past the fractional Wayland edge
+        anchors.margins: 0
         color: cardRoot.backgroundColor
         z: 2
         
