@@ -17,7 +17,7 @@ PanelWindow {
     property string currentWallpaperPath: rootShell && rootShell.wallpaperRef ? rootShell.wallpaperRef.currentWallpaperPath : ""
     property string currentScheme: "scheme-tonal-spot"
 
-    signal applyFinished()
+    signal applyFinished(string finalWallpaperPath)
 
     Timer {
         id: startupDelayTimer
@@ -74,7 +74,7 @@ PanelWindow {
         running: false
 
         onExited: {
-            wallpaperWindow.applyFinished();
+            wallpaperWindow.applyFinished(wallpaperWindow.currentWallpaperPath);
         }
 
         function triggerBackendRun(filePath, activeOnly) {
