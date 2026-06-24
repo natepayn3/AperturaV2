@@ -34,14 +34,9 @@ Item {
     property int currentSchemeIndex: 0
     property string activeWallpaperPath: ""
     property var temporaryPreviews: ({})
-
-    Process {
-        id: jsonReader
-        command: ["cat", provider.matugenFilePath]
-        stdout: StdioCollector {
-            onStreamFinished: { provider.parseMatugen(this.text); }
-        }
-    }
+    
+    // Internal state tracking to differentiate boot vs live changes
+    property bool isInitialBoot: true
 
     Process {
         id: variantGenerator
@@ -51,6 +46,50 @@ Item {
         }
     }
 
+    Process {
+        id: jsonReader
+        command: ["cat", provider.matugenFilePath]
+        stdout: StdioCollector {
+            onStreamFinished: { provider.parseMatugen(this.text); }
+        }
+    }
+
+    Timer {
+        id: debounceTrigger
+        interval: 50
+        running: false
+        repeat: false
+        onTriggered: {
+            provider.executeRecalculationLoop();
+        }
+    }
+
+    onActiveWallpaperPathChanged: {
+        forcePreviewRecalculation();
+    }
+
+    function forcePreviewRecalculation() {
+        if (provider.activeWallpaperPath && provider.activeWallpaperPath.trim() !== "") {
+            variantGenerator.running = false;
+            
+            if (provider.isInitialBoot) {
+                // Run instantly on boot to bypass event loop scheduling latency
+                provider.isInitialBoot = false;
+                provider.executeRecalculationLoop();
+            } else {
+                // Use the safety buffer for live transitions
+                debounceTrigger.stop();
+                debounceTrigger.start();
+            }
+        }
+    }
+
+    function executeRecalculationLoop() {
+        provider.currentSchemeIndex = 0;
+        provider.temporaryPreviews = {};
+        provider.kickoffNextVariant();
+    }
+
     function reloadColors() {
         jsonReader.running = false;
         jsonReader.running = true;
@@ -58,6 +97,23 @@ Item {
 
     Component.onCompleted: {
         reloadColors();
+    }
+
+    function sanitizePath(rawPath) {
+        if (!rawPath || rawPath.trim() === "") return "";
+        let imgPath = rawPath;
+        let home = Quickshell.env("HOME");
+        
+        if (imgPath.startsWith("file://")) {
+            imgPath = imgPath.replace("file://", "");
+        }
+        if (imgPath.startsWith("~/")) {
+            imgPath = home + imgPath.substring(1);
+        }
+        if (!imgPath.startsWith("/")) {
+            imgPath = home + "/" + imgPath;
+        }
+        return imgPath;
     }
 
     function parseMatugen(jsonString) {
@@ -74,18 +130,11 @@ Item {
                 _matBorder     = Qt.color("#" + rawBorder);
                 _matAccent     = Qt.color("#" + rawAccent);
                 
-                let imgPath = data.image ? data.image : "";
-                if (imgPath !== "") {
-                    // Sanity check: If path is relative to home directory, prepend $HOME
-                    if (!imgPath.startsWith("/") && !imgPath.startsWith("file://")) {
-                        let home = Quickshell.env("HOME");
-                        imgPath = home + "/" + imgPath;
+                if ((!provider.activeWallpaperPath || provider.activeWallpaperPath.trim() === "") && data.image) {
+                    let parsedPath = provider.sanitizePath(data.image);
+                    if (parsedPath !== "") {
+                        provider.activeWallpaperPath = parsedPath;
                     }
-                    
-                    provider.activeWallpaperPath = imgPath;
-                    provider.currentSchemeIndex = 0;
-                    provider.temporaryPreviews = {};
-                    provider.kickoffNextVariant();
                 }
             }
         } catch(e) { 
@@ -95,16 +144,24 @@ Item {
 
     function kickoffNextVariant() {
         if (currentSchemeIndex >= targetSchemes.length) {
-            // Commit results to the interface bindings
             provider.matugenPreviews = provider.temporaryPreviews;
             provider.matugenPreviewTick++;
             return;
         }
 
         let currentScheme = targetSchemes[currentSchemeIndex];
+        let targetPath = provider.sanitizePath(provider.activeWallpaperPath);
+
+        if (!targetPath || targetPath.trim() === "") {
+            provider.currentSchemeIndex++;
+            provider.kickoffNextVariant();
+            return;
+        }
+        
         variantGenerator.command = [
+            "/usr/bin/env", 
             "matugen", 
-            "image", provider.activeWallpaperPath, 
+            "image", targetPath, 
             "-t", currentScheme, 
             "--prefer=saturation", 
             "--json", "hex"
@@ -114,9 +171,7 @@ Item {
     }
 
     function processSingleVariant(stdoutLines) {
-        // Guard against execution stalls: Always step forward even on command failures
         if (!stdoutLines || stdoutLines.trim() === "") {
-            console.warn("Matugen variant returned empty output for scheme index:", currentSchemeIndex);
             provider.currentSchemeIndex++;
             provider.kickoffNextVariant();
             return;
@@ -127,7 +182,6 @@ Item {
             if (data && data.colors) {
                 let currentScheme = targetSchemes[currentSchemeIndex];
                 
-                // Flexible structure evaluation to prevent parser breakage
                 let primaryHex = "#ffffff";
                 let outlineHex = "#ffffff";
                 let bgHex = "#000000";
