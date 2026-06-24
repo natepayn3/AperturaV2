@@ -31,8 +31,11 @@ Scope {
     property color colorSubtext: themeProvider.textSub
     property color colorClose: "#f38ba8" 
     property string matugenFilePath: themeProvider.matugenFilePath
-    property var matugenPreviews: themeProvider.schemePreviews
-    property int matugenPreviewTick: (themeProvider && themeProvider.previewUpdateTick !== undefined) ? themeProvider.previewUpdateTick : 0
+    
+    // Corrected target bindings to match MatugenProvider instance properties
+    property var matugenPreviews: themeProvider.matugenPreviews
+    property int matugenPreviewTick: themeProvider.matugenPreviewTick
+    
     property string shellFont: "Rubik"
 
     property string barPosition: "left"
@@ -66,13 +69,13 @@ Scope {
     onEnabledDisplayStrChanged: saveConfig()
     onShellFontChanged: saveConfig()
     onSafeToLoadChanged: {
-    if (safeToLoad && Config.currentWallpaper !== "") {
-        globalWallpaperPreview.currentWallpaperPath = Config.currentWallpaper;
+        if (safeToLoad && Config.currentWallpaper !== "") {
+            globalWallpaperPreview.currentWallpaperPath = Config.currentWallpaper;
+        }
+        if (safeToLoad && Config.matugenScheme !== "") {
+            globalWallpaperPreview.currentScheme = Config.matugenScheme;
+        }
     }
-    if (safeToLoad && Config.matugenScheme !== "") {
-        globalWallpaperPreview.currentScheme = Config.matugenScheme;
-    }
-}
 
     function triggerOrientationChange(newEdge) {
         if (barPosition === newEdge) return;
@@ -112,17 +115,17 @@ Scope {
     }
 
     function saveConfig() {
-    if (!safeToLoad || !configFilePath) return;
-    let configObj = {
-        "position": barPosition,
-        "enabledDisplays": enabledDisplayStr,
-        "font": shellFont,
-        "currentWallpaper": globalWallpaperPreview.currentWallpaperPath,
-        "matugenScheme": globalWallpaperPreview.currentScheme
-    };
-    saveConfigProc.command = ["sh", "-c", "echo '" + JSON.stringify(configObj) + "' > " + configFilePath];
-    saveConfigProc.running = true;
-}
+        if (!safeToLoad || !configFilePath) return;
+        let configObj = {
+            "position": barPosition,
+            "enabledDisplays": enabledDisplayStr,
+            "font": shellFont,
+            "currentWallpaper": globalWallpaperPreview.currentWallpaperPath,
+            "matugenScheme": globalWallpaperPreview.currentScheme
+        };
+        saveConfigProc.command = ["sh", "-c", "echo '" + JSON.stringify(configObj) + "' > " + configFilePath];
+        saveConfigProc.running = true;
+    }
 
     function parseConfig(rawJson) {
         if (!rawJson || rawJson.trim() === "") return;
@@ -156,7 +159,7 @@ Scope {
     }
 
     function startDashboardDismissTimer() { 
-        dashboardDismissTimer.restart(); 
+        dashboardDismissTimer.restart();
     }
 
     SequentialAnimation {
@@ -436,7 +439,7 @@ Scope {
     CalendarWindow  { id: globalCalendarPreview; rootShell: rootShell }
     DashboardWindow { id: globalDashboardPreview; rootShell: rootShell }
     AudioWindow     { id: globalAudioPreview; rootShell: rootShell }
-    BatteryWindow { id: globalBatteryPreview; rootShell: rootShell }
+    BatteryWindow   { id: globalBatteryPreview; rootShell: rootShell }
     BluetoothWindow { id: globalBluetoothPreview; rootShell: rootShell }
     WifiWindow      { id: globalWifiPreview; rootShell: rootShell }
     WallpaperWindow { id: globalWallpaperPreview; rootShell: rootShell } 
