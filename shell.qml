@@ -155,6 +155,13 @@ Scope {
                 Config.matugenScheme = parsed.matugenScheme;
                 globalWallpaperPreview.currentScheme = parsed.matugenScheme;
             }
+
+            // Sync the loaded path down to the provider and trigger the startup generation loop
+            if (globalWallpaperPreview.currentWallpaperPath) {
+                themeProvider.activeWallpaperPath = globalWallpaperPreview.currentWallpaperPath;
+                themeProvider.forcePreviewRecalculation();
+            }
+
         } catch (e) {}
     }
 
@@ -377,11 +384,18 @@ Scope {
 
     Connections {
         target: globalWallpaperPreview 
-        function onApplyFinished() {
-            themeProvider.reloadColors();
-            Config.currentWallpaper = globalWallpaperPreview.currentWallpaperPath;
-            Config.matugenScheme = globalWallpaperPreview.currentScheme;
-            rootShell.saveConfig();
+        ignoreUnknownSignals: true
+        
+        function onApplyFinished(finalWallpaperPath) {
+            {
+                themeProvider.activeWallpaperPath = finalWallpaperPath;
+                themeProvider.forcePreviewRecalculation();
+                
+                themeProvider.reloadColors();
+                Config.currentWallpaper = finalWallpaperPath;
+                Config.matugenScheme = globalWallpaperPreview.currentScheme;
+                rootShell.saveConfig();
+            }
         }
     }
 
@@ -427,6 +441,7 @@ Scope {
     MatugenProvider { 
         id: themeProvider 
         isShutterMode: Config.shutterMode
+        activeWallpaperPath: globalWallpaperPreview.currentWallpaperPath
     }
 
     SettingsApp { 
