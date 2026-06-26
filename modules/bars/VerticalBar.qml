@@ -62,16 +62,16 @@ PanelWindow {
                 Column {
                     id: clockCol
                     anchors.centerIn: parent; spacing: 2; width: parent.width
-                    Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 10; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    Text { text: Qt.formatDateTime(rootShell.clockRef.currentTime, "ddd"); font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorAccent; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                     Text { 
                         text: { 
                             let hours = rootShell.clockRef.currentTime.getHours() % 12
                             hours = hours === 0 ? 12 : hours
                             return hours + ":" + rootShell.clockRef.currentTime.getMinutes().toString().padStart(2, '0')
                         } 
-                        font.family: rootShell.shellFont; font.pixelSize: 11; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
+                        font.family: rootShell.shellFont; font.pixelSize: 14; font.bold: true; color: rootShell.colorText; horizontalAlignment: Text.AlignHCenter; width: parent.width 
                     }
-                    Text { text: rootShell.clockRef.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 9; font.bold: false; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    Text { text: rootShell.clockRef.currentTime.getHours() >= 12 ? "pm" : "am"; font.family: rootShell.shellFont; font.pixelSize: 12; font.bold: true; color: rootShell.colorSubtext; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                 }
             }
             
