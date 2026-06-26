@@ -13,7 +13,6 @@ Scope {
     property alias launcherWindowObject: launcherWindow
 
     // 🎯 The Reactive Bridge
-    // This forces the UI to re-bind whenever the shellTarget updates
     property color themeBackground: rootShell ? rootShell.colorBackground : "#11111b"
     property color themeText: rootShell ? rootShell.colorText : "#cdd6f4"
     property color themeAccent: rootShell ? rootShell.colorAccent : "#89b4fa"
@@ -33,7 +32,6 @@ Scope {
         id: launcherWindow
         visible: false
         
-        // Lowered layer plane to allow native desktop hovers and tooltips
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "quickshell-launcher-preview"
         WlrLayershell.keyboardFocus: WlrLayershell.OnDemand
@@ -42,7 +40,6 @@ Scope {
         anchors { left: true; right: true; top: true; bottom: true }
         color: "transparent"
 
-        // --- State Properties & Functions (Unchanged) ---
         property var allApps: []
         property var filteredApps: []
         property var localPins: []
@@ -75,7 +72,7 @@ Scope {
             launcherWindow.updateModel();
             
             let jsonStr = JSON.stringify({ "pins": currentPins });
-            Quickshell.execDetached(["bash", "-c", "echo '" + jsonStr + "' > ~/.cache/quickshell_launcher_pins.json"]);
+            Quickshell.execDetached(["fish", "-c", "echo '" + jsonStr + "' > ~/.cache/quickshell_launcher_pins.json"]);
         }
 
         Process {
@@ -132,33 +129,29 @@ Scope {
             }
         }
 
-        // --- Pass-Through Outer Dismissal Tripwire ---
-        // Closes the launcher instantly on click out while forwarding the action down
         MouseArea {
             anchors.fill: parent
             propagateComposedEvents: true
             
             onPressed: (mouse) => {
                 launcherModuleRoot.closeRequested();
-                mouse.accepted = false; // Passes press events straight through to windows/bars underneath
+                mouse.accepted = false; 
             }
         }
 
         Item {
             id: launcherCardFrame
-            width: 400
-            height: 400
+            width: 600  // Expanded for a wider, modern layout
+            height: 500 // Taller to fit more apps comfortably
             anchors.centerIn: parent
             transformOrigin: Item.Center
 
-            // Internal card click blocker to preserve content frame focus
             MouseArea {
                 anchors.fill: parent
                 onPressed: (event) => event.accepted = true
                 onClicked: (event) => event.accepted = true
             }
 
-            // --- Animation States ---
             states: [
                 State {
                     name: "hidden"
@@ -172,7 +165,6 @@ Scope {
                 }
             ]
 
-            // --- Animation Transitions ---
             transitions: [
                 Transition {
                     from: "hidden"; to: "shown"
@@ -199,28 +191,28 @@ Scope {
                 id: cardMainBody
                 anchors.fill: parent
                 color: launcherModuleRoot.themeBackground
-                radius: 20
+                radius: 24 // Softer corners
                 border.color: launcherModuleRoot.themeAccent
-                border.width: 3
+                border.width: 2 // Thinner, cleaner border
                 antialiasing: true
             }
 
             Item {
                 id: layoutContentWrapper
                 anchors.fill: parent
-                anchors.margins: 20
+                anchors.margins: 24 // Increased padding
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 14
+                    spacing: 16
 
                     TextField {
                         id: searchInput
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 44
+                        Layout.preferredHeight: 52 // Taller search bar
                         placeholderText: "Search applications..."
                         font.family: rootShell.shellFont
-                        font.pixelSize: 15
+                        font.pixelSize: 18 // Larger search text
                         color: rootShell.colorText
                         placeholderTextColor: rootShell.colorSubtext
                         selectByMouse: true
@@ -230,7 +222,7 @@ Scope {
                             color: Qt.rgba(0, 0, 0, 0.2)
                             border.color: searchInput.activeFocus ? launcherModuleRoot.themeAccent : launcherModuleRoot.themeBorder
                             border.width: 1
-                            radius: 8
+                            radius: 12 // Rounded search bar
                         }
 
                         onTextChanged: launcherWindow.updateModel()
@@ -254,11 +246,11 @@ Scope {
                         }
                     }
 
-                    // Divider segment utilizing standardized colorText properties
                     Rectangle {
                         Layout.fillWidth: true
                         height: 1
                         color: launcherModuleRoot.themeAccent
+                        opacity: 0.5 // Softer divider
                     }
 
                     ScrollView {
@@ -268,14 +260,14 @@ Scope {
 
                         ListView {
                             id: appListView
-                            spacing: 4
+                            spacing: 6
                             keyNavigationEnabled: false
                             model: launcherWindow.filteredApps
                             
                             delegate: ItemDelegate {
                                 id: appDelegate
                                 width: appListView.width
-                                height: 46
+                                height: 56 // Taller delegate rows for a modern feel
                                 highlighted: appListView.currentIndex === index
                                 
                                 property string appExec: modelData.exec
@@ -285,19 +277,24 @@ Scope {
                                     color: appDelegate.highlighted
                                         ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15)
                                         : (appDelegate.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-                                    radius: 8
+                                    radius: 12 // Match search bar radius
                                     border.width: appDelegate.highlighted ? 1 : 0
                                     border.color: rootShell.colorAccent
                                 }
 
                                 contentItem: RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 8
-                                    spacing: 12
+                                    anchors.margins: 12 // Thicker internal margins
+                                    spacing: 16
 
                                     Image {
-                                        Layout.preferredWidth: 26
-                                        Layout.preferredHeight: 26
+                                        Layout.preferredWidth: 32 // Slightly larger icon
+                                        Layout.preferredHeight: 32
+                                        
+                                        // 🖼️ The Resolution Fix: Force Qt to request a 64x64 icon to scale down cleanly
+                                        sourceSize.width: 64
+                                        sourceSize.height: 64
+                                        
                                         source: Quickshell.iconPath(modelData.icon !== "" ? modelData.icon : "application-x-executable")
                                         fillMode: Image.PreserveAspectFit
                                         asynchronous: true
@@ -306,7 +303,7 @@ Scope {
                                     Text {
                                         text: modelData.name
                                         font.family: rootShell.shellFont
-                                        font.pixelSize: 14
+                                        font.pixelSize: 16 // Bumped up from 14
                                         color: appDelegate.isPinned ? rootShell.colorAccent : rootShell.colorText
                                         font.weight: appDelegate.isPinned ? Font.Bold : Font.Normal
                                         Layout.fillWidth: true
@@ -318,7 +315,7 @@ Scope {
                                         text: "keep"
                                         visible: appDelegate.isPinned
                                         font.family: "Material Symbols Outlined"
-                                        font.pixelSize: 16
+                                        font.pixelSize: 20
                                         color: rootShell.colorAccent
                                     }
                                 }
@@ -329,13 +326,10 @@ Scope {
                                     cursorShape: Qt.PointingHandCursor
                                     hoverEnabled: true
 
-                                    // Track the last known position relative to the screen
                                     property point lastPos: Qt.point(-1, -1)
 
                                     onPositionChanged: (mouse) => {
                                         let currentPos = Qt.point(mouse.screenX, mouse.screenY);
-                                        
-                                        // If this is the first move or the mouse actually shifted coordinates, update index
                                         if (lastPos.x === -1 || lastPos.x !== currentPos.x || lastPos.y !== currentPos.y) {
                                             if (appListView.currentIndex !== index) {
                                                 appListView.currentIndex = index;
@@ -345,7 +339,6 @@ Scope {
                                     }
 
                                     onExited: {
-                                        // Reset tracking when leaving the delegate bounds
                                         lastPos = Qt.point(-1, -1);
                                     }
 
