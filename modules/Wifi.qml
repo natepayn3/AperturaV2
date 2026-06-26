@@ -545,8 +545,12 @@ Item {
                                             Text { 
                                                 anchors.centerIn: parent
                                                 text: isConnecting ? "Connecting..." : (isFailed ? "Failed - Try Again" : "Connect")
-                                                color: "#ffffff"
-                                                font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold 
+                                                // If it's failed, background is close color. Otherwise, if accent is very bright, use background color for text.
+                                                color: isFailed 
+                                                    ? "#ffffff" 
+                                                    : ((rootShell.colorAccent.r * 0.299 + rootShell.colorAccent.g * 0.587 + rootShell.colorAccent.b * 0.114) > 0.6 ? rootShell.colorBackground : "#ffffff")
+                                                font.family: rootShell.shellFont; font.pixelSize: 12;
+                                                font.weight: Font.Bold 
                                             }
                                             MouseArea { 
                                                 anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -617,7 +621,9 @@ Item {
                                             Text { 
                                                 anchors.centerIn: parent
                                                 text: isConnecting ? "Wait..." : (isFailed ? "Failed" : "Connect")
-                                                color: "#ffffff"
+                                                color: isFailed 
+                                                    ? "#ffffff" 
+                                                    : ((rootShell.colorAccent.r * 0.299 + rootShell.colorAccent.g * 0.587 + rootShell.colorAccent.b * 0.114) > 0.6 ? rootShell.colorBackground : "#ffffff")
                                                 font.family: rootShell.shellFont; font.pixelSize: 12; font.weight: Font.Bold 
                                             }
                                             MouseArea { 
