@@ -22,15 +22,19 @@ Item {
     property real wingSize: 14
 
     // 📐 Scaling Factor Configuration
-    property real scaleFactor: rootShell.scale || 1.0
+    property real scaleFactor: (rootShell && rootShell.scale > 0) ? rootShell.scale : 1.0
 
-    // 📐 Snap Functions
-    // ceil for size to prevent 1px clipping, floor for origins, toFixed to kill float drift
+
+    // 🎯 Robust Snap Functions
+    // Fall back to 1.0 if rootShell or rootShell.scale is not yet initialized
     function snapSize(logicalValue) { 
-        return Number((Math.ceil(logicalValue * scaleFactor) / scaleFactor).toFixed(4)) 
+        let s = (typeof rootShell !== 'undefined' && rootShell && rootShell.scale > 0) ? rootShell.scale : 1.0;
+        return Math.ceil(logicalValue * s) / s;
     }
+
     function snapOrigin(logicalValue) { 
-        return Number((Math.floor(logicalValue * scaleFactor) / scaleFactor).toFixed(4)) 
+        let s = (typeof rootShell !== 'undefined' && rootShell && rootShell.scale > 0) ? rootShell.scale : 1.0;
+        return Math.round(logicalValue * s) / s;
     }
 
     property real maxCardWidth: 340
@@ -74,18 +78,33 @@ Item {
         interval: 1000 
     }
 
-    onActiveChanged: {
-        if (active) {
+    // ⏱️ Wait 300ms for sustained activation before polling WirePlumber
+    Timer {
+        id: sinkDebounceTimer
+        interval: 300 
+        repeat: false
+        onTriggered: {
             fetchSinksProc.running = false;
             fetchSinksProc.running = true;
+        }
+    }
+
+    onActiveChanged: {
+        if (active) {
+            // Restarting resets the countdown to prevent spam on rapid toggles
+            sinkDebounceTimer.restart();
+        } else {
+            // Cancel the fetch entirely if the cursor leaves before the timer finishes
+            sinkDebounceTimer.stop();
         }
     }
 
     Process {
         id: audioEventStream
         command: [
-            "sh", "-c",
-            "pactl subscribe | grep --line-buffered \"Event 'change' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
+            "bash", "-c",
+            // Catch QML's EXIT/TERM signals and kill all child processes of this bash instance
+            "trap 'pkill -P $$' EXIT TERM; pactl subscribe | grep --line-buffered \"Event 'change' on sink\" | while read -r _; do wpctl get-volume @DEFAULT_AUDIO_SINK@; done"
         ]
         running: true
 
@@ -415,8 +434,8 @@ Item {
         id: volumePillWindow
         WlrLayershell.namespace: audioRoot.namespace
         exclusiveZone: 0 
-        implicitWidth: snapSize(260)
-        implicitHeight: snapSize(48)
+        implicitWidth: snapSize(350)
+        implicitHeight: snapSize(60)
         color: "transparent"
         visible: hardwareOsdTimer.running
 
@@ -427,7 +446,7 @@ Item {
             id: pillBackground
             anchors.fill: parent
             color: rootShell.colorBackground
-            radius: snapSize(12)
+            radius: snapSize(16)
 
             RowLayout {
                 anchors.fill: parent
@@ -438,14 +457,14 @@ Item {
                 Text {
                     text: audioRoot.isMuted ? "volume_off" : "volume_up"
                     font.family: "Material Symbols Outlined"
-                    font.pixelSize: snapSize(20)
+                    font.pixelSize: snapSize(24)
                     color: audioRoot.isMuted ? rootShell.colorClose : rootShell.colorAccent
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: snapSize(4)
-                    radius: snapSize(2)
+                    height: snapSize(6)
+                    radius: snapSize(3)
                     color: Qt.rgba(255, 255, 255, 0.1)
 
                     Rectangle {
@@ -461,7 +480,7 @@ Item {
                 Text {
                     text: Math.round(audioRoot.currentVolume * 100) + "%"
                     font.family: rootShell.shellFont
-                    font.pixelSize: snapSize(13)
+                    font.pixelSize: snapSize(16)
                     font.weight: Font.Bold
                     color: audioRoot.isMuted ? "#999999" : "#ffffff"
                     Layout.minimumWidth: snapSize(36)
