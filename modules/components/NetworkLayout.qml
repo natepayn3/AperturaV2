@@ -21,6 +21,8 @@ Item {
     property string currentSection: "wifi" // "wifi" | "ethernet"
     property string activeWifiSsid: ""
     property bool wifiEnabled: true
+    property string wifiInterfaceName: "wlan0"
+    property string wifiHardwareModel: "Wireless Adapter"
     property string expandedSsid: ""
     property var knownWifis: []
 
@@ -77,7 +79,7 @@ Item {
         }
     }
 
-    // Evaluates operational states across available physical cards
+    // Evaluates operational states across available physical cards (Stable Core Command)
     Process {
         id: deviceStateWorker
         command: ["nmcli", "-g", "DEVICE,TYPE,STATE,CONNECTION", "device"]
@@ -98,6 +100,10 @@ Item {
 
                     if (type === "wifi") {
                         networkLayoutRoot.wifiEnabled = (state !== "unavailable" && state !== "unmanaged");
+                        if (networkLayoutRoot.wifiInterfaceName !== dev) {
+                            networkLayoutRoot.wifiInterfaceName = dev;
+                            wifiHardwareDetailsProc.fetchDetails(dev);
+                        }
                     } else if (type === "ethernet") {
                         let isUp = (state === "connected");
                         ethernetListModel.append({
@@ -107,6 +113,25 @@ Item {
                             "isConnected": isUp
                         });
                     }
+                }
+            }
+        }
+    }
+
+    // Fetches full hardware descriptions separately to avoid parsing race conditions
+    Process {
+        id: wifiHardwareDetailsProc
+        running: false
+        function fetchDetails(iface) {
+            command = ["nmcli", "-g", "GENERAL.PRODUCT", "device", "show", iface];
+            running = false;
+            running = true;
+        }
+        stdout: StdioCollector {
+            onTextChanged: {
+                let model = text.trim();
+                if (model !== "") {
+                    networkLayoutRoot.wifiHardwareModel = model;
                 }
             }
         }
@@ -137,19 +162,16 @@ Item {
                     let securityStr = parts[3].trim();
                     let securityDisplay = (securityStr === "--" || securityStr === "") ? "Open" : securityStr;
                     let secureNode = (securityDisplay !== "Open");
-                    
                     if (!ssid || discoveredSsids.indexOf(ssid) !== -1) continue;
                     discoveredSsids.push(ssid);
 
                     if (inUse) activeSsidFound = ssid;
-
                     rawItemsList.push({
                         "ssid": ssid,
                         "signal": signal,
                         "isConnected": inUse,
                         "isSecure": secureNode,
                         "securityType": securityDisplay,
-                        // Force false if it is the actively failing target profile to block transient sorting jumps
                         "isSaved": networkLayoutRoot.failedSsid === ssid ? false : (networkLayoutRoot.knownWifis.indexOf(ssid) !== -1)
                     });
                 }
@@ -267,11 +289,11 @@ Item {
 
         onExited: (exitCode) => {
             if (networkLayoutRoot.connectingSsid !== "") {
+                let currentAttempt = attemptingSsid;
                 if (exitCode !== 0) {
                     networkLayoutRoot.failedSsid = networkLayoutRoot.connectingSsid;
-                    
-                    if (attemptingSsid !== "" && networkLayoutRoot.knownWifis.indexOf(attemptingSsid) !== -1) {
-                        failedAuthCleanUpProc.dropProfile(attemptingSsid);
+                    if (currentAttempt !== "" && networkLayoutRoot.knownWifis.indexOf(currentAttempt) !== -1) {
+                        failedAuthCleanUpProc.dropProfile(currentAttempt);
                     } else {
                         if (!wifiListPopulator.running) wifiListPopulator.running = true;
                         if (!knownNetworksPopulator.running) knownNetworksPopulator.running = true;
@@ -536,8 +558,9 @@ Item {
                 visible: networkLayoutRoot.currentSection === "wifi"
 
                 NetworkRowCard {
-                    mainText: "Wireless Radio Link"
-                    subText: networkLayoutRoot.wifiEnabled ? "Network discovery running" : "Hardware radio layer interface disabled"
+                    // 🎯 Dynamically shows adapter hardware name and interface link string natively
+                    mainText: networkLayoutRoot.wifiInterfaceName
+                    subText: networkLayoutRoot.wifiEnabled ? "Wi-Fi is ON" : "Wi-Fi is OFF"
                     iconGlyph: networkLayoutRoot.wifiEnabled ? "wifi" : "wifi_off"
                     isRowActive: networkLayoutRoot.wifiEnabled
                     isInteractiveElement: false
@@ -581,7 +604,7 @@ Item {
                         subText: isConnecting 
                             ? "Connecting to interface..." 
                             : (isFailed 
-                                ? "Authentication failed - verify password" 
+                                ? "Wrong password!" 
                                 : (model.isConnected ? "Active connection profile" : (isSaved ? "Saved network profile" : "Signal strength: " + model.signal + "%")))
                         
                         isRowActive: model.isConnected
@@ -592,10 +615,7 @@ Item {
                         onClicked: {
                             if (networkLayoutRoot.expandedSsid === model.ssid) {
                                 networkLayoutRoot.expandedSsid = "";
-                                // If they dismiss while it's flagged as failed, scrub it from memory cleanly
-                                if (networkLayoutRoot.failedSsid === model.ssid) {
-                                    networkLayoutRoot.failedSsid = "";
-                                }
+                                networkLayoutRoot.failedSsid = "";
                             } else {
                                 networkLayoutRoot.expandedSsid = model.ssid;
                             }
@@ -642,10 +662,10 @@ Item {
                                         }
 
                                         onAccepted: connectNetworkProc.connectTo(model.ssid, text)
-                                        onTextEdited: if (isFailed) networkLayoutRoot.failedSsid = ""
+                                        // 🎯 FIX: Removed old error flash reset logic that broke visibility constraints mid-keystroke
 
                                         Text {
-                                            text: "Enter Network Password..."
+                                            text: "Password..."
                                             color: themeSubtext
                                             font.pixelSize: 12
                                             anchors.verticalCenter: parent.verticalCenter
@@ -737,7 +757,6 @@ Item {
 
                 Repeater {
                     model: ethernetListModel
-                    
                     delegate: NetworkRowCard {
                         mainText: "Interface: " + model.interfaceName
                         subText: model.isConnected ? "Profile connection target: " + model.profileName : model.statusText
