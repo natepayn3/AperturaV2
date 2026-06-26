@@ -315,6 +315,7 @@ Scope {
                                 CategoryButton { categoryName: "Layout" }
                                 CategoryButton { categoryName: "Font" }
                                 CategoryButton { categoryName: "Colors" }
+                                CategoryButton { categoryName: "Network" }
                                 CategoryButton { categoryName: "VPN" }
                             }
                         }
@@ -371,41 +372,65 @@ Scope {
                             }
 
                             Item {
-                                anchors.top: contentHeader.bottom; anchors.bottom: parent.bottom
+                                anchors.top: contentHeader.bottom
+                                anchors.bottom: parent.bottom
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.margins: 30
 
                                 MonitorLayout {
                                     anchors.fill: parent
                                     visible: settingsWindow.activeCategory === "Layout"
-                                    shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    themeBorder: settingsModuleRoot.themeBorder
+                                    themeAccent: settingsModuleRoot.themeAccent
+                                    themeText: settingsModuleRoot.themeText
+                                    themeSubtext: settingsModuleRoot.themeSubtext
                                 }
 
                                 Fonts {
                                     anchors.fill: parent
                                     visible: settingsWindow.activeCategory === "Font"
-                                    shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    themeBorder: settingsModuleRoot.themeBorder
+                                    themeAccent: settingsModuleRoot.themeAccent
+                                    themeText: settingsModuleRoot.themeText
+                                    themeSubtext: settingsModuleRoot.themeSubtext
                                 }
 
                                 ColorsLayout {
                                     anchors.fill: parent
                                     visible: settingsWindow.activeCategory === "Colors"
-                                    shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
-                                    
-                                    // 🎯 Inject the reactive variables here
+                                    shellTarget: settingsModuleRoot.shellTarget
                                     themeBorder: settingsModuleRoot.themeBorder
                                     themeAccent: settingsModuleRoot.themeAccent
                                     themeText: settingsModuleRoot.themeText
+                                    themeSubtext: settingsModuleRoot.themeSubtext
+                                }
+
+                                NetworkLayout {
+                                    id: networkLayoutSection
+                                    anchors.fill: parent
+                                    visible: settingsWindow.activeCategory === "Network"
+                                    settingsWindow: settingsWindow
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    themeBorder: settingsModuleRoot.themeBorder
+                                    themeAccent: settingsModuleRoot.themeAccent
+                                    themeText: settingsModuleRoot.themeText
+                                    themeSubtext: settingsModuleRoot.themeSubtext
                                 }
 
                                 VpnLayout {
                                     id: vpnLayoutSection
                                     anchors.fill: parent
                                     visible: settingsWindow.activeCategory === "VPN"
-                                    shellTarget: settingsModuleRoot.shellTarget
                                     settingsWindow: settingsWindow
+                                    shellTarget: settingsModuleRoot.shellTarget
+                                    themeBorder: settingsModuleRoot.themeBorder
+                                    themeAccent: settingsModuleRoot.themeAccent
+                                    themeText: settingsModuleRoot.themeText
+                                    themeSubtext: settingsModuleRoot.themeSubtext
                                 }
                             }
                         }
