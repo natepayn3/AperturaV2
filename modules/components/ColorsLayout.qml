@@ -11,6 +11,7 @@ Item {
     property color themeBorder: "transparent"
     property color themeAccent: "transparent"
     property color themeText: "transparent"
+    property color themeSubtext: "transparent"
 
     Binding {
         target: settingsWindow
