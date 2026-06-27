@@ -730,7 +730,7 @@ Item {
                                 cursorShape: Qt.PointingHandCursor; 
                                 onClicked: { 
                                     rootShell.dashboardRef.requestDismiss(); 
-                                    rootShell.wallpaperWindowRef.windowVisible = true; 
+                                    rootShell.wallpaperRef.active = true; // Fixed reference and property name
                                 } 
                             }
                             Text { anchors.centerIn: parent; text: "wallpaper"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
