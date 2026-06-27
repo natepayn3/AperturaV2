@@ -9,6 +9,11 @@ Item {
     property var shellTarget: null
     property var settingsWindow: null
 
+    property color themeBorder: "transparent"
+    property color themeAccent: "transparent"
+    property color themeText: "transparent"
+    property color themeSubtext: "transparent"
+
     Column {
         anchors.fill: parent
         spacing: 32
