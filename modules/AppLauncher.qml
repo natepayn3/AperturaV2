@@ -70,14 +70,14 @@ Scope {
             }
             launcherWindow.localPins = currentPins;
             launcherWindow.updateModel();
-            
             let jsonStr = JSON.stringify({ "pins": currentPins });
             Quickshell.execDetached(["fish", "-c", "echo '" + jsonStr + "' > ~/.cache/quickshell_launcher_pins.json"]);
         }
 
         Process {
             id: appFetcher
-            command: ["bash", "-c", "find /usr/share/applications ~/.local/share/applications -maxdepth 2 -name '*.desktop' 2>/dev/null | awk 'BEGIN { print \"[\"; c=0 } { name=\"\"; exec=\"\"; icon=\"\"; nshow=0; while ((getline line < $0) > 0) { if (line ~ /^Name=/ && name==\"\") name = substr(line, 6); if (line ~ /^Exec=/ && exec==\"\") exec = substr(line, 6); if (line ~ /^Icon=/ && icon==\"\") icon = substr(line, 6); if (line ~ /^NoDisplay=true/) nshow=1 } close($0); if (name != \"\" && exec != \"\" && nshow==0) { gsub(/[\"\\\\]/, \"\", name); gsub(/[\"\\\\]/, \"\", exec); gsub(/[\"\\\\]/, \"\", icon); if (c > 0) print \",\"; printf \"{\\\"name\\\":\\\"%s\\\", \\\"exec\\\":\\\"%s\\\", \\\"icon\\\":\\\"%s\\\", \\\"path\\\":\\\"%s\\\"}\", name, exec, icon, $0; c++ } } END { print \"]\" }'"]
+            // 🛠️ AWK expansion: Added comment extraction logic and sanitized JSON characters
+            command: ["bash", "-c", "find /usr/share/applications ~/.local/share/applications -maxdepth 2 -name '*.desktop' 2>/dev/null | awk 'BEGIN { print \"[\"; c=0 } { name=\"\"; exec=\"\"; icon=\"\"; desc=\"\"; nshow=0; while ((getline line < $0) > 0) { if (line ~ /^Name=/ && name==\"\") name = substr(line, 6); if (line ~ /^Exec=/ && exec==\"\") exec = substr(line, 6); if (line ~ /^Icon=/ && icon==\"\") icon = substr(line, 6); if (line ~ /^Comment=/ && desc==\"\") desc = substr(line, 9); if (line ~ /^NoDisplay=true/) nshow=1 } close($0); if (name != \"\" && exec != \"\" && nshow==0) { gsub(/[\"\\\\]/, \"\", name); gsub(/[\"\\\\]/, \"\", exec); gsub(/[\"\\\\]/, \"\", icon); gsub(/[\"\\\\]/, \"\", desc); if (c > 0) print \",\"; printf \"{\\\"name\\\":\\\"%s\\\", \\\"exec\\\":\\\"%s\\\", \\\"icon\\\":\\\"%s\\\", \\\"desc\\\":\\\"%s\\\", \\\"path\\\":\\\"%s\\\"}\", name, exec, icon, desc, $0; c++ } } END { print \"]\" }'"]
             running: false
             stdout: StdioCollector {
                 onStreamFinished: {
@@ -96,7 +96,9 @@ Scope {
 
             for (let i = 0; i < launcherWindow.allApps.length; i++) {
                 let app = launcherWindow.allApps[i];
-                if (query !== "" && !app.name.toLowerCase().includes(query)) continue;
+                
+                // 🔍 Search Optimization: Now matches keywords found inside descriptions as well
+                if (query !== "" && !app.name.toLowerCase().includes(query) && !app.desc.toLowerCase().includes(query)) continue;
 
                 if (launcherWindow.localPins.includes(app.path)) {
                     pins.push(app);
@@ -132,7 +134,6 @@ Scope {
         MouseArea {
             anchors.fill: parent
             propagateComposedEvents: true
-            
             onPressed: (mouse) => {
                 launcherModuleRoot.closeRequested();
                 mouse.accepted = false; 
@@ -141,8 +142,8 @@ Scope {
 
         Item {
             id: launcherCardFrame
-            width: 600  // Expanded for a wider, modern layout
-            height: 500 // Taller to fit more apps comfortably
+            width: 600  
+            height: 500 
             anchors.centerIn: parent
             transformOrigin: Item.Center
 
@@ -191,16 +192,16 @@ Scope {
                 id: cardMainBody
                 anchors.fill: parent
                 color: launcherModuleRoot.themeBackground
-                radius: 24 // Softer corners
+                radius: 24 
                 border.color: launcherModuleRoot.themeAccent
-                border.width: 2 // Thinner, cleaner border
+                border.width: 2 
                 antialiasing: true
             }
 
             Item {
                 id: layoutContentWrapper
                 anchors.fill: parent
-                anchors.margins: 24 // Increased padding
+                anchors.margins: 24 
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -209,10 +210,10 @@ Scope {
                     TextField {
                         id: searchInput
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 52 // Taller search bar
+                        Layout.preferredHeight: 52 
                         placeholderText: "Search applications..."
                         font.family: rootShell.shellFont
-                        font.pixelSize: 18 // Larger search text
+                        font.pixelSize: 18 
                         color: rootShell.colorText
                         placeholderTextColor: rootShell.colorSubtext
                         selectByMouse: true
@@ -222,7 +223,7 @@ Scope {
                             color: Qt.rgba(0, 0, 0, 0.2)
                             border.color: searchInput.activeFocus ? launcherModuleRoot.themeAccent : launcherModuleRoot.themeBorder
                             border.width: 1
-                            radius: 12 // Rounded search bar
+                            radius: 12 
                         }
 
                         onTextChanged: launcherWindow.updateModel()
@@ -250,7 +251,7 @@ Scope {
                         Layout.fillWidth: true
                         height: 1
                         color: launcherModuleRoot.themeAccent
-                        opacity: 0.5 // Softer divider
+                        opacity: 0.5 
                     }
 
                     ScrollView {
@@ -267,7 +268,7 @@ Scope {
                             delegate: ItemDelegate {
                                 id: appDelegate
                                 width: appListView.width
-                                height: 56 // Taller delegate rows for a modern feel
+                                height: 64 // 📏 Increased height slightly to cleanly fit dual-line text rows
                                 highlighted: appListView.currentIndex === index
                                 
                                 property string appExec: modelData.exec
@@ -277,46 +278,52 @@ Scope {
                                     color: appDelegate.highlighted
                                         ? Qt.rgba(rootShell.colorAccent.r, rootShell.colorAccent.g, rootShell.colorAccent.b, 0.15)
                                         : (appDelegate.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-                                    radius: 12 // Match search bar radius
+                                    radius: 12 
                                     border.width: appDelegate.highlighted ? 1 : 0
                                     border.color: rootShell.colorAccent
                                 }
 
                                 contentItem: RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 12 // Thicker internal margins
+                                    anchors.margins: 12 
                                     spacing: 16
 
                                     Image {
-                                        Layout.preferredWidth: 32 // Slightly larger icon
+                                        Layout.preferredWidth: 32 
                                         Layout.preferredHeight: 32
-                                        
-                                        // 🖼️ The Resolution Fix: Force Qt to request a 64x64 icon to scale down cleanly
                                         sourceSize.width: 64
                                         sourceSize.height: 64
-                                        
                                         source: Quickshell.iconPath(modelData.icon !== "" ? modelData.icon : "application-x-executable")
                                         fillMode: Image.PreserveAspectFit
                                         asynchronous: true
                                     }
 
-                                    Text {
-                                        text: modelData.name
-                                        font.family: rootShell.shellFont
-                                        font.pixelSize: 16 // Bumped up from 14
-                                        color: appDelegate.isPinned ? rootShell.colorAccent : rootShell.colorText
-                                        font.weight: appDelegate.isPinned ? Font.Bold : Font.Normal
+                                    // 🔀 Stacked Layout: Clear parent of the invalid property
+                                    ColumnLayout {
                                         Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
+                                        spacing: 2
+                                        // Layout.alignment attached here positions the entire block vertically inside the RowLayout
+                                        Layout.alignment: Qt.AlignVCenter 
 
-                                    Text {
-                                        text: "keep"
-                                        visible: appDelegate.isPinned
-                                        font.family: "Material Symbols Outlined"
-                                        font.pixelSize: 20
-                                        color: rootShell.colorAccent
+                                        Text {
+                                            text: modelData.name
+                                            font.family: rootShell.shellFont
+                                            font.pixelSize: 16
+                                            color: appDelegate.isPinned ? rootShell.colorAccent : rootShell.colorText
+                                            font.weight: appDelegate.isPinned ? Font.Bold : Font.Normal
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            text: modelData.desc !== "" ? modelData.desc : "Application"
+                                            font.family: rootShell.shellFont
+                                            font.pixelSize: 14
+                                            color: rootShell.colorSubtext
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            opacity: 0.7
+                                        }
                                     }
                                 }
 
