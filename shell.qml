@@ -156,10 +156,9 @@ Scope {
                 globalWallpaperPreview.currentScheme = parsed.matugenScheme;
             }
 
-            // Sync the loaded path down to the provider and trigger the startup generation loop
+            // 🎯 FIX: Rely on the property binding and invoke the stable initialization reload instead
             if (globalWallpaperPreview.currentWallpaperPath) {
-                themeProvider.activeWallpaperPath = globalWallpaperPreview.currentWallpaperPath;
-                themeProvider.forcePreviewRecalculation();
+                themeProvider.reloadColors();
             }
 
         } catch (e) {}
