@@ -410,10 +410,10 @@ Item {
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
-            anchors.leftMargin: rootShell.barPosition === "left" ? -1 : 0
-            anchors.rightMargin: rootShell.barPosition === "right" ? -1 : 0
-            anchors.topMargin: rootShell.barPosition === "top" ? -1 : 0
-            anchors.bottomMargin: rootShell.barPosition === "bottom" ? -1 : 0
+            anchors.leftMargin: rootShell.barPosition === "left" ? -2 : 0
+            anchors.rightMargin: rootShell.barPosition === "right" ? -2 : 0
+            anchors.topMargin: rootShell.barPosition === "top" ? -2 : 0
+            anchors.bottomMargin: rootShell.barPosition === "bottom" ? -2 : 0
             color: rootShell.colorBackground
             border.width: 0 
             z: 3 
