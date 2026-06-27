@@ -28,13 +28,13 @@ Item {
     // Explicit coordinate mapping against the fullscreen PanelWindow parent
     x: {
         if (rootShell.barPosition === "left") return 46;
-        if (rootShell.barPosition === "right") return parent.width - width - 46;
+        if (rootShell.barPosition === "right") return Math.round(parent.width - width - 46); // 🛠️ Round absolute delta
         return Math.round((parent.width - width) / 2);
     }
 
     y: {
         if (rootShell.barPosition === "top") return 46;
-        if (rootShell.barPosition === "bottom") return parent.height - height - 46;
+        if (rootShell.barPosition === "bottom") return Math.round(parent.height - height - 46); // 🛠️ Round absolute delta
         return Math.round((parent.height - height) / 2);
     }
 
@@ -410,6 +410,10 @@ Item {
         Rectangle {
             id: cardMainBody
             anchors.fill: parent
+            anchors.leftMargin: rootShell.barPosition === "left" ? -1 : 0
+            anchors.rightMargin: rootShell.barPosition === "right" ? -1 : 0
+            anchors.topMargin: rootShell.barPosition === "top" ? -1 : 0
+            anchors.bottomMargin: rootShell.barPosition === "bottom" ? -1 : 0
             color: rootShell.colorBackground
             border.width: 0 
             z: 3 
@@ -705,6 +709,7 @@ Item {
                         x: utilitiesWrapper.menuExpanded ? -parent.width - 16 : 0
                         Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
+                        // 1. Settings Button (First from left)
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: actionHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -714,6 +719,24 @@ Item {
                             Text { anchors.centerIn: parent; text: "settings"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
+                        // 2. Wallpaper Picker Button (Second from left)
+                        Rectangle { 
+                            Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
+                            color: wallpaperHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            HoverHandler { id: wallpaperHover }
+                            MouseArea { 
+                                anchors.fill: parent; 
+                                cursorShape: Qt.PointingHandCursor; 
+                                onClicked: { 
+                                    rootShell.dashboardRef.requestDismiss(); 
+                                    rootShell.wallpaperWindowRef.windowVisible = true; 
+                                } 
+                            }
+                            Text { anchors.centerIn: parent; text: "wallpaper"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
+                        }
+
+                        // 3. App Launcher Button
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: launcherHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
@@ -723,15 +746,24 @@ Item {
                             Text { anchors.centerIn: parent; text: "apps"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
+                        // 4. Satty Screenshot Tool Button
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: snipHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
                             Behavior on color { ColorAnimation { duration: 150 } }
                             HoverHandler { id: snipHover }
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { rootShell.dashboardRef.forceDismiss(); Quickshell.execDetached(["bash", "-c", "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"]); } }
+                            MouseArea { 
+                                anchors.fill: parent; 
+                                cursorShape: Qt.PointingHandCursor; 
+                                onClicked: { 
+                                    rootShell.dashboardRef.forceDismiss();
+                                    Quickshell.execDetached(["bash", "-c", "sleep 0.1 && grim -g \"$(slurp)\" -t ppm - | satty --filename -"]);
+                                } 
+                            }
                             Text { anchors.centerIn: parent; text: "screenshot_region"; font.family: "Material Symbols Outlined"; color: rootShell.colorText; font.pixelSize: 26 } 
                         }
 
+                        // 5. Power Action Button (Far right slot)
                         Rectangle { 
                             Layout.fillWidth: true; Layout.preferredHeight: 56; radius: 30
                             color: powerHover.hovered ? Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.25) : Qt.rgba(rootShell.colorText.r, rootShell.colorText.g, rootShell.colorText.b, 0.15)
