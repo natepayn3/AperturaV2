@@ -156,8 +156,8 @@ PanelWindow {
             }
 
             property int modelCount: wallpaperModel.count
-            property real baseItemWidth: 260
-            property real itemGap: -140
+            property real baseItemWidth: 300
+            property real itemGap: -100
             property real cardSkew: 90
             property real radiusVal: 12
             property real expandedWidth: 880
